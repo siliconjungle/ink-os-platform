@@ -1,0 +1,41 @@
+{
+  "format": "ink-os-hosted-acceptance-summary-v1",
+  "status": "passed",
+  "platformCommit": "0b9b403c905d9c7b0f9792d197684606693a6a82",
+  "deploymentCommit": "19228dc2ebed29ac271d709cb243ecc3bab3df0d",
+  "privateProofSha256": "79782391b39e4003852f9de2c08dba819c6576021d6b41e566109658a0993865",
+  "backendVerified": true,
+  "edgeVerified": true,
+  "sourcePrivacyVerified": true,
+  "quiescentCleanup": true,
+  "appsIncludingArchived": 0,
+  "sourceAssetsRemaining": 0,
+  "sourceDeletionAcknowledged": true,
+  "restart": {
+    "externallyAttested": true,
+    "actualProviderEvents": [
+      {
+        "type": "start",
+        "status": "started"
+      },
+      {
+        "type": "restart",
+        "status": "starting"
+      },
+      {
+        "type": "exit",
+        "status": "stopped"
+      },
+      {
+        "type": "restart",
+        "status": "stopping"
+      }
+    ],
+    "persistenceObserved": true
+  },
+  "limits": [
+    "HTTP cookie/auth checks do not prove graphical browser behavior.",
+    "Restart execution is externally attested; the health API exposes no process generation.",
+    "Source deletion is checked through owner API disappearance and, when the purge response is received, storage deletion acknowledgement; no direct cloud credentials are used."
+  ]
+}
