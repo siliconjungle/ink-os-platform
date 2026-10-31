@@ -11,7 +11,7 @@ import edgeWorker from '../infra/edge/worker.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const owner = 'fixture-owner-private', edgeToken = 'fixture-edge-private', instanceId = '1'.repeat(32);
-async function fixture(t, { foreign = false, lose, busy = false } = {}) {
+async function fixture(t, { foreign = false, lose, busy = false, defaults = false } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'ink-cloud-host-verifier-'));
   const journal = join(directory, 'journal.json'), output = join(directory, 'proof.json');
   const objects = new Map(), apps = new Map(), records = new Map(), releases = new Map(), state = new Map(), mutations = [], invocations = [], credentials = [];
@@ -20,6 +20,7 @@ async function fixture(t, { foreign = false, lose, busy = false } = {}) {
     get: async key => objects.has(key) ? new Response(objects.get(key)) : null,
     put: async (key, value) => objects.set(key, value),
   } };
+  if (defaults) for (const slug of ['finder','preview','ink-environment']) { const id=hash('ink-os-app:'+slug).slice(0,32); apps.set(id,{id,kind:'app',archived:false,title:slug,body:JSON.stringify({slug,repository:'https://github.com/siliconjungle/ink-app-'+slug,sourceCommit:'a'.repeat(40),releaseId:hash(slug).slice(0,32)})}); }
   if (foreign) apps.set('f'.repeat(32), { id: 'f'.repeat(32), title: 'Do not touch', archived: true, body: JSON.stringify({ slug: 'existing-app' }) });
   function json(response, value, status = 200) { response.writeHead(status, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(value)); }
   async function invoke(appId, input) {
@@ -183,3 +184,5 @@ test('missing state after external restart is a failure and never silently recre
   await assert.rejects(verifyCloudHost({ ...f.options, phase: 'resume', restartReceipt: receipt }), { code: 'INK_CLOUD_PROOF_CONTRACT' });
   assert.equal(f.invocations.filter(item => item.path === '/count' && item.method === 'POST').length, writes); assert.equal(f.apps.size, 1);
 });
+
+test('hosted acceptance preserves the exact three distribution app releases while purging only its canary',async t=>{const f=await fixture(t,{defaults:true}),before=structuredClone([...f.apps.values()]);const proof=await verifyCloudHost(f.options);assert.equal(proof.status,'passed');assert.equal(proof.appsIncludingArchived,3);assert.equal(proof.defaultAppsPreserved,3);assert.equal(proof.userAppsIncludingArchived,0);assert.deepEqual([...f.apps.values()],before);assert.equal(f.records.size,0);});

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "apps": [
+    {
+      "slug": "finder",
+      "title": "Finder",
+      "repository": "https://github.com/siliconjungle/ink-app-finder",
+      "commit": "2a62ed2f6e769dc65a447ac1ea3549d7bfd168f5",
+      "sha256": "90aa31baf141a593fe4d3d869491781e4f0e89c8cd7b28cd7340ecfd696fd822"
+    },
+    {
+      "slug": "preview",
+      "title": "Preview",
+      "repository": "https://github.com/siliconjungle/ink-app-preview",
+      "commit": "ae8327c1371f3514df27b2bc6ced95513b5a4a01",
+      "sha256": "1489cd33555e5b3cb0c328fb0e58e46be99c058bc0ce023c9aebd42ae267b223"
+    },
+    {
+      "slug": "ink-environment",
+      "title": "Ink Environment",
+      "repository": "https://github.com/siliconjungle/ink-app-ink-environment",
+      "commit": "debfb61b3f08e3b7e3bef64df506856be68ae477",
+      "sha256": "1a65b0aae9e25ba68fe08ecbf303159f88a7968927be848558e988d44ce8a3bc"
+    }
+  ]
+}

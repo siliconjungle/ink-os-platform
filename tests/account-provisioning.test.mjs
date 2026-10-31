@@ -76,7 +76,7 @@ test('actual owner API preserves a keyless identity over restart and retains acc
   const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening');
   const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(INK_|FLY_|AWS_|S3_|BUCKET_NAME|GIT_)/.test(name)));
-  Object.assign(env, { PORT: String(port), INK_OS_DATA_DIR: data, INK_OS_CONFIG: join(data, 'client.json'), NODE_ENV: 'production', INK_OS_NATIVE: '0' });
+  Object.assign(env, { PORT: String(port), INK_OS_DEFAULT_APPS: '0', INK_OS_DATA_DIR: data, INK_OS_CONFIG: join(data, 'client.json'), NODE_ENV: 'production', INK_OS_NATIVE: '0' });
   const url = 'http://127.0.0.1:' + port;
   let child, output = '';
   const stop = async () => { if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); await once(child, 'exit'); } };

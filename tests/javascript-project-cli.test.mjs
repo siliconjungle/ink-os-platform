@@ -16,7 +16,7 @@ test('JavaScript CLI deploys local Git and updates a project-bound app without r
  await writeFile(join(directory,'storage-retention.json'),JSON.stringify({keep:{source:'Explicit generated source fixture.',data:'Owned host fixture until graceful shutdown.'},safe_to_remove:{}}));
  const probe=createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');const port=probe.address().port;await new Promise(done=>probe.close(done));
  const env=Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^(INK_|FLY_|AWS_|S3_|BUCKET_NAME|GIT_)/.test(name)));
- Object.assign(env,{PORT:String(port),INK_OS_DATA_DIR:data,INK_OS_CONFIG:join(data,'client.json'),NODE_ENV:'production',INK_OS_NATIVE:'0'});
+ Object.assign(env,{PORT:String(port),INK_OS_DEFAULT_APPS: '0', INK_OS_DATA_DIR:data,INK_OS_CONFIG:join(data,'client.json'),NODE_ENV:'production',INK_OS_NATIVE:'0'});
  const child=spawn(process.execPath,['scripts/start.mjs'],{env,stdio:['ignore','pipe','pipe']});let output='';child.stdout.on('data',bytes=>output+=bytes);child.stderr.on('data',bytes=>output+=bytes);
  t.after(async()=>{if(child.exitCode===null&&child.signalCode===null){child.kill('SIGTERM');await once(child,'exit');}await rm(directory,{recursive:true,force:true});});
  const url='http://127.0.0.1:'+port;let ready=false;

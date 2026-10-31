@@ -1,4 +1,5 @@
 import{Workflows}from './workflows.mjs';
+import { installDefaultApps } from './default-apps.mjs';
 import { Projects } from './projects.mjs';
 import { NativeInk } from './native-ink.mjs';
 import { managedNativeFromEnvironment } from './managed-native.mjs';
@@ -57,6 +58,7 @@ const requests=new Set(),responses=new Set();
 const maintenanceAdapter=Object.fromEntries(['closeAdmission','resumeAdmission','continueDraining','activity','quiescePool','flush'].map(method=>[method,(...args)=>{if(!maintenanceHost)throw Error('Maintenance host adapter is not initialized');return maintenanceHost[method](...args);} ]));
 const maintenance=await new Maintenance({directory:data,instanceId:process.env.INK_OS_INSTANCE_ID,images:()=>({os:process.env.INK_OS_IMAGE_PIN,runtime:process.env.INK_OS_RUNTIME_IMAGE}),adapter:maintenanceAdapter,admissionAvailable:()=>!draining&&!stopping&&!snapshotGate?.closed&&!backups?.busy}).open();
 const world = await new World(data).open();
+const freshWorld = world.all().length === 0;
 const storage = await new Storage(data).open();
 await activateRecoveredStorage(storage);
 await activateRecoveredRuntimes(world);
@@ -75,6 +77,7 @@ const serve=process.env.INK_OS_DEV!=='1'?staticFiles(join(root,'dist')):(req,res
 const platform=await new Platform({root,directory:data,world,storage,origin,adminToken:process.env.INK_OS_ADMIN_TOKEN||(!production?'local-development-only':undefined),sourceProvider:process.env.INK_OS_GITHUB_TOKEN?new GitHubSources():undefined,provider:runtimeBinding?.provider!=='local'&&process.env.FLY_API_TOKEN?(process.env.INK_OS_HOSTING==='pool'?new PooledProvider({fly:new FlyProvider()}):new FlyProvider()):new LocalProvider({compute:process.env.INK_OS_BACKENDS==='docker'?new DockerCompute():undefined})}).open();
 platform.projects = await new Projects(data).open();
 platform.calls=new CallRooms({clients,app:id=>platform.app(id),...(process.env.INK_OS_RTC_ICE_SERVERS?{iceServers:JSON.parse(process.env.INK_OS_RTC_ICE_SERVERS)}:{})});
+await installDefaultApps(platform, { fresh: freshWorld, enabled: process.env.INK_OS_DEFAULT_APPS !== '0' });
 await reconcileFileDefaults(platform);
 platform.code=code;platform.inkPreviews=new InkPreviews({platform});platform.computer=new Computer(platform);platform.collaboration=collaboration;platform.namespaceMigrations=namespaceMigrations;platform.versions=new Versions({world,collaboration:platform.collaboration,storage,bundle:key=>platform.bundle(key)});
 platform.nativeJobs=await new NativeJobs(data,{native:new NativeInk(join(data,'native'),{cargo:process.env.INK_NATIVE_CARGO||'cargo',rustc:process.env.INK_NATIVE_RUSTC||'rustc',offline:process.env.INK_NATIVE_OFFLINE==='1',managed:managedNativeFromEnvironment()}),enabled:process.env.INK_OS_NATIVE!=='0',source:async(appId,releaseId)=>{platform.app(appId);const release=world.get(releaseId);if(release?.kind!=='release'||JSON.parse(release.body).appId!==appId)throw Object.assign(Error('Native source release not found.'),{status:404});const bundle=await platform.bundle(releaseId);if(!bundle.ink)throw Object.assign(Error('This release has no Ink program.'),{status:400});return inkSource(bundle.ink,bundle.files);}}).open();

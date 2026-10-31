@@ -38,7 +38,7 @@ test('administrator migrates exact causal namespaces through CLI/SDK/HTTP and ho
   const probe = createServer(); probe.listen(0,'127.0.0.1'); await once(probe,'listening');
   const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(INK_|FLY_|AWS_|S3_|BUCKET_NAME|GIT_)/.test(name)));
-  Object.assign(env, { PORT: String(port), INK_OS_DATA_DIR: targetPath, NODE_ENV: 'production', INK_OS_NATIVE: '0', INK_OS_CONFIG: join(targetPath, 'client.json') });
+  Object.assign(env, { PORT: String(port), INK_OS_DEFAULT_APPS: '0', INK_OS_DATA_DIR: targetPath, NODE_ENV: 'production', INK_OS_NATIVE: '0', INK_OS_CONFIG: join(targetPath, 'client.json') });
   const url = 'http://127.0.0.1:' + port;
   async function start() {
     logs = ''; child = spawn(process.execPath, ['scripts/start.mjs'], { env, stdio: ['ignore','pipe','pipe'] });

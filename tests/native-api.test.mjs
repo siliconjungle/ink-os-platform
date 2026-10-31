@@ -15,7 +15,7 @@ test('native jobs survive a graceful host stop and share exact persistent app st
   const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening');
   const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(INK_|FLY_|AWS_|S3_|BUCKET_NAME|GIT_)/.test(name)));
-  Object.assign(env, { PORT: String(port), INK_OS_DATA_DIR: data, NODE_ENV: 'production', INK_OS_CONFIG: join(data, 'client.json'), ...(process.env.INK_NATIVE_OFFLINE === '1' ? { INK_NATIVE_OFFLINE: '1' } : {}) });
+  Object.assign(env, { PORT: String(port), INK_OS_DEFAULT_APPS: '0', INK_OS_DATA_DIR: data, NODE_ENV: 'production', INK_OS_CONFIG: join(data, 'client.json'), ...(process.env.INK_NATIVE_OFFLINE === '1' ? { INK_NATIVE_OFFLINE: '1' } : {}) });
   let child, output = '';
   async function stop() { if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); await once(child, 'exit'); } }
   t.after(async () => { await stop(); await rm(directory, { recursive: true, force: true }); });

@@ -1,3 +1,4 @@
+import { distributionApps } from '../shared/distribution-apps.mjs';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { open, readFile, lstat, mkdir, rename, unlink } from 'node:fs/promises';
@@ -56,8 +57,13 @@ export async function verifyCloudHost({ url, token, journal: journalFile, output
   const save = async value => { Object.assign(journal, value, { updatedAt: new Date().toISOString() }); await atomicJSON(journalFile, journal); };
   const catalog = async () => {
     const apps = await sdk.apps.list({ includeDeleted: true }); check(Array.isArray(apps), 'INK_CLOUD_PROOF_CATALOG');
-    check(apps.length <= 1 && apps.every(app => app.id === journal.appId && app.title === journal.title && bodyOf(app).slug === journal.slug && !bodyOf(app).repository && !bodyOf(app).projectId), 'INK_CLOUD_PROOF_NONEMPTY_CATALOG');
-    return apps[0];
+    const defaults = distributionApps(apps);
+    const baseline = defaults.map(app => ({id:app.id, releaseId:bodyOf(app).releaseId, sourceCommit:bodyOf(app).sourceCommit})).sort((a,b)=>a.id.localeCompare(b.id));
+    if (journal.defaultApps) check(JSON.stringify(journal.defaultApps) === JSON.stringify(baseline), 'INK_CLOUD_PROOF_DEFAULT_APPS_CHANGED');
+    const userApps = apps.filter(app => !defaults.includes(app));
+    check(userApps.length <= 1 && userApps.every(app => app.id === journal.appId && app.title === journal.title && bodyOf(app).slug === journal.slug && !bodyOf(app).repository && !bodyOf(app).projectId), 'INK_CLOUD_PROOF_NONEMPTY_CATALOG');
+    if (!journal.defaultApps) await save({defaultApps:baseline});
+    return userApps[0];
   };
   const runtime = async () => {
     const result = await sdk.runtimes.list(); check(Array.isArray(result.slots), 'INK_CLOUD_PROOF_RUNTIME');
@@ -182,7 +188,7 @@ export async function verifyCloudHost({ url, token, journal: journalFile, output
     check((await sdk.data.list({ namespace: journal.appId })).length === 0, 'INK_CLOUD_PROOF_SOURCE_CLEANUP');
     if (journal.sourceAssetId) { let missing = false; try { await sdk.assets.get(journal.sourceAssetId); } catch (error) { if (error.status === 404) missing = true; else throw error; } check(missing, 'INK_CLOUD_PROOF_SOURCE_CLEANUP'); }
     await runtime();
-    proof = { format: 'ink-os-cloud-host-proof-v1', status: journal.backendVerified && journal.edgeVerified ? 'passed' : 'cleaned', instanceId: journal.instanceId, hostOriginSha256: sha(host.origin), canaryId: journal.appId, releaseId: journal.releaseId || null, bundleSha256: journal.bundleSha256 || null, edgeOriginSha256: journal.edgeOriginSha256 || null, backendVerified: journal.backendVerified === true, edgeVerified: journal.edgeVerified === true, sourcePrivacyVerified: journal.edgeVerified === true, quiescentCleanup: true, appsIncludingArchived: 0, sourceAssetsRemaining: 0, removedBlobs: journal.removedBlobs || 0, sourceDeletionAcknowledged: journal.removedBlobs >= 1, restartExternallyAttested: !!journal.restartAttestationSha256, restartAttestationSha256: journal.restartAttestationSha256 || null, persistenceAfterRestartHookVerified: phase === 'resume', limits: ['HTTP cookie/auth checks do not prove graphical browser behavior.', 'Restart execution is externally attested; the health API exposes no process generation.', 'Source deletion is checked through owner API disappearance and, when the purge response is received, storage deletion acknowledgement; no direct cloud credentials are used.'] };
+    proof = { format: 'ink-os-cloud-host-proof-v1', status: journal.backendVerified && journal.edgeVerified ? 'passed' : 'cleaned', instanceId: journal.instanceId, hostOriginSha256: sha(host.origin), canaryId: journal.appId, releaseId: journal.releaseId || null, bundleSha256: journal.bundleSha256 || null, edgeOriginSha256: journal.edgeOriginSha256 || null, backendVerified: journal.backendVerified === true, edgeVerified: journal.edgeVerified === true, sourcePrivacyVerified: journal.edgeVerified === true, quiescentCleanup: true, appsIncludingArchived: journal.defaultApps.length, defaultAppsPreserved: journal.defaultApps.length, userAppsIncludingArchived: 0, sourceAssetsRemaining: 0, removedBlobs: journal.removedBlobs || 0, sourceDeletionAcknowledged: journal.removedBlobs >= 1, restartExternallyAttested: !!journal.restartAttestationSha256, restartAttestationSha256: journal.restartAttestationSha256 || null, persistenceAfterRestartHookVerified: phase === 'resume', limits: ['HTTP cookie/auth checks do not prove graphical browser behavior.', 'Restart execution is externally attested; the health API exposes no process generation.', 'Source deletion is checked through owner API disappearance and, when the purge response is received, storage deletion acknowledgement; no direct cloud credentials are used.'] };
     await save({ phase: 'complete', proof }); await atomicJSON(output, proof); return proof;
   } catch (error) {
     const safe = { format: 'ink-os-cloud-host-proof-v1', status: 'failed', stage, code: error.name === 'AssertionError' ? 'INK_CLOUD_PROOF_CONTRACT' : /^[A-Z0-9_]+$/.test(error.code || '') ? error.code : 'INK_CLOUD_PROOF_REQUEST', ...(Number.isInteger(error.status) ? { httpStatus: error.status } : {}), journalRetained: true, restartVerified: false };

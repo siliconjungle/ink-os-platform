@@ -16,7 +16,7 @@ test('real host gate preserves admitted HTTP work, closes new entries and transp
  const directory=await mkdtemp(join(tmpdir(),'ink-maintenance-api-')),data=join(directory,'data');
  const probe=createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');const port=probe.address().port;await new Promise(resolve=>probe.close(resolve));
  const env=Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^(INK_|FLY_|AWS_|S3_|BUCKET_NAME|GIT_)/.test(name)));
- Object.assign(env,{PORT:String(port),INK_OS_DATA_DIR:data,INK_OS_CONFIG:join(data,'client.json'),NODE_ENV:'production',INK_OS_NATIVE:'0',INK_OS_INSTANCE_ID:'a'.repeat(32),INK_OS_IMAGE_PIN:image('1'),INK_OS_RUNTIME_IMAGE:image('2')});
+ Object.assign(env,{PORT:String(port),INK_OS_DEFAULT_APPS: '0', INK_OS_DATA_DIR:data,INK_OS_CONFIG:join(data,'client.json'),NODE_ENV:'production',INK_OS_NATIVE:'0',INK_OS_INSTANCE_ID:'a'.repeat(32),INK_OS_IMAGE_PIN:image('1'),INK_OS_RUNTIME_IMAGE:image('2')});
  const url='http://127.0.0.1:'+port;let child,logs='',held,events;
  async function stop(){if(child&&child.exitCode===null&&child.signalCode===null){child.kill('SIGTERM');await once(child,'exit');}}
  t.after(async()=>{held?.destroy();await events?.body?.cancel().catch(()=>{});await stop();await rm(directory,{recursive:true,force:true});});

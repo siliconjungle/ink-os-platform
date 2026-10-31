@@ -40,7 +40,7 @@ async function port() { const server = createServer(); server.listen(0, '127.0.0
 async function host(t, directory) {
   const hostPort = await port(), url = 'http://127.0.0.1:' + hostPort;
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(INK_|FLY_|AWS_|S3_|BUCKET_NAME|GIT_)/.test(name)));
-  Object.assign(env, { PORT: String(hostPort), INK_OS_DATA_DIR: directory, INK_OS_NATIVE: '0', NODE_ENV: 'production' });
+  Object.assign(env, { PORT: String(hostPort), INK_OS_DEFAULT_APPS: '0', INK_OS_DATA_DIR: directory, INK_OS_NATIVE: '0', NODE_ENV: 'production' });
   const child = spawn(process.execPath, ['scripts/start.mjs'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
   const exited = once(child, 'exit'); let output = '', stopped = false;
   child.stdout.on('data', bytes => output += bytes); child.stderr.on('data', bytes => output += bytes);

@@ -18,7 +18,7 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
   const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening');
   const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(PATH|HOME|LANG|LC_ALL|TMPDIR|INK_OS_DOCKER_SOCKET)$/.test(name)));
-  Object.assign(env, { PORT: String(port), INK_OS_BIND: '0.0.0.0', INK_OS_DATA_DIR: directory, INK_OS_CONFIG: join(directory, 'client.json'), INK_OS_NATIVE: '0', INK_OS_BACKENDS: 'docker', INK_OS_DOCKER_OS_URL: 'http://host.docker.internal:' + port, INK_OS_DOCKER_IDLE_MS: '1000', HOST_ONLY_SECRET: 'host-only-canary', INK_OS_APP_ORIGIN_TEMPLATE: 'http://__RELEASE__.apps.ink.localhost:' + port });
+  Object.assign(env, { PORT: String(port), INK_OS_BIND: '0.0.0.0', INK_OS_DEFAULT_APPS: '0', INK_OS_DATA_DIR: directory, INK_OS_CONFIG: join(directory, 'client.json'), INK_OS_NATIVE: '0', INK_OS_BACKENDS: 'docker', INK_OS_DOCKER_OS_URL: 'http://host.docker.internal:' + port, INK_OS_DOCKER_IDLE_MS: '1000', HOST_ONLY_SECRET: 'host-only-canary', INK_OS_APP_ORIGIN_TEMPLATE: 'http://__RELEASE__.apps.ink.localhost:' + port });
   const url = 'http://127.0.0.1:' + port;
   let child, output = '', instanceId;
   async function stop({ abrupt = false } = {}) { if (child && child.exitCode === null && child.signalCode === null) { child.kill(abrupt ? 'SIGKILL' : 'SIGTERM'); await once(child, 'exit'); } }

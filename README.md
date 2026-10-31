@@ -1,6 +1,12 @@
 # Ink OS
 
-Shared web desktop, application API, SDK, and CLI. A new instance contains zero apps.
+Shared web desktop, application API, SDK, and CLI. A new instance includes Finder, Preview and Ink Environment.
+
+Find more demo apps in the [Ink App Directory](https://github.com/siliconjungle/ink-app-directory).
+
+Finder, Preview and Ink Environment are ordinary isolated apps. Their exact public source commits and bundle checksums are recorded in `default-apps/lock.json`. Bundles ship with the platform, so first startup needs no app downloads. Installation runs once per fresh instance, resumes after an interruption, and preserves later app edits/removals. Existing instances are left unchanged. Set `INK_OS_DEFAULT_APPS=0` before the first start for an explicitly empty instance.
+
+To reproduce the bundled defaults, check out the three app repositories beside Platform at the exact commits in `default-apps/lock.json`, then run `npm run bundle:default-apps`. Deliberate app upgrades require updating the reviewed source pins before rebundling.
 
 Requires Node.js 24+ and Git.
 
@@ -49,7 +55,7 @@ node cli/bin/ink-os.mjs build ./my-app
 node cli/bin/ink-os.mjs deploy ./my-app
 ```
 
-`init` creates a local Git repository with `main.ink` and `ink-app.json`. No GitHub account is required. Edit the source and commit changes before deploying again. Deployment imports the committed tree into the instance, checks its Git tree identity, builds a release, and publishes it. The starter is created only by `init`; startup still installs zero apps.
+`init` creates a local Git repository with `main.ink` and `ink-app.json`. No GitHub account is required. Edit the source and commit changes before deploying again. Deployment imports the committed tree into the instance, checks its Git tree identity, builds a release, and publishes it. The starter is created only by `init`; startup includes only Finder, Preview and Ink Environment.
 
 JavaScript apps can also deploy from committed local Git without a repository URL. Build their frontend first, then run `ink-os deploy DIRECTORY`. An installed app with a source project updates that same project from the clean checkout, including apps whose older manifest still records a repository URL. `--project PROJECT_ID` selects an existing managed project for a new app; an installed app keeps its existing binding. A project snapshot uses the checkout's actual commit, and an explicit `--commit` must match it. Repository-based prebuilt deployments continue to accept their explicit source repository and revision.
 

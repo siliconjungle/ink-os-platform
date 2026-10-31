@@ -14,7 +14,7 @@ if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(owner || '') || !/^ink-os-proof-[a-z
 const directory = await mkdtemp(join(tmpdir(), 'ink-source-read-proof-'));
 const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening'); const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
 const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(PATH|HOME|SystemRoot|SYSTEMROOT|WINDIR|TEMP|TMP|TMPDIR|LANG|LC_ALL|INK_OS_GIT_ROOT)$/.test(name)));
-Object.assign(env, { PORT: String(port), INK_OS_DATA_DIR: directory, INK_OS_CONFIG: join(directory, 'client.json'), INK_OS_NATIVE: '0' });
+Object.assign(env, { PORT: String(port), INK_OS_DEFAULT_APPS:'0',INK_OS_DATA_DIR: directory, INK_OS_CONFIG: join(directory, 'client.json'), INK_OS_NATIVE: '0' });
 const url = 'http://127.0.0.1:' + port;
 let child, output = '';
 async function stop() { if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); await once(child, 'exit'); } }

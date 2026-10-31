@@ -9,6 +9,7 @@
     "cli": "Headless platform operations.",
     "infra": "Hosting provider implementations.",
     "app-runtime": "Isolated application execution.",
+    "computer-runtime": "Optional self-hosted Chromium service source, pinned dependencies and deployment instructions.",
     "scripts": "Build and source audit tools.",
     "tests": "Selected regression proofs.",
     "public": "Desktop assets.",
@@ -103,7 +104,8 @@
     "evidence/compiler-source-pins.json": "Exact committed source-pin compatibility build, core tree identity and package revision binding.",
     ".local/history-compiler-tests.log": "Required full platform regression with the new compiler artifact.",
     "evidence/populated-portability.json": "Sanitized actual populated frontends, live managed source authoring and authenticated local recovery acceptance.",
-    "computer-runtime": "Optional self-hosted Chromium service source, pinned dependencies and deployment instructions."
+    "default-apps": "Selected default app bundles and exact public source/checksum pins; required offline first-start reproduction inputs.",
+    "evidence/default-apps.json": "Selected default app installation, recovery, isolated-origin and hosted verification proof."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",

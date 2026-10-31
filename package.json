@@ -13,7 +13,8 @@
     "start": "node scripts/start.mjs",
     "build:runtime": "node scripts/build-runtime.mjs",
     "audit": "node scripts/audit-source.mjs",
-    "build:compiler": "node scripts/build-compiler.mjs"
+    "build:compiler": "node scripts/build-compiler.mjs",
+    "bundle:default-apps": "node scripts/bundle-default-apps.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1158.0",
@@ -45,7 +46,8 @@
     "cli",
     "dist",
     "scripts/start.mjs",
-    "LICENSE"
+    "LICENSE",
+    "default-apps"
   ],
   "exports": {
     ".": "./sdk/src/server.js",

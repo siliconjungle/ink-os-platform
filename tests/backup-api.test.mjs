@@ -20,7 +20,7 @@ async function host(t, storageEnv = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'ink-backup-api-'))), directory = join(root, 'data');
   await writeFile(join(root, 'storage-retention.json'), JSON.stringify({ keep: { data: 'Active owned API backup validation instance.' }, safe_to_remove: {} }));
   const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening'); const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(PATH|HOME|LANG|LC_ALL|TMPDIR)$/.test(key))), NODE_ENV: 'production', PORT: String(port), INK_OS_DATA_DIR: directory, INK_OS_NATIVE: '0', ...storageEnv };
+  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(PATH|HOME|LANG|LC_ALL|TMPDIR)$/.test(key))), NODE_ENV: 'production', PORT: String(port), INK_OS_DEFAULT_APPS: '0', INK_OS_DATA_DIR: directory, INK_OS_NATIVE: '0', ...storageEnv };
   const url = 'http://127.0.0.1:' + port; let child, output = '';
   async function stop() { if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); const [code] = await once(child, 'exit'); assert.equal(code, 0, output.slice(-2000)); } }
   async function start() {
