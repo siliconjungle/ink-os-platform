@@ -1,0 +1,100 @@
+{
+  "format": "ink-os-provider-recovery-proof-v1",
+  "status": "passed",
+  "baseCommit": "26ad74cbd0e750f3c6c6f251900943438c29e931",
+  "inputs": [
+    {
+      "sha256": "fde78fdb8d6581c40faeb435d0c5690a56a70513278a1bf4da071f202a243e4f",
+      "path": "shared/backup-limits.mjs"
+    },
+    {
+      "sha256": "fb2e142ad0cf9600a274cc67f0cb676a87877e3fa9d0829e5682d1e5a11b4091",
+      "path": "server/provider-bindings.mjs"
+    },
+    {
+      "sha256": "95833a14fcad7e1fb5df2e7ed96f5de816a42b3bb9f021d2591ec0edbf33998a",
+      "path": "server/provider-recovery.mjs"
+    },
+    {
+      "sha256": "116bda76ee96eebaa92b56306a5717a133fc173afdf8f98b38377f49dfdba1a4",
+      "path": "server/provider-recovery-host.mjs"
+    },
+    {
+      "sha256": "9cf19d1ae3a6ea7188c24f87ca0d8ce68ea92ac7b0e642bee31272abb5b58d3a",
+      "path": "server/backup-recovery.mjs"
+    },
+    {
+      "sha256": "67ecd1d0647bf7fccb4caa3a8e4901ffb42479dea1c738a0dc18bdac38873227",
+      "path": "server/backup-assets.mjs"
+    },
+    {
+      "sha256": "0bc45fa2bbe4456cb225068d0091a774d214626b3089659d4b3041994ff46a12",
+      "path": "server/storage.mjs"
+    },
+    {
+      "sha256": "047583a2738b1d2d662743a092a6c9cf1d33cfe428463fe378d0022e04e3d3c2",
+      "path": "server/storage-aliases.mjs"
+    },
+    {
+      "sha256": "b5079892e383c710540b2eb82bdeb4b41422f20399a92203919f88b41eb88585",
+      "path": "server/index.mjs"
+    },
+    {
+      "sha256": "6c045079aead954bc648786ade359d214329f5eb87f368ad183778b8868fca21",
+      "path": "server/platform.mjs"
+    },
+    {
+      "sha256": "bca114f01aedd1ceb9828752425d8422c9eb67c1469a78a80174fe5b58593798",
+      "path": "server/deletion.mjs"
+    },
+    {
+      "sha256": "41a70c935c35393836cc51e311afbbb233ef8aa223bd99077ae3bef4bb1f2d8f",
+      "path": "server/maintenance-host.mjs"
+    },
+    {
+      "sha256": "d749dee81e9d8b37690b4f15ed9707ffc2428693d5c65c3430007ea46b237b3c",
+      "path": "cli/bin/backup.mjs"
+    },
+    {
+      "sha256": "f47c692414082cbf0f062d806217ee349b9be7554a0575ecffb7095bc7473983",
+      "path": "src/native/frame.ts"
+    },
+    {
+      "sha256": "d959d6d41bc9e70b5e3ccf48d6ee573128645c759e683e0e6c9586001201ff45",
+      "path": "src/native/app-launch.ts"
+    },
+    {
+      "sha256": "ce0c1e2a4af63b9b9430beed5d71c31f1a3c6d91e2efd1f42954a3fdb6ac3df0",
+      "path": "tests/provider-recovery.test.mjs"
+    },
+    {
+      "sha256": "324692a98ace5d1503a3d5629ec91b62d9095ebfd4f3158bfbe475307642c642",
+      "path": "tests/docker-backends.test.mjs"
+    }
+  ],
+  "verification": {
+    "command": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "tests": 325,
+    "passed": 320,
+    "failed": 0,
+    "skipped": 5,
+    "logSha256": "e3da3841e71cd62ebae2a91e26ca9f7b44189db684f7647eebfbdedab0fcbd2c",
+    "typecheck": "passed",
+    "sourceAudit": "passed"
+  },
+  "observed": [
+    "Actual stopped CLI recovery preserved identity/encryption keys, complete managed Git bytes/modes/history, app data and encrypted environment values.",
+    "A restored real host served a fresh isolated app frontend and local files while ignoring ambient source cloud credentials; source-provider transport counts did not increase.",
+    "Actual destination-only R2 and official signed S3 client transfers verified every uploaded object before serving apps; completed transfer was not repeated on restart.",
+    "Objects above24MiB and more than20000 historical aliases restored under shared64MiB/200000-location capture/recovery bounds.",
+    "Authenticated corrupt, missing, ambiguous and mismatched manifests or blobs never published the recovery destination.",
+    "An interrupted destination copy refused a changed target and resumed exact digest writes on the original destination.",
+    "Original storage/alias/worker/maintenance authority remained in private audit files. Runtime bootstrap detached old deployments and app URLs without adopting, resuming or stopping former workers.",
+    "Repeated runtime activation preserved app-state objects and did not create duplicate recovery mutations."
+  ],
+  "limits": [
+    "Remote object stores are owned loopback protocol fixtures; production hosted recovery acceptance remains pending.",
+    "The amended real Docker restored-backend test is awaiting this source publication and CI.",
+    "Developer ID signing/notarization is outside this platform proof."
+  ]
+}

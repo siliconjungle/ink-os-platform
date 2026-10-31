@@ -3,6 +3,7 @@ import {join} from 'node:path';
 import {desktopFile} from '../shared/desktop-placements.mjs';
 import {blobDigest} from './world.mjs';
 import {clearAppDefaults} from './file-defaults.mjs';
+import {unboundDeployment} from './provider-bindings.mjs';
 const fail=(status,message)=>{throw Object.assign(Error(message),{status});};
 const metadata=object=>{try{return JSON.parse(object.body);}catch{return{};}};
 export async function deleting(platform,object,namespace,run){
@@ -29,7 +30,7 @@ export async function purgeApp(platform,id){
    delete platform.keys[id];await platform.saveKeys();
    const releases=platform.world.all().filter(o=>o.kind==='release'&&metadata(o).appId===id),releaseIds=new Set(releases.map(o=>o.id));
    const survivingRuntimes=new Set(platform.world.all().filter(o=>!releaseIds.has(o.id)&&o.kind==='release').flatMap(o=>runtimes(metadata(o).deployment)));
-   for(const release of releases){const deployment=metadata(release).deployment;if(!deployment)continue;if(runtimes(deployment).some(name=>survivingRuntimes.has(name)))continue;if(!platform.provider?.retire)fail(503,'Runtime cleanup provider is unavailable');await platform.provider.retire(deployment);}
+   for(const release of releases){const deployment=metadata(release).deployment;if(!deployment||unboundDeployment(deployment))continue;if(runtimes(deployment).some(name=>survivingRuntimes.has(name)))continue;if(!platform.provider?.retire)fail(503,'Runtime cleanup provider is unavailable');await platform.provider.retire(deployment);}
    await platform.environment.remove(id);await clearAppDefaults(platform,id);
    const objects=platform.world.all().filter(o=>o.id===id||o.namespace===id||releaseIds.has(o.id)||o.kind==='fork-snapshot'&&metadata(o).targetId===id);
    return purge(platform,objects,{namespace:id,releases});

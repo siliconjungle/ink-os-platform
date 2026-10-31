@@ -8,6 +8,8 @@ import { InkPreviews } from './ink-previews.mjs';
 import { drainHost } from './shutdown.mjs';
 import { SnapshotGate } from './snapshot-gate.mjs';
 import { Backups } from './backups.mjs';
+import { readProviderBinding } from './provider-bindings.mjs';
+import { activateRecoveredStorage,activateRecoveredRuntimes } from './provider-recovery-host.mjs';
 import { backupRoute, backupControlPath } from './backup-router.mjs';
 import { httpConnections } from './http-connections.mjs';
 import{DesktopActions}from './desktop-actions.mjs';
@@ -56,6 +58,10 @@ const maintenanceAdapter=Object.fromEntries(['closeAdmission','resumeAdmission',
 const maintenance=await new Maintenance({directory:data,instanceId:process.env.INK_OS_INSTANCE_ID,images:()=>({os:process.env.INK_OS_IMAGE_PIN,runtime:process.env.INK_OS_RUNTIME_IMAGE}),adapter:maintenanceAdapter,admissionAvailable:()=>!draining&&!stopping&&!snapshotGate?.closed&&!backups?.busy}).open();
 const world = await new World(data).open();
 const storage = await new Storage(data).open();
+await activateRecoveredStorage(storage);
+await activateRecoveredRuntimes(world);
+const runtimeBinding=await readProviderBinding(data,'runtime',process.env.INK_OS_INSTANCE_ID);
+if(runtimeBinding?.provider==='host')process.env.INK_OS_APP_PREFIX=(process.env.INK_OS_APP_PREFIX||'ink')+'-r'+runtimeBinding.operation.slice(0,8);
 const collaboration = new Collaboration({directory:data,world,storage});
 const namespaceMigrations = new NamespaceMigrations({directory:data,world,collaboration,storage});
 await namespaceMigrations.recover();
@@ -66,7 +72,7 @@ const embeddings={describe:()=>({status:'disabled',model:'',dimensions:0,error:'
 const clients = new Map();
 const vite = process.env.INK_OS_DEV!=='1'?null:await createViteServer({ root, server: { middlewareMode: true, hmr: { host: '127.0.0.1', port: 24678 } }, appType: 'spa' });
 const serve=process.env.INK_OS_DEV!=='1'?staticFiles(join(root,'dist')):(req,res)=>vite.middlewares(req,res,()=>{res.statusCode=404;res.end();});
-const platform=await new Platform({root,directory:data,world,storage,origin,adminToken:process.env.INK_OS_ADMIN_TOKEN||(!production?'local-development-only':undefined),sourceProvider:process.env.INK_OS_GITHUB_TOKEN?new GitHubSources():undefined,provider:process.env.FLY_API_TOKEN?(process.env.INK_OS_HOSTING==='pool'?new PooledProvider({fly:new FlyProvider()}):new FlyProvider()):new LocalProvider({compute:process.env.INK_OS_BACKENDS==='docker'?new DockerCompute():undefined})}).open();
+const platform=await new Platform({root,directory:data,world,storage,origin,adminToken:process.env.INK_OS_ADMIN_TOKEN||(!production?'local-development-only':undefined),sourceProvider:process.env.INK_OS_GITHUB_TOKEN?new GitHubSources():undefined,provider:runtimeBinding?.provider!=='local'&&process.env.FLY_API_TOKEN?(process.env.INK_OS_HOSTING==='pool'?new PooledProvider({fly:new FlyProvider()}):new FlyProvider()):new LocalProvider({compute:process.env.INK_OS_BACKENDS==='docker'?new DockerCompute():undefined})}).open();
 platform.projects = await new Projects(data).open();
 platform.calls=new CallRooms({clients,app:id=>platform.app(id),...(process.env.INK_OS_RTC_ICE_SERVERS?{iceServers:JSON.parse(process.env.INK_OS_RTC_ICE_SERVERS)}:{})});
 await reconcileFileDefaults(platform);

@@ -2,6 +2,7 @@ import { lstat, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setImmediate as nextTurn } from 'node:timers/promises';
 import { LocalProvider } from '../infra/local-provider.mjs';
+import { unboundDeployment } from './provider-bindings.mjs';
 
 const fail=(code,message,status=503)=>{throw Object.assign(Error(message),{code,status});};
 const check=(condition,code,message,status)=>{if(!condition)fail(code,message,status);};
@@ -98,7 +99,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
       if(deployment.legacyBackend||deployment.backendURL||deployment.legacy?.backendURL||deployment.legacy&&!deployment.legacy.parked||deployment.provider==='fly'&&meta.backend||deployment.provider!=='pool'&&deployment.provider!=='local'&&!deployment.parked)diagnostics.push({reason:'unpooled-legacy-deployment'});
       if(deployment.provider==='pool'&&meta.backend&&!pool())diagnostics.push({reason:'pooled-backend-without-pool'});
       if(deployment.provider==='local'&&meta.backend&&!pool()&&!localBackendsInactive)diagnostics.push({reason:'unpooled-local-backend'});
-      if(!['pool','local','fly'].includes(deployment.provider))diagnostics.push({reason:'deployment-provider-unverified'});
+      if(!['pool','local','fly'].includes(deployment.provider)&&!unboundDeployment(deployment))diagnostics.push({reason:'deployment-provider-unverified'});
     }
     for(const[appId,manifest]of apps){
       if(!manifest.releaseId)continue;

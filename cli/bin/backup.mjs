@@ -24,7 +24,7 @@ export async function backupPassword({ options = {}, stdin = process.stdin, env 
 
 /** Offline recovery never claims to stop a running host. */
 export async function backupCLI({ sub, options = {}, print = value => console.log(JSON.stringify(value, null, 2)), stdin = process.stdin, env = process.env } = {}) {
-  const allowed = new Set(['directory', 'input', 'output', 'offline', 'password-stdin', 'password-env']);
+  const allowed = new Set(['directory', 'input', 'output', 'offline', 'password-stdin', 'password-env', ...(sub === 'restore' ? ['storage','runtime'] : [])]);
   for (const name of Object.keys(options)) if (!allowed.has(name)) throw Error('Unsupported backup option: --' + name);
   if (!['create', 'restore'].includes(sub)) throw Error('Use backup create --offline --directory DIR --output FILE or backup restore --offline --directory DIR --input FILE');
   if (options.offline !== true) throw Error('Stop the instance host, then specify --offline');
@@ -32,7 +32,7 @@ export async function backupCLI({ sub, options = {}, print = value => console.lo
   const password = await backupPassword({ options, stdin, env });
   const result = sub === 'create'
     ? await createStoppedBackup({ directory: await realpath(options.directory), archive: await selectedPath(options.output), password, offline: true })
-    : await recoverBackup({ directory: await selectedPath(options.directory), archive: await selectedPath(options.input), password, offline: true });
+    : await recoverBackup({ directory: await selectedPath(options.directory), archive: await selectedPath(options.input), password, offline: true, storage:options.storage,runtime:options.runtime });
   print(result); return result;
 }
 

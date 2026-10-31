@@ -4,10 +4,21 @@ import { constants } from 'node:fs';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { hash,blobDigest } from './world.mjs';
 import { StorageAliases,storageAliasLocation } from './storage-aliases.mjs';
+import { readProviderBinding,writePrivateJSON } from './provider-bindings.mjs';
 
 export class Storage {
   constructor(directory,{env=process.env}={}) { this.directory = directory; this.env=env; this.config = null;this.r2=null;this.blobTails=new Map();this.inflight=new Map();this.aliases=new StorageAliases({directory,isCurrent:location=>this.aliasIsCurrent(location),readCurrent:(location,options)=>this.readAliasCurrent(location,options),withDigests:(digests,run)=>{const next=index=>index===digests.length?run():this.lockBlob(digests[index],()=>next(index+1));return next(0);}}); }
-  async open() { await mkdir(join(this.directory, 'blobs'), { recursive: true }); try { this.config = JSON.parse(await readFile(join(this.directory, 'storage.json'), 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw e; }if(this.env.INK_OS_R2_URL&&this.env.INK_OS_R2_TOKEN)this.r2={url:this.env.INK_OS_R2_URL,token:this.env.INK_OS_R2_TOKEN,bucket:this.env.INK_OS_R2_BUCKET||'ink-os-assets'};const bucket=this.env.INK_OS_S3_BUCKET||this.env.BUCKET_NAME||this.env.S3_BUCKET;if(bucket)this.config={managed:true,bucket,endpoint:this.env.INK_OS_S3_ENDPOINT||this.env.AWS_ENDPOINT_URL_S3||this.env.S3_ENDPOINT,region:this.env.AWS_REGION||this.env.AWS_DEFAULT_REGION||'auto',accessKeyId:this.env.AWS_ACCESS_KEY_ID,secretAccessKey:this.env.AWS_SECRET_ACCESS_KEY,prefix:(this.env.INK_OS_STORAGE_PREFIX||'ink-os').replace(/^\/+|\/+$/g,'')+'/'};await this.aliases.open();return this; }
+  async open() {
+    await mkdir(join(this.directory,'blobs'),{recursive:true});this.config=null;this.r2=null;
+    this.binding=await readProviderBinding(this.directory,'storage');
+    if(this.binding?.provider!=='local')try{this.config=JSON.parse(await readFile(join(this.directory,'storage.json'),'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+    if(!this.binding||this.binding.provider==='host'){
+      if(this.env.INK_OS_R2_URL&&this.env.INK_OS_R2_TOKEN)this.r2={url:this.env.INK_OS_R2_URL,token:this.env.INK_OS_R2_TOKEN,bucket:this.env.INK_OS_R2_BUCKET||'ink-os-assets'};
+      const bucket=this.env.INK_OS_S3_BUCKET||this.env.BUCKET_NAME||this.env.S3_BUCKET;if(bucket)this.config={managed:true,bucket,endpoint:this.env.INK_OS_S3_ENDPOINT||this.env.AWS_ENDPOINT_URL_S3||this.env.S3_ENDPOINT,region:this.env.AWS_REGION||this.env.AWS_DEFAULT_REGION||'auto',accessKeyId:this.env.AWS_ACCESS_KEY_ID,secretAccessKey:this.env.AWS_SECRET_ACCESS_KEY,prefix:(this.env.INK_OS_STORAGE_PREFIX||'ink-os').replace(/^\/+|\/+$/g,'')+'/'};
+    }
+    if(this.binding?.provider==='configured'&&!this.config?.bucket)throw Error('Configured recovery storage needs its private storage.json.');
+    await this.aliases.open();return this;
+  }
   installAliases(input){return this.aliases.install(input);}
   aliasIsCurrent(location){const value=storageAliasLocation(location);return value.scheme==='blob'||value.scheme==='r2'&&this.r2?.bucket===value.bucket||value.scheme==='s3'&&this.config?.bucket===value.bucket&&value.key===(this.config.prefix||'')+'objects/'+value.digest;}
   async readAliasCurrent(location,{maxBytes,allowMissing=false}={}){
@@ -26,7 +37,9 @@ export class Storage {
   async connect(config) {
     if(this.r2||this.config?.managed)throw Error('Storage is managed through server environment variables');if (!config.bucket) throw Error('Enter a bucket name');
     await this.client(config).send(new HeadBucketCommand({ Bucket: config.bucket }));
-    this.config = config; await writeFile(join(this.directory, 'storage.json'), JSON.stringify(config), { mode: 0o600 });
+    await writePrivateJSON(this.directory,'storage.json',config);
+    if(this.binding){const binding={...this.binding,provider:'configured'};await writePrivateJSON(this.directory,'storage-binding.json',binding);this.binding=binding;}
+    this.config = config;
     return this.describe();
   }
   describe() { return { local: true,...(this.r2?{r2:{managed:true,bucket:this.r2.bucket}}:{}),s3: !this.r2&&this.config ? { managed:!!this.config.managed,bucket: this.config.bucket, endpoint: this.config.endpoint || '', region: this.config.region || 'us-east-1' } : null }; }

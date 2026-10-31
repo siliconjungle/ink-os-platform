@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { captureCurrentProcessReceipt, checkProcessReceipt } from './process-receipt.mjs';
+import { BACKUP_ASSET_LIMITS } from '../shared/backup-limits.mjs';
 
 const format = 'ink-os-storage-aliases-v1';
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -33,7 +34,7 @@ async function syncDirectory(path) { const f = await open(path, 'r'); try { awai
 export class StorageAliases {
   constructor({ directory, isCurrent, readCurrent, withDigests = (_digests, run) => run(), limits = {}, fault }) {
     if (!directory || typeof isCurrent !== 'function' || typeof readCurrent !== 'function') fail('Provide a private directory and current storage adapter');
-    const defaults = { aliases: 20000, operations: 4096, inputBytes: 8 * 1024 * 1024, journalBytes: 16 * 1024 * 1024, objectBytes: 24 * 1024 * 1024, verifiedBytes: 2 * 1024 * 1024 * 1024 };
+    const defaults = { aliases: BACKUP_ASSET_LIMITS.locations, operations: 4096, inputBytes: 8 * 1024 * 1024, journalBytes: 128 * 1024 * 1024, objectBytes: BACKUP_ASSET_LIMITS.objectBytes, verifiedBytes: 2 * 1024 * 1024 * 1024 };
     for (const [key, value] of Object.entries(limits)) if (!(key in defaults) || !Number.isSafeInteger(value) || value < 1 || value > defaults[key]) fail('Storage alias limits can only be reduced');
     Object.assign(this, { directory, isCurrent, readCurrent, withDigests, fault, limits: { ...defaults, ...limits }, path: join(directory, 'storage-aliases.json'), aliases: new Map(), operations: new Map(), tail: Promise.resolve(), ready: false });
   }

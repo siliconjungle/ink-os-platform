@@ -89,7 +89,17 @@
     ".local/backup-api-focused.log": "Selected required focused backup API/CLI/recovery/archive/gate regression log.",
     ".local/backup-api-tests.log": "Completed319-test serial regression:314 passed,5 environment gates,0 failures. Selected proof retains exact source/log digest.",
     "evidence/backup-api.json": "Selected actual owned host CLI/API/SDK encrypted capture/download/recovery/restart/shutdown proof with exact inputs and full regression digest; production/provider-rebinding limits explicit.",
-    ".local/backup-api-shutdown.log": "Completed actual slow remote-reader/SIGTERM and private job protocol tests; selected proof scope is also covered by the full regression."
+    ".local/backup-api-shutdown.log": "Completed actual slow remote-reader/SIGTERM and private job protocol tests; selected proof scope is also covered by the full regression.",
+    "shared/backup-limits.mjs": "Shared authenticated asset/recovery bounds; retained blobs and location coverage must remain representable after provider changes.",
+    "server/provider-bindings.mjs": "Bound private storage/runtime selection and atomic bounded provider metadata primitives.",
+    "server/provider-recovery.mjs": "Pure offline authenticated manifest/content verification, local alias generation and exact original provider-journal quarantine.",
+    "server/provider-recovery-host.mjs": "Destination-only verified startup object transfer and checked World deployment rebinding with restart receipts.",
+    "tests/provider-recovery.test.mjs": "Required real owned local/R2/S3/CLI/Git/key/state/frontend, large-object/alias and interrupted/corrupt recovery proof inputs.",
+    ".local/provider-recovery-foundation.log": "Completed47-test preexisting recovery/storage/gate regression on the new bindings.",
+    ".local/provider-recovery-tests.log": "Completed6-test real protocol/host provider recovery proof; exact source-bound consolidation pending full regression.",
+    "evidence/provider-recovery.json": "Selected exact-source CLI/host local/R2/S3 provider recovery proof, source isolation, large-object/alias coverage and terminal regression hash.",
+    ".local/provider-recovery-all-tests.log": "Completed325-test serial regression:320passed5explicit environment gates0failures; exact source and log digest retained.",
+    ".local/provider-recovery-url-tests.log": "Completed6-test fresh recovered deployment and detached source URL regression."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { createClient } from '../sdk/src/server.js';
 import { DockerEngine } from '../infra/docker-engine.mjs';
 import { proofHTTP } from '../scripts/proof-http.mjs';
+import { recoverBackup } from '../server/backup-recovery.mjs';
 
 const execute = promisify(execFile);
 test('real Docker backends preserve held work across restart, isolate tenants, reuse idle slots and run OCI handlers', { skip: process.env.INK_TEST_DOCKER !== '1', timeout: 180000 }, async t => {
@@ -118,7 +119,8 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
   let saved;
   for (let attempt = 0; attempt < 300; attempt++) { saved = await sdk.backups.get(backupOperation); if (!['queued', 'running'].includes(saved.status)) break; await new Promise(resolve => setTimeout(resolve, 100)); }
   assert.equal(saved.status, 'ready', JSON.stringify(saved));
-  const encrypted = await sdk.backups.download(backupOperation); let captured = 0; for await (const chunk of encrypted.chunks) captured += chunk.length; assert.equal(captured, saved.bytes);
+  const encrypted = await sdk.backups.download(backupOperation), archiveParts=[]; let captured = 0; for await (const chunk of encrypted.chunks) {captured += chunk.length;assert.ok(captured<=16*1024*1024);archiveParts.push(chunk);} assert.equal(captured, saved.bytes);
+  const archive=join(directory,'captured.inkbak');await writeFile(archive,Buffer.concat(archiveParts),{mode:0o600});
   await sdk.backups.delete(backupOperation);
   assert.equal((await invoke(second.app, '/account-work', 'POST')).body.started, true);
   const held = (await runtimes()).slots.find(slot => slot.appId === second.app.id);
@@ -131,4 +133,10 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
   assert.equal(result.value?.done, true, JSON.stringify(result));
   assert.equal((await sdk.data.get(result.value.objectId)).title, 'Admitted account continuation');
   await sdk.account.keys.revoke(accountKey.id);
+  await stop();
+  const restored=join(directory,'restored');await recoverBackup({directory:restored,archive,password:'Disposable Docker backup proof password',offline:true,storage:'local',runtime:'local'});
+  env.INK_OS_DATA_DIR=restored;env.INK_OS_CONFIG=join(restored,'client.json');await start();
+  assert.equal((await invoke(first.app,'/count')).body.value.count,1);
+  assert.equal((await invoke(first.app,'/count','POST')).body.value.count,2);
+  assert.equal((await fetch(url+'/api/v1/runtime/bundle/'+first.release.id,{headers:{Authorization:'Bearer '+oldToken}})).status,401);
 });

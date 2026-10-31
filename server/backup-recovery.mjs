@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createBackup, restoreBackup } from './backup-store.mjs';
 import { gitRuntime } from './git-runtime.mjs';
+import { prepareProviderRecovery } from './provider-recovery.mjs';
 
 const execute = promisify(execFile);
 async function smallJSON(path, optional = false) {
@@ -93,8 +94,9 @@ async function retire(path) {
  * Caller exclusively controls the destination parent during final publication.
  * Remote assets/environment-provided keys still need explicit materialization.
  */
-export async function recoverBackup({ directory, archive, password, offline = false, limits, fetcher, git = gitRuntime().executable } = {}) {
+export async function recoverBackup({ directory, archive, password, offline = false, limits, fetcher, git = gitRuntime().executable, storage = 'preserve', runtime = 'preserve' } = {}) {
   if (offline !== true) throw Error('Stop the instance host and explicitly specify offline:true');
+  if (!['preserve','local','host'].includes(storage) || !['preserve','local','host'].includes(runtime)) throw Error('Recovery storage/runtime must be preserve, local or host.');
   directory = await selectedPath(directory); archive = await selectedPath(archive);
   const initial = await targetState(directory), parent = dirname(directory);
   let envelope;
@@ -157,6 +159,7 @@ export async function recoverBackup({ directory, archive, password, offline = fa
       await writable(catalogPath, false);
       const file = await open(catalogPath, 'w'); try { await file.writeFile(JSON.stringify(catalog)); await file.sync(); } finally { await file.close(); }
     }
+    const providerBindings = await prepareProviderRecovery({directory:payload,restored,storage,runtime});
     const removedConnectionFiles = [];
     try { await unlink(join(payload, 'client.json')); removedConnectionFiles.push('client.json'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     for (const [path, mode] of [...modes].reverse()) {
@@ -167,6 +170,6 @@ export async function recoverBackup({ directory, archive, password, offline = fa
     const now = await targetState(directory);
     if (!!initial !== !!now || initial && (initial.dev !== now.dev || initial.ino !== now.ino)) throw Error('Recovery target changed before publication');
     await rename(payload, directory); await syncDirectory(parent);
-    return { ...restored, recovery: { rebasedProjects, rebasedHooks, externalProjects, customHooks, removedConnectionFiles, offlineCheck } };
+    return { ...restored, recovery: { rebasedProjects, rebasedHooks, externalProjects, customHooks, removedConnectionFiles, offlineCheck, ...(providerBindings ? {providerBindings} : {}) } };
   } finally { if (envelope) await retire(envelope); }
 }

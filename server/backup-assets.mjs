@@ -3,10 +3,11 @@ import { open, lstat } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { storageAliasLocation } from './storage-aliases.mjs';
+import { BACKUP_ASSET_LIMITS } from '../shared/backup-limits.mjs';
 
 const format = 'ink-os-backup-asset-closure-v1';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
-const defaults = { objects: 100000, locations: 200000, objectBytes: 64 * 1024 * 1024, totalBytes: 1024 ** 4, manifestBytes: 16 * 1024 * 1024 };
+const defaults = BACKUP_ASSET_LIMITS;
 function limitsFor(input) {
   const result = { ...defaults, ...input };
   for (const [key, value] of Object.entries(result)) if (!(key in defaults) || !Number.isSafeInteger(value) || value < 1 || value > defaults[key]) throw Error('Backup asset limits can only be reduced.');

@@ -85,8 +85,14 @@
   ],
   "limits": [
     "Remote storage tests use owned loopback R2/S3 protocol fixtures, not the personal hosted bucket.",
-    "The new backup operation has not yet completed real Docker or hosted acceptance; the amended real Docker test is awaiting publication/CI.",
-    "Raw archive and same-provider stopped recovery are proven. Explicit storage/runtime provider rebinding remains unfinished.",
+    "Provider-changing recovery is recorded separately in evidence/provider-recovery.json.",
     "Personal hosted and desktop releases have not yet been upgraded to these new backup endpoints."
-  ]
+  ],
+  "ci": {
+    "commit": "26ad74cbd0e750f3c6c6f251900943438c29e931",
+    "mainRun": 41194277734,
+    "branchRun": 41194277327,
+    "dockerJob": 124517180468,
+    "conclusion": "success"
+  }
 }
