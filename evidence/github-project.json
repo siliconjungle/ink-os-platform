@@ -1,0 +1,73 @@
+{
+  "format": "ink-os-github-publication-proof-v1",
+  "repository": "https://github.com/siliconjungle/ink-os-proof-project-sources-20261031",
+  "repositoryId": 1440450795,
+  "visibility": "private",
+  "branch": "proof/reconciliation",
+  "first": {
+    "repository": "https://github.com/siliconjungle/ink-os-proof-project-sources-20261031",
+    "repositoryId": 1440450795,
+    "branch": "proof/reconciliation",
+    "sourceCommit": "cdeddf713e650776fb988bd06264af995914832b",
+    "tree": "e994f070db09e65d0cc670c600ae44cd4ba2f332",
+    "remoteCommit": "a7d155229c0e2753fed2693731a16b22dddb6ad1",
+    "parent": null,
+    "createdAt": "2026-10-31T03:07:17.103Z",
+    "publishedAt": "2026-10-31T03:07:18.478Z"
+  },
+  "second": {
+    "repository": "https://github.com/siliconjungle/ink-os-proof-project-sources-20261031",
+    "repositoryId": 1440450795,
+    "branch": "proof/reconciliation",
+    "sourceCommit": "bcf559e4d39b7e89baa1a2186f4a61f4174da7c4",
+    "tree": "45f38029a85b71131b68d30fc6878cfc42c875c9",
+    "remoteCommit": "a3558d8cc44e2e62ac7bdbab7414d37e71e36807",
+    "parent": "a7d155229c0e2753fed2693731a16b22dddb6ad1",
+    "createdAt": "2026-10-31T03:07:22.184Z",
+    "publishedAt": "2026-10-31T03:07:23.620Z"
+  },
+  "conflictCommit": "b625d669f6fb5eabc8dc4fb123bc91cf33bf81e9",
+  "reconciliation": {
+    "repository": "https://github.com/siliconjungle/ink-os-proof-project-sources-20261031",
+    "repositoryId": 1440450795,
+    "branch": "proof/reconciliation",
+    "sourceCommit": "5bc38db916fe72aad98d5e2d7a6f6b54124217bf",
+    "tree": "ac9bb9e01877cb1bab587b0d91c2b9d122bbf0ec",
+    "remoteCommit": "305483c2579db460d8231981212b6ba7fce5340a",
+    "parent": "b625d669f6fb5eabc8dc4fb123bc91cf33bf81e9",
+    "createdAt": "2026-10-31T03:07:30.522Z",
+    "publishedAt": "2026-10-31T03:07:31.912Z"
+  },
+  "observed": [
+    "Fresh host contained zero apps before and after source operations.",
+    "CLI stored a private project token and explicitly published a private GitHub branch.",
+    "Restart preserved credentials and returned the same publication receipt without another commit.",
+    "SDK published the next committed snapshot with exact tree identity and executable mode.",
+    "Fresh remote fetch found exact binary bytes, the expected tree and exactly two publication commits before the conflict check.",
+    "Source duplication defaulted to independent local Git without credentials.",
+    "A real remote file addition caused HTTP 409 and remained the branch head.",
+    "After importing the remote file, CLI publication acknowledged its exact base and preserved both the file tree and remote history.",
+    "Credential ciphertext omitted the token and explicit removal succeeded."
+  ],
+  "limits": [
+    "Single GitHub personal-owner/private-repository roundtrip; organization/public creation has not been validated against GitHub.",
+    "Lost-response recovery and concurrent push races use real local Git remotes in automated tests.",
+    "Automatic fetching/merging of external GitHub changes is not implemented."
+  ],
+  "initialRepositoryCreation": {
+    "repositoryId": 1440450795,
+    "visibility": "private",
+    "branch": "main",
+    "first": {
+      "repository": "https://github.com/siliconjungle/ink-os-proof-project-sources-20261031",
+      "repositoryId": 1440450795,
+      "branch": "main",
+      "sourceCommit": "c2807b05885626ec398211020f4887b8dbbf6866",
+      "tree": "e994f070db09e65d0cc670c600ae44cd4ba2f332",
+      "remoteCommit": "b41a331bf65639c7bef7af93e90617039574cda0",
+      "parent": null,
+      "createdAt": "2026-10-31T03:04:42.917Z",
+      "publishedAt": "2026-10-31T03:04:44.374Z"
+    }
+  }
+}

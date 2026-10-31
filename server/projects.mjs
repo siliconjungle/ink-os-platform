@@ -5,6 +5,8 @@ import { promisify } from 'node:util';
 import { randomBytes } from 'node:crypto';
 import { sourceFiles } from '../shared/source-files.mjs';
 import { gitRuntime } from './git-runtime.mjs';
+import { ProjectCredentials } from './project-credentials.mjs';
+import { ProjectPublisher, PublicationGit } from './project-publisher.mjs';
 
 const execute = promisify(execFile);
 const fail = (status, message) => { throw Object.assign(Error(message), { status }); };
@@ -17,10 +19,11 @@ export function projectSettings(input = {}) {
   if (remote && !/^(https:\/\/|ssh:\/\/|git@)[^\s]+$/.test(remote)) fail(400, 'Use an HTTPS or SSH Git remote.');
   if (remote && /^https?:\/\/[^/]*@/.test(remote)) fail(400, 'Credentials belong in a credential provider, not a Git remote.');
   const github = source.github || {};
-  if (source.provider === 'github' && (!/^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}$/.test(github.owner || '') || !/^[a-zA-Z0-9_.-]{1,100}$/.test(github.repository || ''))) fail(400, 'Provide a GitHub owner and repository for this project.');
+  if (source.provider === 'github' && (!/^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}$/.test(github.owner || '') || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/.test(github.repository || ''))) fail(400, 'Provide a GitHub owner and repository for this project.');
+  if (source.provider === 'github' && remote && remote !== 'https://github.com/' + github.owner + '/' + github.repository + '.git') fail(400, 'GitHub remote must match the configured project destination.');
   if (github.visibility && !['private', 'public'].includes(github.visibility)) fail(400, 'Visibility must be private or public.');
   const branch = input.branch || 'main';
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9/_-]{0,100}$/.test(branch) || branch.includes('..')) fail(400, 'Invalid Git branch.');
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9/_-]{0,100}$/.test(branch) || branch.split('/').some(part => !part)) fail(400, 'Invalid Git branch.');
   return {
     branch,
     source: {
@@ -33,7 +36,7 @@ export function projectSettings(input = {}) {
 }
 
 export class Projects {
-  constructor(directory, { git = gitRuntime().executable } = {}) {
+  constructor(directory, { git = gitRuntime().executable, environmentKey, publisher } = {}) {
     this.directory = directory;
     this.catalogPath = join(directory, 'projects.json');
     this.root = join(directory, 'projects');
@@ -41,12 +44,16 @@ export class Projects {
     this.records = {};
     this.tail = Promise.resolve();
     this.operations = new Map();
+    this.credentials = new ProjectCredentials(directory, environmentKey);
+    this.publisher = publisher || new ProjectPublisher(directory, { git: new PublicationGit({ executable: git }) });
   }
   async open() {
     await mkdir(this.root, { recursive: true, mode: 0o700 });
     this.root = await realpath(this.root);
     try { this.records = JSON.parse(await readFile(this.catalogPath, 'utf8')); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
+    await this.credentials.open();
+    await this.publisher.open();
     return this;
   }
   async gitRaw(directory, args, options = {}) {
@@ -92,18 +99,35 @@ export class Projects {
     await this.persist();
     return project;
   }
-  async update(id, input) {
+  update(id, input) { return this.operation(id, () => this.configure(id, input)); }
+  async configure(id, input) {
     const current = this.get(id);
     const settings = projectSettings({ ...current, ...input, source: input.source || current.source });
     this.records[id] = { ...current, ...settings };
     await this.persist();
     return this.records[id];
   }
-  snapshot(input = {}, id) {
-    const operation = (this.operations.get(id || 'new') || Promise.resolve()).catch(() => {}).then(() => this.importSnapshot(input, id));
-    this.operations.set(id || 'new', operation);
-    operation.finally(() => { if (this.operations.get(id || 'new') === operation) this.operations.delete(id || 'new'); }).catch(() => {});
+  operation(key, run) {
+    const operation = (this.operations.get(key) || Promise.resolve()).catch(() => {}).then(run);
+    this.operations.set(key, operation);
+    operation.finally(() => { if (this.operations.get(key) === operation) this.operations.delete(key); }).catch(() => {});
     return operation;
+  }
+  snapshot(input = {}, id) { return this.operation(id || 'new', () => this.importSnapshot(input, id)); }
+  credentialStatus(id) { return this.credentials.status(this.get(id)); }
+  setCredentials(id, token) { return this.operation(id, () => this.credentials.set(this.get(id), token)); }
+  removeCredentials(id) { return this.operation(id, () => this.credentials.remove(this.get(id))); }
+  publication(id) { return this.publisher.status(this.get(id)); }
+  publish(id, input = {}) {
+    return this.operation(id, async () => {
+      if (!input || typeof input !== 'object' || Array.isArray(input) || input.create !== undefined && typeof input.create !== 'boolean' || input.expectedRemote !== undefined && !/^[a-f0-9]{40}$/.test(input.expectedRemote)) fail(400, 'Use create as a boolean and expectedRemote as a full commit SHA.');
+      const project = this.get(id), token = this.credentials.token(project), state = await this.status(id);
+      if (!state.commit || state.changes) fail(409, 'Commit project changes before publishing.');
+      const commit = input.commit || state.commit, files = await this.files(id, commit);
+      if (files.some(file => Buffer.from(file.base64, 'base64').includes(Buffer.from(token)))) fail(400, 'Committed source contains the project credential. Remove it before publishing.');
+      const tree = await this.git(project.directory, ['rev-parse', commit + '^{tree}']);
+      return this.publisher.publish(project, { commit, tree, files }, token, { create: input.create === true, expectedRemote: input.expectedRemote });
+    });
   }
   async importSnapshot(input, id) {
     const files = sourceFiles(input.files);
@@ -193,7 +217,7 @@ export class Projects {
     if (state.changes && !input.commit) fail(409, 'Commit or discard project edits before duplicating.');
     const revision = input.commit || state.commit;
     await this.files(id, revision);
-    const copy = await this.create({ title: input.title || original.title + ' copy', source: { provider: 'local' }, target: input.target || original.target });
+    const copy = await this.create({ title: input.title || original.title + ' copy', source: input.source || { provider: 'local' }, target: input.target || original.target });
     await this.git(copy.directory, ['fetch', '--no-tags', original.directory, revision]);
     await this.git(copy.directory, ['checkout', '-B', original.branch, 'FETCH_HEAD']);
     this.records[copy.id] = { ...copy, branch: original.branch, forkedFrom: id, sourceCommit: revision };

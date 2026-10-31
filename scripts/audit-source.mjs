@@ -9,7 +9,8 @@ const rules = [
   ['GitHub credential', /\bgh[pousr]_[A-Za-z0-9_]{25,}\b|\bgithub_pat_[A-Za-z0-9_]{25,}\b/],
   ['provider credential', /\b(?:sk-proj-|sk-ant-|r8_)[A-Za-z0-9_-]{25,}\b|\bAKIA[A-Z0-9]{16}\b/],
   ['Fly credential', /\bFlyV1\s+[A-Za-z0-9_-]{30,}/],
-  ['hardcoded infrastructure', /https?:\/\/[a-z0-9-]+\.fly\.dev|registry\.fly\.io\/[a-z0-9_-]+|\/Users\/[^/]+\//i],
+  ['hardcoded infrastructure', /https?:\/\/[a-z0-9-]+\.fly\.dev|registry\.fly\.io\/[a-z0-9_-]+/i],
+  ['local home path', /\/Users\/[^/\s"'`]+\//],
 ];
 const errors = [];
 async function visit(directory) {

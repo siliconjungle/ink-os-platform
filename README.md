@@ -19,6 +19,25 @@ INK_OS_CONFIG=.data/client.json node cli/bin/ink-os.mjs projects list
 
 Source projects, execution providers, and persistent storage are independent. Local source repositories can have optional remotes; GitHub settings belong to each project. Hosted services receive release bundles rather than laptop filesystem paths.
 
+For GitHub publishing, configure a project using a JSON file:
+
+```json
+{"source":{"provider":"github","github":{"owner":"YOUR-OWNER","repository":"YOUR-REPOSITORY","visibility":"private"}},"branch":"main"}
+```
+
+```sh
+node cli/bin/ink-os.mjs projects configure PROJECT_ID --file settings.json
+node cli/bin/ink-os.mjs projects credentials PROJECT_ID --from-env GITHUB_TOKEN
+node cli/bin/ink-os.mjs projects publish PROJECT_ID --create
+node cli/bin/ink-os.mjs projects publication PROJECT_ID
+```
+
+`--stdin` also accepts a piped token. Tokens are encrypted using the private instance key, bound to the project/repository, and never returned by the API. Keep the instance identity with its private data when backing up. A GitHub token needs repository contents write access; creating repositories also needs the corresponding account/organization permission. Existing repositories must match the configured visibility. Publication never changes visibility.
+
+Publishing sends a validated committed snapshot with generic author metadata, creating its own remote history. Receipts identify both the local source commit and the remote commit; unrelated local history is not uploaded. Remote edits cause a conflict. Inspect and reconcile them into your committed local source, then use `projects publish PROJECT_ID --expected-remote FULL_SHA` to acknowledge that exact remote base. The new snapshot becomes its child, preserving the remote history; another concurrent edit still prevents the push. Fetching/merging source changes is currently a Git-client operation. A retry reconciles a push whose response was lost. Local source remains usable independently. `projects duplicate` defaults to local Git; `--file` can specify another GitHub destination, whose credentials must be set separately.
+
+Owner clients can use `projects.credentials.status/set/remove`, `projects.publish`, and `projects.publication` in the server SDK. The matching `/api/v1/projects/:id` endpoints are `credentials` (GET/PUT/DELETE), `publish` (POST), and `publication` (GET). Credential management requires the `apps:credentials` key scope; publishing requires `apps:deploy`.
+
 Create and install an Ink app on your running instance:
 
 ```sh

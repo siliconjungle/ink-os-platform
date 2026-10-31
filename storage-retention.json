@@ -14,7 +14,8 @@
     "public": "Desktop assets.",
     "compiler": "Pinned browser/host Ink compiler source and dependency lock.",
     "evidence/ink-app-ui.jpg": "Selected browser proof of the source-defined Ink app after a CLI state change.",
-    "evidence/ink-app-ui.json": "Screenshot binding, observed behavior and proof limits."
+    "evidence/ink-app-ui.json": "Screenshot binding, observed behavior and proof limits.",
+    "evidence/github-project.json": "Selected actual private GitHub publication, restart, exact-tree/binary/mode and remote-conflict proof; reproduction script and tests remain in source."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",

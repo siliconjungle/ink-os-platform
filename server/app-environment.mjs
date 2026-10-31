@@ -21,8 +21,9 @@ export function environmentValues(values) {
 // Values never enter the shared world, release bundles, or ordinary Machine config.env.
 // The envelope key is provisioned separately as a Fly secret on the OS itself.
 export class AppEnvironment {
-  constructor(directory, key = process.env.INK_OS_ENV_KEY) {
-    this.path = join(directory, 'app-environment.json');
+  constructor(directory, key = process.env.INK_OS_ENV_KEY, { filename = 'app-environment.json', domain = 'ink-os-env-v1' } = {}) {
+    this.path = join(directory, filename);
+    this.domain = domain;
     this.key = key && /^[A-Za-z0-9+/]{43}=$/.test(key) ? Buffer.from(key, 'base64') : null;
     this.records = {};
     this.tail = Promise.resolve();
@@ -39,7 +40,7 @@ export class AppEnvironment {
     this.requireKey();
     try {
       const cipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(record.iv, 'base64'));
-      cipher.setAAD(Buffer.from('ink-os-env-v1:' + appId));
+      cipher.setAAD(Buffer.from(this.domain + ':' + appId));
       cipher.setAuthTag(Buffer.from(record.tag, 'base64'));
       return JSON.parse(Buffer.concat([cipher.update(Buffer.from(record.ciphertext, 'base64')), cipher.final()]).toString());
     } catch { fail(503, 'App environment could not be decrypted with the configured key.'); }
@@ -56,7 +57,7 @@ export class AppEnvironment {
       for (const name of removed) { delete next[name]; delete metadata[name]; }
       if (Object.keys(next).length > 100 || Buffer.byteLength(JSON.stringify(next)) > 128 * 1024) fail(400, 'An app can have at most 100 variables and 128 KiB of environment data.');
       const iv = randomBytes(12), cipher = createCipheriv('aes-256-gcm', this.key, iv);
-      cipher.setAAD(Buffer.from('ink-os-env-v1:' + appId));
+      cipher.setAAD(Buffer.from(this.domain + ':' + appId));
       const ciphertext = Buffer.concat([cipher.update(JSON.stringify(next)), cipher.final()]);
       const records = { ...this.records, [appId]: { iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), ciphertext: ciphertext.toString('base64'), metadata } };
       await writeFile(this.path + '.next', JSON.stringify(records), { mode: 0o600, flush: true });
