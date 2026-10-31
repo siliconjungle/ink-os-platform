@@ -15,6 +15,9 @@ COPY --from=build /app/shared ./shared
 COPY --from=build /app/generated ./generated
 COPY --from=build /app/infra ./infra
 COPY --from=build /app/app-runtime ./app-runtime
+COPY --from=build /app/cli ./cli
+COPY --from=build /app/sdk ./sdk
+COPY --from=build /app/ink ./ink
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/scripts/start.mjs ./scripts/start.mjs
 ENV NODE_ENV=production INK_OS_DATA_DIR=/data INK_OS_BIND=0.0.0.0 PORT=4318

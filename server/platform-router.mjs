@@ -1,4 +1,5 @@
 import{workflowRoute}from './workflow-router.mjs';
+import { buildProjectRelease, installedInk, runInstalledInk } from './ink-apps.mjs';
 import { projectRoute } from './project-router.mjs';
 import{commandRoute}from './app-commands.mjs';
 import{scheduleRoute}from './schedule-router.mjs';
@@ -97,6 +98,9 @@ export function platformRouter(platform,{send,body}){return async(req,res,url,pr
   if(action==='env'){if(!principal.owner&&principal.appId!==appId)error(403,'Wrong app identity');if(method==='GET')return send(res,200,platform.listEnvironment(appId));if(method==='PUT'){const input=await body(req,256*1024);return send(res,200,await platform.updateEnvironment(appId,environmentInput(input),[],principal.writeAccess));}}
   if(action.startsWith('env/')&&method==='DELETE'){if(!principal.owner&&principal.appId!==appId)error(403,'Wrong app identity');return send(res,200,await platform.updateEnvironment(appId,{},[decodeURIComponent(action.slice(4))],principal.writeAccess));}
   if(action==='duplicate'&&method==='POST'){platform.owner(principal);return send(res,201,await platform.duplicate(appId,await body(req)));}
+  if(action==='build'&&method==='POST'){platform.owner(principal);return send(res,201,await buildProjectRelease(platform,appId,await body(req)));}
+  if(action==='ink'&&method==='GET'){asApp(appId);const app=await installedInk(platform,appId,principal.releaseId);return send(res,200,{spec:app.spec,entries:app.entries,namedTypes:app.namedTypes,releaseId:app.releaseId});}
+  if(action==='ink/run'&&method==='POST'){asApp(appId);return send(res,200,await runInstalledInk(platform,appId,await body(req),principal));}
   if(action==='artifacts'&&method==='GET'){platform.owner(principal);return send(res,200,artifactRecords(platform,appId));}
   if(/^artifacts\/[a-f0-9]{64}$/.test(action)&&method==='PUT'){platform.owner(principal);return send(res,201,await uploadArtifact(platform,req,appId,action.split('/')[1]));}
   if(action==='releases'&&method==='GET'){platform.owner(principal);return send(res,200,platform.releases(appId));}
@@ -107,7 +111,7 @@ export function platformRouter(platform,{send,body}){return async(req,res,url,pr
   if(action==='api'&&method==='GET')return send(res,200,appAPI(platform,appId));
   if(action==='call'&&method==='POST')return send(res,200,await callAppAPI(platform,principal,appId,await body(req,100000)));
   if(action==='invoke'&&method==='POST'){const caller=asApp(appId),input=await body(req);if(caller.releaseId){if(input.releaseId&&input.releaseId!==caller.releaseId)error(403,'A runtime can invoke only its own release');input.releaseId=caller.releaseId;}return send(res,200,await platform.invoke(appId,withAppCaller(platform,principal,appId,input)));}
-  if(action==='code/run'&&method==='POST'){asApp(appId);if(!platform.code)error(503,'Ink execution unavailable');return send(res,200,await platform.code.run({...await body(req),namespace:appId,instance:appId,principal:asApp(appId)}));}
+  if(action==='code/run'&&method==='POST'){asApp(appId);if(!platform.code)error(503,'Ink execution unavailable');const input=await body(req);return send(res,200,typeof input.source==='string'?await platform.code.run({...input,namespace:appId,instance:appId,principal:asApp(appId)}):await runInstalledInk(platform,appId,input,principal));}
   if(action==='token'&&method==='POST'){platform.owner(principal);return send(res,200,{token:await platform.serviceToken(appId),namespace:appId});}
   if(action==='data'&&method==='POST')return send(res,201,await platform.dataCreate(asApp(appId),await body(req)));
   if(/^data\/[a-f0-9]{32}$/.test(action)&&method==='PATCH'){const input=await body(req);return send(res,200,await platform.dataUpdate(asApp(appId),action.split('/')[1],input.changes,input.expected,input.mutationId));}

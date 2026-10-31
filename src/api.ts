@@ -7,7 +7,7 @@ export const sessionId = crypto.randomUUID();
 export function actor() { return localStorage.getItem('ink-os-name') || 'Owner'; }
 export async function api<T = any>(path: string, options: RequestInit = {}): Promise<T> {
   if(transport)return transport(path,options);
-  const response = await fetch('/api' + path, { ...options, headers: { 'Content-Type': 'application/json', 'X-Ink OS-Actor': encodeURIComponent(actor()), ...options.headers } });
+  const response = await fetch('/api' + path, { ...options, headers: { 'Content-Type': 'application/json', 'X-Ink-Actor': encodeURIComponent(actor()), ...options.headers } });
   return responseJSON(response);
 }
 export const post = <T = any>(path: string, data: unknown) => api<T>(path, { method: 'POST', body: JSON.stringify(data) });
@@ -23,7 +23,7 @@ export function coverURL(object: { cover: string; location?: string; body?: stri
 
 export async function uploadFile(file:File,namespace='os'){
  if(file.size>24*1024*1024)throw Error('Keep each file below 24 MiB');
- const query=new URLSearchParams({name:file.name,namespace}),response=await fetch('/api/v1/files/upload?'+query,{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream','X-Ink OS-Actor':encodeURIComponent(actor())},body:file});
+ const query=new URLSearchParams({name:file.name,namespace}),response=await fetch('/api/v1/files/upload?'+query,{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream','X-Ink-Actor':encodeURIComponent(actor())},body:file});
  if(response.status===404&&['127.0.0.1','localhost'].includes(location.hostname)){
   const base64=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=()=>reject(Error('Could not read '+file.name));reader.readAsDataURL(file);});
   return post<{objects:import('./types').WorldObject[]}>('/import',{namespace,files:[{name:file.name,mime:file.type,base64}]});

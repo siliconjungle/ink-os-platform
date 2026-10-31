@@ -30,7 +30,7 @@ export class Code {
   }
   run(input) {
     if (typeof input.source !== 'string') return Promise.reject(Error('Provide Ink source text.'));
-    const key = hash(input.source || '') + ':' + (input.namespace || input.instance || 'preview');
+    const key = (input.stateKey || hash(input.source || '')) + ':' + (input.namespace || input.instance || 'preview');
     const task = (this.tasks.get(key) || Promise.resolve()).catch(() => {}).then(() => this.execute(input));
     this.tasks.set(key, task);
     task.finally(() => { if (this.tasks.get(key) === task) this.tasks.delete(key); }).catch(() => {});
@@ -52,13 +52,13 @@ export class Code {
     if (!selected) throw Error('Select an exported function, query, or change.');
     if (input.input === undefined && selected.params.length !== (input.args || []).length) return { entries: compiled.entries, needsArguments: true, selected: selected.name, digest: compiled.digest };
     const prepared = await compilerRequest({ op: 'prepare', core: compiled.artifact.core, identity: compiled.artifact.manifest.core_sha256, entry: selected.name, input: input.input ?? stringifyExactJSON(input.args || []) });
-    const stateKey = 'ink-program:' + compiled.digest;
+    const stateKey = input.stateKey || 'ink-program:' + compiled.digest;
     let saved = { value: null, revision: 0 };
     const path = join(this.directory, hash((input.namespace || input.instance || 'preview') + ':' + compiled.digest) + '.json');
     if (selected.action) {
       if (input.namespace && this.world) saved = await this.loadCheckpoint(input.namespace, stateKey, input.principal);
       else { try { saved.value = JSON.parse(await readFile(path, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
-      if (saved.value && saved.value.digest !== compiled.digest) throw Error('Ink checkpoint source identity mismatch.');
+      if (saved.value && saved.value.digest !== compiled.digest) throw Object.assign(Error('Ink state belongs to a different source revision. Migrate or explicitly reset it before running this revision.'), { status: 409 });
     }
     const result = await isolatedWorker(new URL('./ink-run-worker.mjs', import.meta.url), { artifact: compiled.artifact, selected, input: prepared.input, snapshot: saved.value?.snapshot });
     if (result.committed) {

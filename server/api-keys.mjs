@@ -44,7 +44,7 @@ export function routeScope(path,method){
  if(path==='/me')return null;
  if(path==='/query')return 'world:read';
  if(path==='/schedules'||/\/schedules(?:\/|$)/.test(path))return method==='GET'?'apps:read':'apps:invoke';
- if(path.startsWith('/apps')){if(/\/env(?:\/|$)/.test(path))return 'apps:environment';if(path.endsWith('/token'))return 'apps:credentials';if(path.endsWith('/invoke')||path.endsWith('/call'))return 'apps:invoke';if(/\/data(?:\/|$)/.test(path))return ['GET','HEAD'].includes(method)?'world:read':'world:write';return method==='GET'||path.endsWith('/launch')?'apps:read':'apps:deploy';}
+ if(path.startsWith('/apps')){if(/\/env(?:\/|$)/.test(path))return 'apps:environment';if(path.endsWith('/token'))return 'apps:credentials';if(path.endsWith('/invoke')||path.endsWith('/call')||path.endsWith('/ink/run')||path.endsWith('/code/run'))return 'apps:invoke';if(/\/data(?:\/|$)/.test(path))return ['GET','HEAD'].includes(method)?'world:read':'world:write';return method==='GET'||path.endsWith('/launch')?'apps:read':'apps:deploy';}
  return ['GET','HEAD'].includes(method)?'world:read':'world:write';
 }
 export function authorizeRoute(principal,path,method){const scope=routeScope(path,method);if(scope&&principal.keyId){if(principal.scopes.includes('computer')&&!['accounts:manage','keys:manage','apps:credentials','apps:environment'].includes(scope))return;requireScope(principal,scope);}}

@@ -1,0 +1,17 @@
+{
+  "source": "cli/templates/main.ink",
+  "screenshot": "ink-app-ui.jpg",
+  "screenshotSha256": "c58c1ec15aa27f11d962da8aca17430cf3be57eb7ce15e92ccdb76a2b1630312",
+  "observed": [
+    "Fresh local instance contained no installed apps.",
+    "CLI init and deploy created a local Git source project and installed its Ink app.",
+    "The desktop launcher showed the explicitly installed app.",
+    "Opening the app rendered its Ink view using the SDK styles.",
+    "Keyboard activation of Add one changed the displayed count from 0 to 1.",
+    "A separate CLI call added 4 and the open app updated from 1 to 5 without reloading."
+  ],
+  "limitations": [
+    "Single local browser validation, not a multi-machine collaboration or performance measurement.",
+    "Native execution, desktop packaging, source migration and full cloud provisioning remain separate acceptance work."
+  ]
+}

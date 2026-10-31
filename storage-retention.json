@@ -12,11 +12,15 @@
     "scripts": "Build and source audit tools.",
     "tests": "Selected regression proofs.",
     "public": "Desktop assets.",
-    "compiler": "Pinned browser/host Ink compiler source and dependency lock."
+    "compiler": "Pinned browser/host Ink compiler source and dependency lock.",
+    "evidence/ink-app-ui.jpg": "Selected browser proof of the source-defined Ink app after a CLI state change.",
+    "evidence/ink-app-ui.json": "Screenshot binding, observed behavior and proof limits."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",
     "public/ink-runtime": "Completed generated runtime bundles; reproducible from shared sources.",
-    "compiler/target": "Completed compiler build cache; public compiler artifact, exact source, Cargo.lock, and reproduction script are retained."
+    "compiler/target": "Completed compiler build cache; public compiler artifact, exact source, Cargo.lock, and reproduction script are retained.",
+    ".local/ink-app-browser/data": "Disposable local validation instance, after its server is stopped; contains generated test credentials and source copies, not required reproduction inputs.",
+    ".local/ink-app-browser/source": "Completed generated starter checkout; exact initializer/template source and lifecycle tests are retained."
   }
 }
