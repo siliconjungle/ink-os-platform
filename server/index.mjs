@@ -3,6 +3,7 @@ import { Projects } from './projects.mjs';
 import { NativeInk } from './native-ink.mjs';
 import { NativeJobs } from './native-jobs.mjs';
 import { drainHost } from './shutdown.mjs';
+import { httpConnections } from './http-connections.mjs';
 import{DesktopActions}from './desktop-actions.mjs';
 import{errorStatus}from './error-status.mjs';
 import{Schedules}from './schedules.mjs';
@@ -186,7 +187,8 @@ const server = http.createServer(async (req, res) => {
   return serve(req,res);
  }catch(error){if(!res.headersSent)send(res,errorStatus(error),{error:error.message,current:error.current?world.publicObject(error.current):undefined});else res.end();}finally{requests.delete(task);finish();}
 });
+const connections=httpConnections(server);
 const sockets=platform.collaboration.attach(server,req=>sealed?null:platform.principal(req)||(!production?{owner:true,admin:true,accountId:'owner',namespace:'os'}:null));
-const shutdown=()=>{if(shutdownTask)return shutdownTask;draining=true;console.log('Ink OS is finishing background jobs before stopping.');shutdownTask=drainHost({server,platform,world,requests,responses,sockets,vite,stopAdmission:()=>{sealed=true;}}).then(()=>{console.log('Ink OS stopped cleanly.');process.exitCode=0;}).catch(error=>{console.error('Ink OS shutdown:',error.message);process.exitCode=1;});return shutdownTask;};
+const shutdown=()=>{if(shutdownTask)return shutdownTask;draining=true;console.log('Ink OS is finishing background jobs before stopping.');shutdownTask=drainHost({server,connections,platform,world,requests,responses,sockets,vite,stopAdmission:()=>{sealed=true;}}).then(()=>{console.log('Ink OS stopped cleanly.');process.exitCode=0;}).catch(error=>{console.error('Ink OS shutdown:',error.message);process.exitCode=1;});return shutdownTask;};
 process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);
 server.listen(port, process.env.INK_OS_BIND||'127.0.0.1',()=>{platform.schedules.start();platform.workflows.start();console.log(`Ink OS: ${origin}; engine=Ink; production=${production}`);});

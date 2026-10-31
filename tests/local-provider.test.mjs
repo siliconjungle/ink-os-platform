@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { LocalProvider } from '../infra/local-provider.mjs';
 import { sign } from '../server/platform.mjs';
+import { createConnection } from 'node:net';
+import { once } from 'node:events';
 
 test('local releases use separate origins, require launch grants, and hide server source', async t => {
   const provider = new LocalProvider(); t.after(() => provider.close());
@@ -20,4 +22,10 @@ test('local releases use separate origins, require launch grants, and hide serve
   assert.equal(await (await fetch(first.url, { headers: { cookie } })).text(), '<p>local</p>');
   assert.equal((await fetch(first.url + '/server/private.mjs', { headers: { cookie } })).status, 404);
   assert.equal((await fetch(second.url, { headers: { cookie } })).status, 401);
+  const preconnect = createConnection({ host: '127.0.0.1', port: Number(new URL(second.url).port) });
+  preconnect.on('error', error => assert.equal(error.code, 'ECONNRESET'));
+  t.after(() => preconnect.destroy()); await once(preconnect, 'connect');
+  const ended = new Promise(resolve => preconnect.once('close', resolve));
+  await provider.retire(second); await ended;
+  assert.equal(provider.available(second.releaseId), false);
 });

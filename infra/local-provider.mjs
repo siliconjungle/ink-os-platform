@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { extname } from 'node:path';
 import { sign, verify } from '../server/platform.mjs';
+import { httpConnections } from '../server/http-connections.mjs';
 
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json', '.wasm': 'application/wasm', '.woff2': 'font/woff2' };
 
@@ -21,6 +22,7 @@ export class LocalProvider {
     };
     const server = http.createServer((req, res) => {
       try {
+        if (connections.closing) { res.writeHead(503, { Connection: 'close' }); res.end('This app host is stopping.'); return; }
         const url = new URL(req.url, 'http://127.0.0.1');
         res.setHeader('Cache-Control', 'private, no-store');
         res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -45,13 +47,14 @@ export class LocalProvider {
         res.writeHead(200); res.end(req.method === 'HEAD' ? undefined : Buffer.from(file.base64, 'base64'));
       } catch { res.writeHead(400); res.end('Invalid application request'); }
     });
+    const connections = httpConnections(server);
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
     const internalURL = `http://127.0.0.1:${server.address().port}`;
     const publicURL = this.originTemplate ? this.originTemplate.replace('{release}', releaseId).replace('__RELEASE__', releaseId) : internalURL;
     const parsed = new URL(publicURL);
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.pathname !== '/') { server.close(); throw Error('Invalid app origin template.'); }
     const deployment = { provider: 'local', url: publicURL, appId, releaseId };
-    this.servers.set(releaseId, { server, deployment, internalURL });
+    this.servers.set(releaseId, { server, connections, deployment, internalURL });
     return deployment;
   }
   route(req, res) {
@@ -71,7 +74,7 @@ export class LocalProvider {
   async retire(deployment) {
     const runtime = this.servers.get(deployment.releaseId);
     if (!runtime) return;
-    await new Promise((resolve, reject) => runtime.server.close(error => error ? reject(error) : resolve()));
+    await runtime.connections.close();
     this.servers.delete(deployment.releaseId);
   }
   async close() { await Promise.all([...this.servers.values()].map(({ deployment }) => this.retire(deployment))); }

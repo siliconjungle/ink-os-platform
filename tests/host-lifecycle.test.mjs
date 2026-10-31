@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { createServer } from 'node:net';
+import { createServer, createConnection } from 'node:net';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
@@ -16,12 +16,12 @@ test('normal shutdown closes connected desktop event streams and collaboration s
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(INK_|FLY_|AWS_|S3_|BUCKET_NAME)/.test(name)));
   Object.assign(env, { PORT: String(port), INK_OS_DATA_DIR: directory, NODE_ENV: 'production' });
   const child = spawn(process.execPath, ['scripts/start.mjs'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
-  let output = '', socket;
+  let output = '', socket, preconnect;
   const streams = [], abort = new AbortController();
   child.stdout.on('data', bytes => output += bytes); child.stderr.on('data', bytes => output += bytes);
   const exited = once(child, 'exit');
   t.after(async () => {
-    abort.abort(); socket?.terminate();
+    abort.abort(); socket?.terminate(); preconnect?.destroy();
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
     await exited; await rm(directory, { recursive: true, force: true });
   });
@@ -38,10 +38,14 @@ test('normal shutdown closes connected desktop event streams and collaboration s
   }
   socket = new WebSocket(url.replace('http:', 'ws:') + '/api/v1/sync', { headers });
   await once(socket, 'open'); const socketClosed = once(socket, 'close');
+  preconnect = createConnection({ host: '127.0.0.1', port }); await once(preconnect, 'connect');
+  preconnect.on('error', error => assert.equal(error.code, 'ECONNRESET'));
+  const preconnectClosed = new Promise(resolve => preconnect.once('close', resolve));
   child.kill('SIGTERM');
   const [code, signal] = await exited;
   assert.equal(code, 0, output); assert.equal(signal, null);
   assert.match(output, /stopped cleanly/);
   await Promise.all(streams.map(stream => stream.text()));
   assert.equal((await socketClosed)[0], 1001);
+  await preconnectClosed;
 });
