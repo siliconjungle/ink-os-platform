@@ -19,7 +19,14 @@
     "evidence/docker-backends.json": "Selected successful real Docker module/OCI, held-work restart, tenant isolation and idle reuse acceptance binding.",
     "evidence/compose.json": "Exact deployment Compose SHA binding and successful container/gateway/restart proof.",
     "evidence/github-source.json": "Selected actual read-only private GitHub import via CLI/SDK, exact binary/mode/tree identity, restart/no-op and dirty-tree refusal proof.",
-    "evidence/cloud-host.json": "Selected real hosted module/edge/source privacy, graceful idle/restart persistence and scoped complete-cleanup proof; private provider identities/credentials are omitted and original proof is hash-bound."
+    "evidence/cloud-host.json": "Selected real hosted module/edge/source privacy, graceful idle/restart persistence and scoped complete-cleanup proof; private provider identities/credentials are omitted and original proof is hash-bound.",
+    "server/namespace-migrations.mjs": "Scoped causal namespace import, exact cut identity and durable crash recovery.",
+    "server/namespace-migration-router.mjs": "Administrator-only bounded namespace plan/apply HTTP endpoints.",
+    "cli/bin/migrations.mjs": "Explicit private file and inspected-plan CLI for namespace migration.",
+    "tests/namespace-migrations.test.mjs": "Real generated checkpoint, isolation, actor allocation and durable interruption proofs.",
+    "tests/namespace-migration-api.test.mjs": "Actual host/CLI/SDK/admin denial, source isolation and restart migration proof.",
+    "server/storage-aliases.mjs": "Private operation-bound verified content-addressed storage aliases.",
+    "tests/storage-aliases.test.mjs": "Exact bytes, backend boundaries, alias retention/restart and backup proofs."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",

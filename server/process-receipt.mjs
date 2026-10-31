@@ -124,6 +124,23 @@ export async function captureProcessReceipt({ pid, directory, child } = {}) {
   if (!after.verified || after.hostHash !== context.hostHash || after.scopeHash !== context.scopeHash) return unknown('context-changed-during-capture');
   return { state: 'captured', verified: true, preserveWorker: true, receipt: { format: FORMAT, pid, platform: context.platform, provider: context.provider, hostHash: context.hostHash, scopeHash: context.scopeHash, startHash: hash('ink-os-process-start-v1', context.provider, pid, first.start) } };
 }
+
+/** Capture this host process for durable operation ownership. Unlike worker
+ * capture this does not claim ownership of another PID. */
+export async function captureCurrentProcessReceipt({ directory } = {}) {
+  const pid = process.pid, context = await processReceiptContext({ directory });
+  if (!context.verified) return context;
+  const first = await processObservation(pid);
+  if (first.state !== 'observed') return first;
+  if (first.exited) return gone();
+  const second = await processObservation(pid);
+  if (second.state !== 'observed') return second;
+  if (second.exited) return gone();
+  if (first.start !== second.start) return unknown('process-changed-during-capture');
+  const after = await processReceiptContext({ directory });
+  if (!after.verified || after.hostHash !== context.hostHash || after.scopeHash !== context.scopeHash) return unknown('context-changed-during-capture');
+  return { state: 'captured', verified: true, preserveWorker: true, receipt: { format: FORMAT, pid, platform: context.platform, provider: context.provider, hostHash: context.hostHash, scopeHash: context.scopeHash, startHash: hash('ink-os-process-start-v1', context.provider, pid, first.start) } };
+}
 function validReceipt(receipt) {
   return receipt && receipt.format === FORMAT && validPID(receipt.pid) && Object.hasOwn(providers, receipt.platform) && providers[receipt.platform] === receipt.provider && ['hostHash', 'scopeHash', 'startHash'].every(name => typeof receipt[name] === 'string' && /^[a-f0-9]{64}$/.test(receipt[name]));
 }

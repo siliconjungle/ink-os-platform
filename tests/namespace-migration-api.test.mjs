@@ -1,0 +1,96 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { mkdtemp, readFile, writeFile, rm, stat } from 'node:fs/promises';
+import { createServer } from 'node:net';
+import { once } from 'node:events';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { World, hash } from '../server/world.mjs';
+import { Storage } from '../server/storage.mjs';
+import { Collaboration } from '../server/collaboration.mjs';
+import { Versions } from '../server/versions.mjs';
+import { SharedState } from '../shared/state.mjs';
+import { createClient } from '../sdk/src/server.js';
+const execute = promisify(execFile);
+
+test('administrator migrates exact causal namespaces through CLI/SDK/HTTP and host restart without replaying source work', { timeout: 90000 }, async t => {
+  const root = await mkdtemp(join(tmpdir(), 'ink-namespace-api-')), sourcePath = join(root, 'source'), targetPath = join(root, 'target');
+  const world = await new World(sourcePath).open(), storage = await new Storage(sourcePath, { env: {} }).open();
+  const collaboration = new Collaboration({ directory: sourcePath, world, storage });
+  const slug = 'migration-http-proof', appId = hash('ink-os-app:' + slug).slice(0,32), noteId = 'a'.repeat(32);
+  let child, logs = '';
+  async function stop() { if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); await once(child, 'exit'); } }
+  t.after(async () => { await stop(); await collaboration.close(); await rm(root, { recursive: true, force: true }); });
+  await world.put({ id: appId, namespace: 'os', kind: 'app', title: 'Fixture', body: JSON.stringify({slug}) }, { writer: 'os' });
+  await world.put({ id: noteId, namespace: appId, kind: 'note', title: 'Retained note', body: 'Exact saved text🙂' }, { writer: appId });
+  await collaboration.document(appId, 'object:' + noteId, 'text');
+  const replica = new SharedState({ actor: 47n });
+  await collaboration.submit({ owner: true }, appId, 'state', 'state', [...replica.set('/kept', { count: 7 }), ...replica.set('/removed', 'old'), ...replica.delete('/removed')]);
+  const versions = new Versions({ world, collaboration, storage });
+  const version = await versions.create({ label: 'API migration cut' }), sourceVersion = await versions.read(version.id);
+  const input = { operation: 'b'.repeat(32), sourceVersion, sourceVersionCut: { id: sourceVersion.id, manifestDigest: hash(JSON.stringify(sourceVersion)), worldVersion: sourceVersion.world.version, core: sourceVersion.world.core, capturedAt: sourceVersion.capturedAt }, namespaces: [appId], recordIds: [noteId], documentIds: sourceVersion.documents.filter(d => d.metadata.namespace === appId).map(d => d.metadata.id), bootstrapDocumentIds: [] };
+  const inputFile = join(root, 'input.json'), planFile = join(root, 'plan.json');
+  await writeFile(inputFile, JSON.stringify(input), { mode: 0o600 });
+  const probe = createServer(); probe.listen(0,'127.0.0.1'); await once(probe,'listening');
+  const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(INK_|FLY_|AWS_|S3_|BUCKET_NAME|GIT_)/.test(name)));
+  Object.assign(env, { PORT: String(port), INK_OS_DATA_DIR: targetPath, NODE_ENV: 'production', INK_OS_NATIVE: '0', INK_OS_CONFIG: join(targetPath, 'client.json') });
+  const url = 'http://127.0.0.1:' + port;
+  async function start() {
+    logs = ''; child = spawn(process.execPath, ['scripts/start.mjs'], { env, stdio: ['ignore','pipe','pipe'] });
+    child.stdout.on('data', bytes => logs += bytes); child.stderr.on('data', bytes => logs += bytes);
+    for (let n=0;n<300;n++) {
+      if (child.exitCode !== null || child.signalCode !== null) assert.fail(logs);
+      try { if ((await fetch(url + '/api/health')).ok) return; } catch {}
+      await new Promise(resolve => setTimeout(resolve,50));
+    }
+    assert.fail(logs);
+  }
+  const cli = async (...args) => JSON.parse((await execute(process.execPath, ['cli/bin/ink-os.mjs', ...args], { env, maxBuffer: 8 * 1024 * 1024 })).stdout);
+  await start();
+  const credentials = JSON.parse(await readFile(env.INK_OS_CONFIG)), sdk = createClient({ url, token: credentials.token });
+  assert.deepEqual(await sdk.apps.list(), []);
+  assert.equal((await sdk.apps.create({slug})).id, appId);
+  const appToken = (await sdk.request('apps/' + appId + '/token', { method:'POST', body:{} })).token;
+  const appSDK = createClient({url, token:appToken});
+  await assert.rejects(appSDK.request('migrations/namespaces/plan', {method:'POST',body:input}), {status:403});
+  const member = await sdk.request('accounts', {method:'POST',body:{name:'Member migration check',scopes:['world:write','world:read','apps:deploy','computer']}});
+  const memberSDK = createClient({url,token:member.key.token});
+  await assert.rejects(memberSDK.request('migrations/namespaces/apply', {method:'POST',body:input}), {status:403});
+  const saved = await cli('migrations','namespaces','plan','--file',inputFile,'--output',planFile);
+  assert.equal(saved.format,'ink-os-namespace-plan-v1'); assert.equal((await stat(planFile)).mode & 0o777,0o600);
+  const plan = JSON.parse(await readFile(planFile));
+  assert.equal(plan.documents,2);
+  const receipt = await cli('migrations','namespaces','apply','--file',inputFile,'--plan',planFile);
+  assert.equal(receipt.mode,'preserve-causal-snapshots');
+  assert.equal((await sdk.data.get(noteId)).body,'Exact saved text🙂');
+  assert.deepEqual((await sdk.state.get('kept',appId)).value,{count:7});
+  const original = sourceVersion.documents.find(d => d.metadata.kind === 'text').snapshot;
+  const imported = await sdk.request('sync/' + appId + '/object%3A' + noteId + '?kind=text');
+  assert.equal(imported.bytes,original.bytes); assert.deepEqual(imported.versions,original.versions);
+  const state = await sdk.request('sync/' + appId + '/state?kind=state');
+  assert.equal(state.registers.find(r=>r.path==='/removed').deleted,true);
+  await stop(); await start();
+  assert.equal((await cli('migrations','namespaces','status',input.operation)).inputDigest,receipt.inputDigest);
+  assert.deepEqual(await sdk.migrations.namespaces.get(input.operation),await cli('migrations','namespaces','status',input.operation));
+  await assert.rejects(appSDK.migrations.namespaces.get(input.operation),{status:403});
+  assert.deepEqual((await sdk.state.get('kept',appId)).value,{count:7});
+  assert.equal((await sdk.migrations.namespaces.apply({...input,expected:plan.expected})).replayed,true);
+  const edited = await sdk.data.get(noteId); await sdk.request('apps/' + appId + '/data/' + noteId, {method:'PATCH',body:{changes:{title:'Target edit'},expected:edited.revision}});
+  assert.equal((await sdk.migrations.namespaces.apply({...input,expected:plan.expected})).replayed,true);
+  assert.equal((await sdk.data.get(noteId)).title,'Target edit');
+  await assert.rejects(sdk.migrations.namespaces.apply({...input,operation:'c'.repeat(32),expected:plan.expected}),{status:409});
+  await collaboration.submit({owner:true},appId,'independent','state',new SharedState({actor:48n}).set('/sourceContinues',true));
+  assert.equal((await sdk.state.get('sourceContinues',appId)).value,null);
+  const assetBytes=Buffer.from('Relocated image bytes'),asset=await sdk.assets.put(assetBytes,{mime:'application/octet-stream'}),digest=hash(assetBytes);
+  const oldLocation='r2://previous-assets/objects/'+digest,aliasInput={operation:'api-alias-proof',inputDigest:input.sourceVersionCut.manifestDigest,aliases:{[oldLocation]:asset.location}};
+  await assert.rejects(appSDK.migrations.storage.installAliases(aliasInput),{status:403});
+  const aliasFile=join(root,'aliases.json');await writeFile(aliasFile,JSON.stringify(aliasInput),{mode:0o600});
+  assert.equal((await cli('migrations','storage-aliases','apply','--file',aliasFile)).aliases,1);
+  const relocated=await sdk.data.create({kind:'file',title:'Relocated reference',location:oldLocation,body:JSON.stringify({mime:'application/octet-stream',bytes:assetBytes.length})});
+  await stop();await start();
+  assert.deepEqual(Buffer.from(await sdk.assets.get(relocated.id)),assetBytes);
+  assert.equal((await sdk.migrations.storage.installAliases(aliasInput)).replayed,true);
+});

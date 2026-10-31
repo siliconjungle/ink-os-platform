@@ -7,7 +7,7 @@ import { mkdtemp, realpath, rm, mkdir, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { captureProcessReceipt, checkProcessReceipt, processReceiptContext } from '../server/process-receipt.mjs';
+import { captureProcessReceipt, captureCurrentProcessReceipt, checkProcessReceipt, processReceiptContext } from '../server/process-receipt.mjs';
 
 const execute = promisify(execFile);
 async function fixture(t) {
@@ -44,6 +44,15 @@ test('actual owned child kernel start receipt verifies while live and becomes go
   assert.deepEqual(Object.keys(receipt).sort(), ['format', 'hostHash', 'pid', 'platform', 'provider', 'scopeHash', 'startHash'].sort());
   await alive(child); await child.finish();
   const result = await checkProcessReceipt(JSON.parse(serialized), { directory }); assert.equal(result.state, 'gone'); assert.equal(result.verified, true);
+});
+
+test('current host operation identity is authoritative without weakening child ownership capture', async t => {
+  const { directory } = await fixture(t), current = await captureCurrentProcessReceipt({ directory });
+  if (current.state === 'unverified' && process.platform !== 'linux') { t.skip('Optional platform kernel probe unavailable'); return; }
+  assert.equal(current.state, 'captured'); assert.equal(current.receipt.pid, process.pid);
+  assert.equal((await checkProcessReceipt(current.receipt, { directory })).state, 'same-process');
+  assert.equal((await captureProcessReceipt({ pid: process.pid, directory })).state, 'unverified');
+  assert.equal(JSON.stringify(current.receipt).includes(directory), false);
 });
 
 test('a mismatched start receipt distinguishes a live unrelated PID without disturbing its worker', async t => {
