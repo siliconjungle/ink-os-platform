@@ -41,7 +41,10 @@
     "scripts/verify-upgraded-host.mjs": "Current-generation hosted canary verification scoped to its own app and bound images, preserving installed apps and foreign workers.",
     "tests/upgraded-host-verifier.test.mjs": "Actual host and edge lost-reply, cleanup, current-image and foreign-state preservation proofs.",
     "tests/cli-connections.test.mjs": "Real loopback identity/origin/redirect and credential isolation proofs for desktop and standalone CLI.",
-    "evidence/cloud-upgrade.json": "Selected real durable maintenance/stop seal/new boot, preexisting app persistence and nonempty current-generation scoped runtime acceptance; provider identities remain private."
+    "evidence/cloud-upgrade.json": "Selected real durable maintenance/stop seal/new boot, preexisting app persistence and nonempty current-generation scoped runtime acceptance; provider identities remain private.",
+    "tests/javascript-project-cli.test.mjs": "Actual CLI/host local JavaScript Git source snapshots, existing project provenance, artifact upload and no-clobber redeployment proof.",
+    "tests/javascript-deploy-legacy.test.mjs": "Real Git/loopback CLI legacy and managed source paths, path boundaries, credential redaction and custom runtime configuration preservation.",
+    "tests/local-artifacts.test.mjs": "Actual OS/artifact upload/release/launch local transport, content hashes/ranges, source privacy, restart and admitted-stream drain proofs."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",

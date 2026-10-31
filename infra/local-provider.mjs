@@ -4,6 +4,10 @@ import { sign, verify } from '../server/platform.mjs';
 import { httpConnections } from '../server/http-connections.mjs';
 import { RuntimePool } from '../server/runtime-pool.mjs';
 import { requestJSON } from '../server/request-body.mjs';
+import { assetManifest, serveGameAsset } from './edge/game-assets.mjs';
+import { managedArtifactBucket } from '../server/artifacts.mjs';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json', '.wasm': 'application/wasm', '.woff2': 'font/woff2' };
 
@@ -28,7 +32,8 @@ export class LocalProvider {
   available(releaseId) { return this.servers.has(releaseId); }
   async deploy({ appId, releaseId, meta, key, origin }) {
     if (this.servers.has(releaseId)) return this.servers.get(releaseId).deployment;
-    const bundle = await this.platform.bundle(releaseId);
+    const platform = this.platform, bundle = await platform.bundle(releaseId);
+    const assets = assetManifest(bundle);
     const cookieName = 'ink_app_' + releaseId;
     const authenticated = token => {
       const value = verify(token || '', key);
@@ -57,18 +62,29 @@ export class LocalProvider {
         }
         const cookies = Object.fromEntries(String(req.headers.cookie || '').split(';').map(item => { const index = item.indexOf('='); return [item.slice(0, index).trim(), item.slice(index + 1)]; }));
         if (!authenticated(cookies[cookieName])) { res.writeHead(401); res.end('Open through Ink OS'); return; }
+        const path = decodeURIComponent(url.pathname).replace(/^\/+/, '') || bundle.entry;
+        if (path === bundle.backend?.entry || path.startsWith('server/') || path.includes('\\') || path.includes('\0') || path.split('/').some(part => part === '..' || part === '.')) { res.writeHead(404); res.end(); return; }
         if (url.pathname.startsWith('/backend/')) {
+          if (!bundle.backend) { res.writeHead(404); res.end(); return; }
           const result = await this.invokeBackend({ appId, releaseId, meta: { ...meta, backend: bundle.backend }, input: { path: url.pathname.slice(8) + url.search, method: req.method, ...(!['GET', 'HEAD'].includes(req.method) ? { body: await requestJSON(req) } : {}) } });
           res.writeHead(result.status, result.headers); res.end(typeof result.body === 'string' ? result.body : JSON.stringify(result.body)); return;
         }
         if (url.pathname.startsWith('/_ink/')) { res.writeHead(404); res.end('Unknown runtime operation'); return; }
-        if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405); res.end(); return; }
-        const path = decodeURIComponent(url.pathname).replace(/^\/+/, '') || bundle.entry;
+        if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, { Allow: 'GET, HEAD' }); res.end(); return; }
+        if (path.startsWith('_ink/')) { res.writeHead(404); res.end(); return; }
+        const asset = assets?.get(path) || (!extname(path) ? assets?.get(bundle.entry) : undefined);
+        if (asset) {
+          const request = new Request('http://127.0.0.1/', { method: req.method, headers: req.headers.range ? { Range: req.headers.range } : {} });
+          const response = await serveGameAsset(request, managedArtifactBucket(platform, appId, asset), asset, res.getHeaders());
+          res.writeHead(response.status, Object.fromEntries(response.headers));
+          if (req.method === 'HEAD' || !response.body) { await response.body?.cancel(); res.end(); return; }
+          await pipeline(Readable.fromWeb(response.body), res); return;
+        }
         const file = bundle.files.find(item => item.path === path) || (!extname(path) ? bundle.files.find(item => item.path === bundle.entry) : undefined);
         if (!file || file.path === bundle.backend?.entry || file.path.startsWith('server/')) { res.writeHead(404); res.end(); return; }
         res.setHeader('Content-Type', mime[extname(file.path)] || 'application/octet-stream');
         res.writeHead(200); res.end(req.method === 'HEAD' ? undefined : Buffer.from(file.base64, 'base64'));
-      } catch (error) { if (!res.headersSent) res.writeHead(error.status || 400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: error.message || 'Invalid application request' })); }
+      } catch (error) { if (res.destroyed) return; if (res.headersSent) { res.destroy(); return; } res.writeHead(error.status || 400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: error.message || 'Invalid application request' })); }
     });
     const connections = httpConnections(server);
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });

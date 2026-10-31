@@ -49,6 +49,10 @@ node cli/bin/ink-os.mjs deploy ./my-app
 
 `init` creates a local Git repository with `main.ink` and `ink-app.json`. No GitHub account is required. Edit the source and commit changes before deploying again. Deployment imports the committed tree into the instance, checks its Git tree identity, builds a release, and publishes it. The starter is created only by `init`; startup still installs zero apps.
 
+JavaScript apps can also deploy from committed local Git without a repository URL. Build their frontend first, then run `ink-os deploy DIRECTORY`. An installed app with a source project updates that same project from the clean checkout, including apps whose older manifest still records a repository URL. `--project PROJECT_ID` selects an existing managed project for a new app; an installed app keeps its existing binding. A project snapshot uses the checkout's actual commit, and an explicit `--commit` must match it. Repository-based prebuilt deployments continue to accept their explicit source repository and revision.
+
+Module backends keep the selected release's custom runtime image when their source manifest omits it. Set `--runtime-image REGISTRY/IMAGE@sha256:DIGEST` or `INK_OS_APP_RUNTIME_IMAGE` to choose a pinned runtime outside source control. `--runtime-image default` explicitly returns to the instance runtime. These options require a module backend entry.
+
 An Ink manifest declares `language: "ink"`, a source file, `ui.entry`, and exported function/query/change names. A view returns records using `kind` values `column`, `row`, `panel`, `heading`, `text`, `value`, `button`, or `field`. Buttons name an exported `entry` and an `args` JSON array string. Fields have a `name`; argument templates can reference them with `{"$field":"name"}`. The generated interface uses the SDK styles. App code needs no JavaScript.
 
 Exports also become commands such as `ink.add`, available through the command launcher, API, SDK and workflows. Command arguments use JSON **text**, preserving exact integers and structured values. For example:

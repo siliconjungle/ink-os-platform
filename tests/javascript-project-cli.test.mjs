@@ -1,0 +1,52 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {spawn, execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {once} from 'node:events';
+import {createServer} from 'node:net';
+import {mkdtemp, mkdir, readFile, writeFile, rm} from 'node:fs/promises';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {createClient} from '../sdk/src/server.js';
+import {Projects} from '../server/projects.mjs';
+
+const execute=promisify(execFile);
+test('JavaScript CLI deploys local Git and updates a project-bound app without requiring or adopting a repository URL', {timeout:60000}, async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'ink-js-project-')),data=join(directory,'data'),source=join(directory,'source');
+ await writeFile(join(directory,'storage-retention.json'),JSON.stringify({keep:{source:'Explicit generated source fixture.',data:'Owned host fixture until graceful shutdown.'},safe_to_remove:{}}));
+ const probe=createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');const port=probe.address().port;await new Promise(done=>probe.close(done));
+ const env=Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^(INK_|FLY_|AWS_|S3_|BUCKET_NAME|GIT_)/.test(name)));
+ Object.assign(env,{PORT:String(port),INK_OS_DATA_DIR:data,INK_OS_CONFIG:join(data,'client.json'),NODE_ENV:'production',INK_OS_NATIVE:'0'});
+ const child=spawn(process.execPath,['scripts/start.mjs'],{env,stdio:['ignore','pipe','pipe']});let output='';child.stdout.on('data',bytes=>output+=bytes);child.stderr.on('data',bytes=>output+=bytes);
+ t.after(async()=>{if(child.exitCode===null&&child.signalCode===null){child.kill('SIGTERM');await once(child,'exit');}await rm(directory,{recursive:true,force:true});});
+ const url='http://127.0.0.1:'+port;let ready=false;
+ for(let attempt=0;attempt<200;attempt++){if(child.exitCode!==null||child.signalCode!==null)assert.fail(output);try{if((await fetch(url+'/api/health')).ok){ready=true;break;}}catch{}await new Promise(done=>setTimeout(done,30));}
+ assert.ok(ready,output);
+ const cli=async(...args)=>JSON.parse((await execute(process.execPath,['cli/bin/ink-os.mjs',...args],{env,maxBuffer:4*1024*1024})).stdout);
+ const config=JSON.parse(await readFile(env.INK_OS_CONFIG)),sdk=createClient({url,token:config.token});
+ await mkdir(source);let manifest={slug:'javascript-project-proof',title:'JavaScript project proof',entry:'index.html',desktop:{entry:'app',icon:'code'},capabilities:['world.read','world.write']};
+ await writeFile(join(source,'ink-app.json'),JSON.stringify(manifest));await writeFile(join(source,'index.html'),'<!doctype html><p>First committed source</p>');
+ const git=new Projects(source);await git.git(source,['init','-b','main']);
+ const commit=async()=>{await git.git(source,['add','--','ink-app.json','index.html']);await git.git(source,['-c','user.name=Ink OS','-c','user.email=ink-os@localhost','-c','commit.gpgsign=false','-c','core.hooksPath='+join(source,'.git/no-hooks'),'commit','-m','Commit explicit app source']);return git.git(source,['rev-parse','HEAD']);};
+ const firstOrigin=await commit(),first=await cli('deploy',source),appId=first.appId;
+ const firstStatus=await sdk.apps.status(appId),firstBody=JSON.parse(firstStatus.app.body),projectId=firstBody.projectId;
+ assert.match(projectId,/^[a-f0-9]{32}$/);assert.equal(firstBody.repository,undefined);assert.equal((await sdk.projects.list()).length,1);
+ const firstProject=await sdk.projects.get(projectId),firstRelease=JSON.parse(firstStatus.releases.find(r=>r.id===first.releaseId).body);
+ assert.equal(firstProject.originCommit,firstOrigin);assert.equal(firstRelease.source.projectId,projectId);assert.equal(firstRelease.source.commit,firstProject.commit);assert.equal(firstRelease.source.originCommit,firstOrigin);
+ const note=await sdk.request('apps/'+appId+'/data',{method:'POST',body:{kind:'note',title:'Keep across source updates',body:'unchanged'}});
+ manifest={...manifest,repository:'https://github.com/example/legacy-app',sourceCommit:'a'.repeat(40)};
+ await writeFile(join(source,'ink-app.json'),JSON.stringify(manifest));await writeFile(join(source,'index.html'),'<!doctype html><p>Second committed source</p>');const secondOrigin=await commit();
+ const preview=await cli('deploy',source,'--app',appId,'--preview-only');assert.notEqual(preview.releaseId,first.releaseId);
+ assert.equal(JSON.parse((await sdk.apps.status(appId)).app.body).releaseId,first.releaseId);
+ const project=await sdk.projects.get(projectId);assert.equal(project.originCommit,secondOrigin);assert.notEqual(project.commit,firstProject.commit);assert.equal((await sdk.projects.list()).length,1);
+ const release=JSON.parse((await sdk.apps.status(appId)).releases.find(r=>r.id===preview.releaseId).body);
+ assert.equal(release.source.projectId,projectId);assert.equal(release.source.repository,undefined);assert.equal(release.source.commit,project.commit);assert.equal(release.source.originCommit,secondOrigin);
+ const bundle=await sdk.request('runtime/bundle/'+preview.releaseId),assets=JSON.parse(Buffer.from(bundle.files.find(f=>f.path==='ink-assets.json').base64,'base64'));
+ const page=assets.files.find(f=>f.path==='index.html'),chunks=[];for(const part of page.chunks){const bytes=Buffer.from(await sdk.assets.get(part.objectId));chunks.push(bytes.subarray(part.offset,part.offset+part.length));}
+ assert.equal(Buffer.concat(chunks).toString(),'<!doctype html><p>Second committed source</p>');
+ const published=await cli('deploy',source,'--app',appId);assert.equal(published.releaseId,preview.releaseId);assert.equal(JSON.parse((await sdk.apps.status(appId)).app.body).projectId,projectId);assert.equal((await sdk.data.get(note.id)).body,'unchanged');
+ await assert.rejects(cli('deploy',source,'--app',appId,'--commit',firstOrigin),/selected commit must match/i);
+ await assert.rejects(cli('deploy',source,'--app',appId,'--project','f'.repeat(32)),/existing source project/i);
+ await writeFile(join(source,'index.html'),'Uncommitted edit');await assert.rejects(cli('deploy',source,'--app',appId),/Commit source changes/);
+ assert.equal((await sdk.projects.get(projectId)).commit,project.commit);assert.equal((await sdk.projects.list()).length,1);assert.equal(JSON.parse((await sdk.apps.status(appId)).app.body).releaseId,published.releaseId);
+});

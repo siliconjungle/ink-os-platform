@@ -32,6 +32,16 @@ test('local releases use separate origins, require launch grants, and hide serve
   assert.equal(provider.available(second.releaseId), false);
 });
 
+test('backend source remains hidden even when its file path shares the backend API prefix', async t => {
+  const provider = new LocalProvider(); t.after(() => provider.close());
+  const key = randomBytes(32).toString('base64url'), appId = 'a'.repeat(32), releaseId = 'd'.repeat(32);
+  await provider.attach({ bundle: async () => ({ entry: 'index.html', backend: { entry: 'backend/private.mjs' }, files: [{ path: 'index.html', base64: Buffer.from('frontend').toString('base64') }, { path: 'backend/private.mjs', base64: Buffer.from('private source').toString('base64') }] }) });
+  const deployment = await provider.deploy({ appId, releaseId, key, origin: 'http://127.0.0.1:4318' }), ticket = sign({ appId, releaseId, exp: Date.now() + 60000 }, key), launch = await fetch(deployment.url + '/_ink/launch?ticket=' + ticket, { redirect: 'manual' }), cookie = launch.headers.get('set-cookie').split(';')[0];
+  for (const path of ['/backend/private.mjs', '/%62ackend%2fprivate.mjs']) assert.equal((await fetch(deployment.url + path, { headers: { Cookie: cookie } })).status, 404);
+  assert.equal((await fetch(deployment.url + '/backend/health', { headers: { Cookie: cookie } })).status, 503);
+  assert.equal(await (await fetch(deployment.url, { headers: { Cookie: cookie } })).text(), 'frontend');
+});
+
 test('virtual-host gateway preserves release authentication and rejects absolute proxy targets', async t => {
   let provider;
   const gateway = http.createServer((req, res) => { if (!provider?.route(req, res)) res.end('OS'); });
