@@ -1,0 +1,70 @@
+{
+  "format": "ink-os-populated-portability-v1",
+  "platformSource": "ae8953cd369f0357781c6060574cba4f272680cc",
+  "scope": "A separately populated private acceptance instance; distribution images and fresh local profiles start with zero apps.",
+  "frontendDelivery": {
+    "apps": 38,
+    "authenticatedEntriesAndLinkedAssets": true,
+    "receiptSha256": "9c6858c7da8efe50794113a73b4e6a07f2041bebcc2ef77f5965badd87b1d0ca"
+  },
+  "managedAuthoring": {
+    "model": "gpt-6.1-sol",
+    "selectedSourceOnly": true,
+    "realTaskCompleted": true,
+    "sourceCommittedAndDeployed": true,
+    "counterResult": "3",
+    "workflowsRead": 2,
+    "graphicalResultVerified": true,
+    "receiptSha256": "13c657f7d86ac10c4510dc84ced9088b6eb209052c19f65d8ddcdb5e34fe32c3"
+  },
+  "encryptedBackup": {
+    "bytes": 2059117484,
+    "sha256": "b3d1bb4e8e85b844b1356bd93e499638af9fcf2b8631578e3f804ee012b038c2",
+    "files": 5832,
+    "objects": 1081,
+    "locations": 2116,
+    "authenticatedOfflineRestore": true
+  },
+  "localRecovery": {
+    "apps": 38,
+    "recordsCompared": 1030,
+    "allRecordHashesEqual": true,
+    "workflows": 2,
+    "sourceReleaseBindingsPreserved": true,
+    "ownerAuthorityPreserved": true,
+    "storage": "local",
+    "runtime": "local",
+    "oldAppURLsRemoved": true,
+    "externalFetchDenied": true,
+    "imageBytesVerified": true,
+    "gracefulExitCode": 0
+  },
+  "ci": [
+    {
+      "run": 41199695686,
+      "branch": "container-backends",
+      "conclusion": "success"
+    },
+    {
+      "run": 41199947156,
+      "branch": "main",
+      "conclusion": "success"
+    }
+  ],
+  "localRegression": {
+    "tests": 325,
+    "passed": 317,
+    "cancelledForTimeout": 3,
+    "environmentSkips": 5,
+    "focusedProductGitRecheck": {
+      "tests": 3,
+      "passed": 3,
+      "logSha256": "332a816d1c9c4698d7934be1efe1bed8e634ed846afd199b247cf7c99f27872e"
+    },
+    "note": "The concurrent local run hit three 60-second deadlines under the host Apple Git. All three passed serially with the packaged Git; both exact-source cloud CI runs passed."
+  },
+  "limits": [
+    "Paid generation actions across every provider were not triggered; byte parity, authenticated frontend delivery, critical UI, actual authoring and runtime/state flows were verified.",
+    "The development preview is ad-hoc signed; Developer ID/notarization is deferred."
+  ]
+}
