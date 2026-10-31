@@ -1,0 +1,61 @@
+{
+  "format": "ink-rendered-authoring-proof-v1",
+  "observedAt": "2026-10-31T07:50:29.309Z",
+  "sources": [
+    {
+      "sha256": "222a55e2897a1625b8ef39d70049eaacd9acc4a9a7a571ef0c34ad4caa0d2765",
+      "path": "server/ink-previews.mjs"
+    },
+    {
+      "sha256": "d05aeed821cd55a4c8b7de077fc9e5c157be1fe535651ad27dfb5a3f80357c3d",
+      "path": "cli/templates/ink-app.mjs"
+    },
+    {
+      "sha256": "efdbde803bb3174d3dd965852bfadf98a95906a091073c53690be382e92748b3",
+      "path": "cli/templates/ink-app.css"
+    },
+    {
+      "sha256": "7e5dfa78ee66788452ab30199fef5ce154b3679294eb36f0d8e202266654973e",
+      "path": "sdk/styles/ink.css"
+    },
+    {
+      "sha256": "872e9342ca768801003fa7afb31792b2586f39abdfddb7e08bb54092b7f77d86",
+      "path": "sdk/styles/base.css"
+    },
+    {
+      "sha256": "9c46bb30d14123813e9ceded7db37269dc6cffb9c4ea9088a140227632c01085",
+      "path": "sdk/styles/tokens.css"
+    },
+    {
+      "sha256": "cff86e1cf2ccabc79e230e2b8c9da4a673e95379d4f58404008e77f7bee4e6a2",
+      "path": "sdk/styles/font.css"
+    },
+    {
+      "sha256": "ad3b490c0f6c402b6317b0bc383152e70f4ba2996a7664062e3c31b8ae8fe32a",
+      "path": "sdk/styles/components.css"
+    },
+    {
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "path": "sdk/styles/fonts/inter-latin-wght-normal.woff2"
+    }
+  ],
+  "fixture": {
+    "generator": "ink-os init SOURCE --slug ui-preview-proof --title \"Ink preview\"",
+    "tree": "5aa3e3b65dd2427e830f075c882b642e811f24de"
+  },
+  "observed": [
+    "Authenticated owner opened a genuinely unpublished Ink preview in the browser.",
+    "The rendered counter changed from 0 to 1 after clicking Add one inside the opaque sandboxed frame.",
+    "SDK style tokens, components, app CSS and embedded font matched the installed app renderer.",
+    "The host still had zero apps and zero projects after preview interaction.",
+    "Restarting the disposable host discarded the old preview state; a new preview began at 0."
+  ],
+  "screenshot": {
+    "path": "ink-preview.png",
+    "sha256": "f13321e3e2fd6b11069a9a67da802ae64c65d025b4a34dfedec625e8e6dcb07c"
+  },
+  "limits": [
+    "Graphical proof uses the bounded JavaScript worker. Native host-transform parity is a separate CI gate.",
+    "This is a local graphical acceptance check, not a clean-machine distribution proof."
+  ]
+}

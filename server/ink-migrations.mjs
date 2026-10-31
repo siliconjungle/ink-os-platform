@@ -1,6 +1,6 @@
 import { hash } from './world.mjs';
 import { compilerRequest, isolatedWorker } from './ink-compiler.mjs';
-import { inkSpec } from '../shared/ink-app.mjs';
+import { inkSpec,inkCommands } from '../shared/ink-app.mjs';
 import { inkSource } from './ink-apps.mjs';
 import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
 
@@ -20,7 +20,8 @@ async function checkedRelease(platform, appId, releaseId) {
   const spec = inkSpec(bundle.ink, new Set(bundle.files.map(file => file.path)));
   let source;
   try { source = inkSource(spec, bundle.files); } catch { fail(409, 'release-source-bytes-invalid'); }
-  return { record, spec, compiled: await platform.code.compile(source), digest: metadata.digest };
+  const compiled=await platform.code.compile(source);inkCommands(spec,compiled.entries);
+  return { record, spec, compiled, digest: metadata.digest };
 }
 
 async function prepared(compiled, entry, input, side) {

@@ -44,7 +44,21 @@
     "evidence/cloud-upgrade.json": "Selected real durable maintenance/stop seal/new boot, preexisting app persistence and nonempty current-generation scoped runtime acceptance; provider identities remain private.",
     "tests/javascript-project-cli.test.mjs": "Actual CLI/host local JavaScript Git source snapshots, existing project provenance, artifact upload and no-clobber redeployment proof.",
     "tests/javascript-deploy-legacy.test.mjs": "Real Git/loopback CLI legacy and managed source paths, path boundaries, credential redaction and custom runtime configuration preservation.",
-    "tests/local-artifacts.test.mjs": "Actual OS/artifact upload/release/launch local transport, content hashes/ranges, source privacy, restart and admitted-stream drain proofs."
+    "tests/local-artifacts.test.mjs": "Actual OS/artifact upload/release/launch local transport, content hashes/ranges, source privacy, restart and admitted-stream drain proofs.",
+    "cli/bin/project-checkout.mjs": "Exact source tree checkout and private host/project/base binding for safe managed deployments.",
+    "tests/project-checkout.test.mjs": "Actual Git exact binary/mode/tree source checkout and competing snapshot CAS proofs.",
+    "tests/project-checkout-api.test.mjs": "Actual HTTP/CLI/SDK managed checkout/edit/deploy and stale-conversation refusal.",
+    "server/ink-host-bindings.mjs": "Typed own-app single-record CAS transforms, separate from Ink checkpoints.",
+    "server/ink-previews.mjs": "Disposable isolated unpublished executable preview sessions and sandbox controller.",
+    "server/ink-router.mjs": "Owner and deployment-scoped preview API dispatch.",
+    "sdk/src/ink-previews.js": "Programmatic preview API shared by owner tools.",
+    "tests/ink-host-bindings.test.mjs": "Actual checked host transforms, CAS/data/state/duplicate/privacy and isolated preview proofs.",
+    "tests/ink-host-api.test.mjs": "Actual owner HTTP/CLI/SDK preview, managed Ink deployment and restart proof.",
+    "tests/native-host-bindings.test.mjs": "Real native/JavaScript host transform parity gate; skipped unless explicit native CI environment.",
+    "cli/bin/app-api.mjs": "Interapp command and desktop handoff CLI backed by the existing scoped app API.",
+    "tests/cli-app-api.test.mjs": "Actual server CLI/caller/scope/handoff plus origin/credential and unknown-command rejection proofs.",
+    "evidence/ink-authoring.json": "Selected actual rendered unpublished preview interaction and zero-catalog mutation proof bound to exact implementation/style inputs.",
+    "evidence/ink-preview.png": "Selected screenshot of actual isolated rendered Ink preview count1 in shared SDK styling."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",

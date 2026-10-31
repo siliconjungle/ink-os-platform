@@ -8,7 +8,11 @@ export function createProjects(request) {
     status: id => request(base(id) + '/status'),
     duplicate: (id, input = {}) => request(base(id) + '/duplicate', { method: 'POST', body: input }),
     import: input => request('projects/import', { method: 'POST', body: input }),
-    snapshot: (id, input) => request(base(id) + '/snapshot', { method: 'POST', body: input }),
+    // expectedCommit is optional for older callers; null explicitly requires an unborn project.
+    snapshot: (id, input, options = {}) => {
+      if (Object.hasOwn(options, 'expectedCommit') && Object.hasOwn(input, 'expectedCommit') && options.expectedCommit !== input.expectedCommit) throw Error('Conflicting expected project commits.');
+      return request(base(id) + '/snapshot', { method: 'POST', body: { ...input, ...(Object.hasOwn(options, 'expectedCommit') ? { expectedCommit: options.expectedCommit } : {}) } });
+    },
     files: (id, commit) => request(base(id) + '/files' + (commit ? '?commit=' + encodeURIComponent(commit) : '')),
     publication: id => request(base(id) + '/publication'),
     publish: (id, input = {}) => request(base(id) + '/publish', { method: 'POST', body: input }),

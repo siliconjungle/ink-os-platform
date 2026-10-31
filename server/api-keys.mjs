@@ -42,6 +42,7 @@ export function routeScope(path,method){
  if(path.startsWith('/runtimes'))return method==='GET'?'apps:read':'apps:deploy';
  if(path.startsWith('/keys'))return 'keys:manage';
  if(path.startsWith('/computer'))return 'computer';
+ if(path==='/ink/previews'||path.startsWith('/ink/previews/'))return 'apps:deploy';
  if(path==='/me')return null;
  if(path==='/query')return 'world:read';
  if(path==='/schedules'||/\/schedules(?:\/|$)/.test(path))return method==='GET'?'apps:read':'apps:invoke';

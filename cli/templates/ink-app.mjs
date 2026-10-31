@@ -1,16 +1,17 @@
 const root = document.querySelector('#app'), status = document.querySelector('#status');
 const fields = new Map();
+const hostRevisions=new Map();
 let ink, metadata, sequence = 0, timer, busy = false, hidden = false;
 const text = value => typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 const report = (message = '', error = false) => { status.textContent = message; status.dataset.error = String(error); };
 const node = (tag, label) => { const element = document.createElement(tag); if (label !== undefined) element.textContent = label; return element; };
 async function run(entry, input = '[]') {
-  return ink.request('http', { path: '/code/run', method: 'POST', body: { entry, input } });
+  const result=await ink.request('http', { path: '/code/run', method: 'POST', body: { entry, input } });if(result.hostRecord&&(result.hostRecord.effect==='write'||!hostRevisions.has(result.hostRecord.key)||![...fields.values()].some(field=>field.dirty)))hostRevisions.set(result.hostRecord.key,result.hostRecord.revision);return result;
 }
 function argumentsFor(input) {
   if (typeof input !== 'string' || !input.trim()) return '[]';
   // Field tokens retain JSON number text, including integers larger than Number.
-  return input.replace(/\{"\$field"\s*:\s*"([A-Za-z0-9_-]+)"\}/g, (_match, name) => {
+  return input.replace(/\{"\$revision"\s*:\s*"([A-Za-z_][A-Za-z0-9_]*)"\}/g,(_match,name)=>{const binding=metadata.ink.host?.bindings.find(binding=>binding.entry===name);if(!binding||!hostRevisions.has(binding.key))throw Error('Read this host record before editing it.');return String(hostRevisions.get(binding.key));}).replace(/\{"\$field"\s*:\s*"([A-Za-z0-9_-]+)"\}/g, (_match, name) => {
     const field = fields.get(name);
     if (!field) throw Error('Missing field: ' + name);
     return field.format === 'json' ? field.value : JSON.stringify(field.value);
@@ -19,7 +20,7 @@ function argumentsFor(input) {
 async function invoke(entry, input, button) {
   if (busy) return;
   busy = true; if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); }
-  try { report(); const result = await run(entry, argumentsFor(input)); if (!metadata.ink.view) report(result.valueWire); await refresh(); }
+  try { report(); const result = await run(entry, argumentsFor(input)); if (!metadata.ink.view) report(result.valueWire+(result.hostRecord?' · record revision '+result.hostRecord.revision:'')); await refresh(); }
   catch (error) { report(error.message, true); }
   finally { busy = false; if (button) { button.disabled = false; button.removeAttribute('aria-busy'); } }
 }
@@ -39,7 +40,7 @@ function render(value, budget = { nodes: 0 }, depth = 0) {
     if (!value.multiline) input.type = ['text', 'number', 'color', 'date', 'email', 'url', 'range'].includes(value.type) ? value.type : 'text';
     const stored = fields.get(value.name) || { value: String(value.value ?? ''), format: value.format === 'json' ? 'json' : 'text' };
     fields.set(value.name, stored); stored.element = input; input.dataset.field = value.name; input.value = stored.value; input.placeholder = value.placeholder || '';
-    input.oninput = () => { stored.value = input.value; };
+    input.oninput = () => { stored.value = input.value; stored.dirty = true; };
     element.append(node('span', value.text || value.name), input);
   } else element = node('pre', text(value.value ?? value));
   if (['column', 'row', 'panel'].includes(kind)) for (const child of value.children || []) element.append(render(child, budget, depth + 1));

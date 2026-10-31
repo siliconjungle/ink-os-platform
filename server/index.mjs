@@ -4,6 +4,7 @@ import { NativeInk } from './native-ink.mjs';
 import { managedNativeFromEnvironment } from './managed-native.mjs';
 import { NativeJobs } from './native-jobs.mjs';
 import { inkSource } from './ink-apps.mjs';
+import { InkPreviews } from './ink-previews.mjs';
 import { drainHost } from './shutdown.mjs';
 import { httpConnections } from './http-connections.mjs';
 import{DesktopActions}from './desktop-actions.mjs';
@@ -66,7 +67,7 @@ const platform=await new Platform({root,directory:data,world,storage,origin,admi
 platform.projects = await new Projects(data).open();
 platform.calls=new CallRooms({clients,app:id=>platform.app(id),...(process.env.INK_OS_RTC_ICE_SERVERS?{iceServers:JSON.parse(process.env.INK_OS_RTC_ICE_SERVERS)}:{})});
 await reconcileFileDefaults(platform);
-platform.code=code;platform.computer=new Computer(platform);platform.collaboration=collaboration;platform.namespaceMigrations=namespaceMigrations;platform.versions=new Versions({world,collaboration:platform.collaboration,storage,bundle:key=>platform.bundle(key)});
+platform.code=code;platform.inkPreviews=new InkPreviews({platform});platform.computer=new Computer(platform);platform.collaboration=collaboration;platform.namespaceMigrations=namespaceMigrations;platform.versions=new Versions({world,collaboration:platform.collaboration,storage,bundle:key=>platform.bundle(key)});
 platform.nativeJobs=await new NativeJobs(data,{native:new NativeInk(join(data,'native'),{cargo:process.env.INK_NATIVE_CARGO||'cargo',rustc:process.env.INK_NATIVE_RUSTC||'rustc',offline:process.env.INK_NATIVE_OFFLINE==='1',managed:managedNativeFromEnvironment()}),enabled:process.env.INK_OS_NATIVE!=='0',source:async(appId,releaseId)=>{platform.app(appId);const release=world.get(releaseId);if(release?.kind!=='release'||JSON.parse(release.body).appId!==appId)throw Object.assign(Error('Native source release not found.'),{status:404});const bundle=await platform.bundle(releaseId);if(!bundle.ink)throw Object.assign(Error('This release has no Ink program.'),{status:400});return inkSource(bundle.ink,bundle.files);}}).open();
 code.nativeJobs=platform.nativeJobs;
 if(production&&!platform.adminToken)throw Error('INK_OS_ADMIN_TOKEN is required');

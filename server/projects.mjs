@@ -197,12 +197,20 @@ export class Projects {
     });
   }
   async importSnapshot(input, id, { expectedSource } = {}) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) fail(400, 'Provide a source snapshot object.');
+    const hasExpected = Object.hasOwn(input, 'expectedCommit');
+    if (hasExpected && input.expectedCommit !== null && !/^[a-f0-9]{40}$/.test(input.expectedCommit || '')) fail(400, 'Use expectedCommit as a full commit SHA, or null for an unborn project.');
+    if (!id && hasExpected && input.expectedCommit !== null) fail(409, 'A new project has no source commit.');
     const files = sourceFiles(input.files);
     if (input.originCommit && !/^[a-f0-9]{40}$/.test(input.originCommit)) fail(400, 'Use a full original commit SHA.');
     const project = id ? this.get(id) : await this.create({ ...(input.settings || {}), directory: undefined, title: input.title || 'Source project' });
     if (!project.managed) fail(409, 'Snapshot import cannot overwrite an external working repository.');
     const settings = input.settings ? projectSettings({ ...project, ...input.settings, source: input.settings.source || project.source }) : {};
     const state = await this.status(project.id);
+    const checkExpected = commit => {
+      if (hasExpected && commit !== input.expectedCommit) throw Object.assign(Error('Project source changed since this checkout. Reconcile its source before importing another snapshot.'), { status: 409, current: commit });
+    };
+    checkExpected(state.commit);
     if (expectedSource) await this.checkSourceUnchanged(project.id, expectedSource);
     const clean = async () => {
       if (await this.git(project.directory, ['status', '--porcelain', '--untracked-files=all', '--ignored=matching'])) fail(409, 'The managed project has edits or generated files. Commit or move them before importing another snapshot.');
@@ -229,12 +237,17 @@ export class Projects {
       if (tree !== priorTree) {
         const commit = (await this.gitRaw(project.directory, ['-c', 'commit.gpgsign=false', 'commit-tree', tree, ...(state.commit ? ['-p', state.commit] : []), '-m', 'Import source snapshot'], { env })).trim();
         await clean();
-        if ((await this.status(project.id)).commit !== state.commit) fail(409, 'Project changed during source import.');
+        const currentCommit = (await this.status(project.id)).commit;
+        checkExpected(currentCommit);
+        if (currentCommit !== state.commit) fail(409, 'Project changed during source import.');
         if (expectedSource) await this.checkSourceUnchanged(project.id, expectedSource);
         changed = true;
         await this.git(project.directory, ['reset', '--hard', commit]);
       }
-      else if (expectedSource) await this.checkSourceUnchanged(project.id, expectedSource);
+      else {
+        checkExpected((await this.status(project.id)).commit);
+        if (expectedSource) await this.checkSourceUnchanged(project.id, expectedSource);
+      }
     } catch (error) {
       if (changed && state.commit) await this.git(project.directory, ['reset', '--hard', state.commit]);
       if (!id) { delete this.records[project.id]; await this.persist(); await rm(project.directory, { recursive: true, force: true }); }
@@ -274,9 +287,11 @@ export class Projects {
   }
   async status(id) {
     const project = this.get(id);
+    const commit = await this.git(project.directory, ['rev-parse', 'HEAD']).catch(() => null);
     return {
       project,
-      commit: await this.git(project.directory, ['rev-parse', 'HEAD']).catch(() => null),
+      commit,
+      tree: commit ? await this.git(project.directory, ['rev-parse', commit + '^{tree}']) : null,
       changes: await this.git(project.directory, ['status', '--porcelain']),
       remotes: await this.git(project.directory, ['remote', '-v']),
     };

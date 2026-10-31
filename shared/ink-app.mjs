@@ -34,14 +34,26 @@ export function inkModuleGraph(input, { sources = false, paths, privatePaths = f
 
 export function inkSpec(input, paths) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) fail('Provide an Ink application contract.');
-  if (input.version !== undefined && input.version !== 1) fail('Unsupported Ink application contract version.');
+  if (input.version !== undefined && ![1,2].includes(input.version)) fail('Unsupported Ink application contract version.');
+  if ((input.host !== undefined) !== (input.version === 2)) fail('Host bindings require Ink application contract version 2.');
   if (typeof input.source !== 'string' || !/^server\/[A-Za-z0-9_./-]+\.ink$/.test(input.source) || input.source.split('/').some(part => part === '..' || part === '.' || !part) || paths && !paths.has(input.source)) fail('Ink source must be a private server/*.ink release file.');
   if (input.view !== undefined && input.view !== null && !entryName(input.view)) fail('Choose a valid Ink view entry.');
   if (!Array.isArray(input.exports) || input.exports.length > 63 || input.exports.some(name => !entryName(name)) || new Set(input.exports).size !== input.exports.length) fail('Declare up to 63 unique Ink exports.');
   const modules = input.modules === undefined ? null : inkModuleGraph(input.modules, { paths, privatePaths: true });
   if (modules && (modules.root !== input.source || [...input.exports, ...(input.view ? [input.view] : [])].some(name => !modules.modules.find(module => module.path === modules.root).exports.includes(name)))) fail('Ink view and app exports must be declared root module exports.');
-  return { version: 1, source: input.source, view: input.view || null, exports: [...input.exports], ...(modules ? { modules } : {}) };
+  const host=input.host===undefined?undefined:inkHost(input.host);
+  return { version: host?2:1, source: input.source, view: input.view || null, exports: [...input.exports], ...(modules ? { modules } : {}),...(host?{host}:{}) };
 }
+
+export function inkHost(input){
+  if(!keys(input,['version','bindings'])||input.version!==1||!Array.isArray(input.bindings)||!input.bindings.length||input.bindings.length>16)fail('Declare 1–16 version 1 host data bindings.');
+  const seen=new Set();return{version:1,bindings:input.bindings.map(binding=>{if(!keys(binding,['entry','effect','key'])||!symbol(binding.entry)||seen.has(binding.entry)||!['read','write'].includes(binding.effect)||typeof binding.key!=='string'||!/^[a-z][a-z0-9.-]{0,99}$/.test(binding.key))fail('Host bindings need a unique entry, read/write effect and fixed app-data key.');seen.add(binding.entry);return{entry:binding.entry,effect:binding.effect,key:binding.key};}).sort((a,b)=>a.entry.localeCompare(b.entry))};
+}
+export function inkHostBindings(spec,entries){
+  for(const binding of spec.host?.bindings||[]){const entry=entries.find(entry=>entry.name===binding.entry);if(!entry||entry.action||!spec.exports.includes(entry.name)&&spec.view!==entry.name||entry.params.length!==(binding.effect==='write'?2:1)||entry.params.some(param=>param.type?.kind!=='string')||binding.effect==='write'&&entry.result?.kind!=='string')fail('Host bindings require exported stateless String transforms: read(String), write(String,String)->String.');if(spec.view===entry.name&&binding.effect!=='read')fail('A view cannot perform a host write.');}
+  return spec.host?.bindings||[];
+}
+export function inkPublicEntries(spec,entries){inkHostBindings(spec,entries);return entries.map(entry=>{const binding=spec.host?.bindings.find(binding=>binding.entry===entry.name);return binding?{...entry,params:binding.effect==='read'?[]:[{name:'expectedRevision',type:{kind:'u64'}},...entry.params.slice(1)],hostBinding:binding}:entry;});}
 
 export function inkEntries(manifest, graph) {
   if (graph && (!Array.isArray(graph.root_exports) || graph.root_exports.some(name => !symbol(name)))) fail('Invalid checked Ink root export metadata.');
@@ -52,13 +64,14 @@ export function inkEntries(manifest, graph) {
 }
 
 export function inkCommands(spec, entries) {
+  inkHostBindings(spec,entries);
   if (spec.view) {
     const view = entries.find(entry => entry.name === spec.view);
-    if (!view || view.change || view.params.length) fail('The Ink view must be an exported function or query without arguments.');
+    if (!view || view.change || (spec.host?.bindings.find(binding=>binding.entry===view.name)?.effect==='read'?view.params.length!==1:view.params.length)) fail('The Ink view must be an exported function or query without arguments.');
   }
   const ids = new Set();
   return spec.exports.map(name => {
-    const entry = entries.find(entry => entry.name === name);
+    const entry = inkPublicEntries(spec,entries).find(entry => entry.name === name);
     if (!entry || entry.params.length > 16) fail('Ink command is missing or has more than 16 arguments: ' + name);
     const id = 'ink.' + name.toLowerCase().replace(/[^a-z0-9.-]/g, '-').slice(0, 59);
     if (ids.has(id)) fail('Ink exports have conflicting command names.');
@@ -68,7 +81,7 @@ export function inkCommands(spec, entries) {
       description: 'Run ' + name + '.', keywords: ['ink'],
       inputs: entry.params.map((param, index) => ({ name: 'arg' + index, label: param.name, type: 'json', required: true })),
       handler: { type: 'ink', entry: name, arguments: entry.params.map((_param, index) => 'arg' + index) },
-      effect: entry.change ? 'write' : 'read', idempotent: !entry.change,
+      effect: entry.change||entry.hostBinding?.effect==='write' ? 'write' : 'read', idempotent: !entry.change&&entry.hostBinding?.effect!=='write',
       outputs: [{ label: 'Value', path: 'value', type: 'json' }, { label: 'Exact JSON', path: 'valueWire', type: 'json' }],
     };
   });

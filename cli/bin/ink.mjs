@@ -5,6 +5,7 @@ import { buildInkApp } from '../../server/ink-apps.mjs';
 import { parseEnv } from 'node:util';
 import { sourceFiles } from '../../shared/source-files.mjs';
 import { inkModuleGraph } from '../../shared/ink-app.mjs';
+import{prepareProjectSnapshot}from'./project-checkout.mjs';
 
 async function manifestFrom(files) {
   const file = files.find(file => file.path === 'ink-app.json');
@@ -68,13 +69,14 @@ export async function buildInk(directory, options = {}) {
   return { output, commands: bundle.commands.map(command => command.id), bytes: bundle.files.reduce((size, file) => size + Buffer.byteLength(file.base64, 'base64'), 0) };
 }
 
-export async function deployInk(directory, options, request) {
+export async function deployInk(directory, options, request,target) {
   const snapshot = await committedSource(directory, options.commit), manifest = snapshot.manifest;
   let app = options.app ? (await request('apps/' + options.app + '/status')).app : (await request('apps')).find(app => JSON.parse(app.body).slug === manifest.slug);
   const projectId = app && JSON.parse(app.body).projectId;
   const settingsFile = snapshot.files.find(file => file.path === 'ink-project.json');
   const settings = settingsFile && JSON.parse(Buffer.from(settingsFile.base64, 'base64').toString('utf8'));
-  const project = await request(projectId ? 'projects/' + projectId + '/snapshot' : 'projects/import', 'POST', { title: manifest.title, files: snapshot.files, originCommit: snapshot.commit, tree: snapshot.tree, ...(settings ? { settings } : {}) });
+  const checkout=await prepareProjectSnapshot({directory,snapshot,projectId,request,target});
+  const project = await request(projectId ? 'projects/' + projectId + '/snapshot' : 'projects/import', 'POST', { title: manifest.title, files: snapshot.files, originCommit: snapshot.commit, tree: snapshot.tree,expectedCommit:checkout.expectedCommit, ...(settings ? { settings } : {}) });await checkout.complete(project);
   if (!app) app = await request('apps', 'POST', { slug: manifest.slug, title: manifest.title, projectId: project.id, sourceCommit: project.commit });
   if (options['env-file']) {
     const text = await readFile(resolve(options['env-file']), 'utf8');
@@ -85,4 +87,16 @@ export async function deployInk(directory, options, request) {
   if (options['preview-only']) return { appId: app.id, projectId: project.id, releaseId: release.id, status: 'ready' };
   const published = await request('apps/' + app.id + '/releases/' + release.id + '/publish', 'POST', {});
   return { appId: app.id, projectId: project.id, releaseId: release.id, url: JSON.parse(published.body).url };
+}
+
+export async function previewInkCLI(action,value,entry,options,request,target){
+ if(action==='preview'){
+  const snapshot=await committedSource(resolve(value||'.'),options.commit),preview=await request('ink/previews','POST',{files:snapshot.files,tree:snapshot.tree,originCommit:snapshot.commit});
+  return{...preview,...(target?.origin?{url:new URL(preview.url,target.origin).href}:{}),...(options.entry?{result:await request('ink/previews/'+preview.id+'/run','POST',{entry:options.entry,input:options.input??'[]',backend:options.backend??'javascript'})}:{})};
+ }
+ if(!/^[a-f0-9]{32}$/.test(value||''))throw Error('Select a preview ID');const path='ink/previews/'+value;
+ if(action==='preview-status')return request(path);
+ if(action==='preview-close')return request(path,'DELETE');
+ if(action==='preview-run'){if(!entry&&!options.entry)throw Error('Select a preview entry');return request(path+'/run','POST',{entry:entry||options.entry,input:options.input??'[]',backend:options.backend??'javascript'});}
+ throw Error('Unknown Ink preview command');
 }

@@ -1,12 +1,17 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { checkoutProject } from './project-checkout.mjs';
 
-export async function projectCLI({ sub, id, options, request, print }) {
+export async function projectCLI({ sub, id, options, request, print, getTarget }) {
   const settings = async () => options.file ? JSON.parse(await readFile(resolve(String(options.file)), 'utf8')) : {};
   if (sub === 'create') return print(await request('projects', 'POST', { title: options.title || id || 'Project', ...await settings(), ...(options.directory ? { directory: resolve(String(options.directory)) } : {}), ...(options.remote ? { source: { provider: 'local', remote: options.remote } } : {}) }));
   if (!sub || sub === 'list') return print(await request('projects'));
   if (!/^[a-f0-9]{32}$/.test(id || '')) throw Error('Provide a project ID.');
   const base = 'projects/' + id;
+  if (sub === 'checkout' || sub === 'export') {
+    if (typeof options.directory !== 'string') throw Error('Use projects checkout PROJECT_ID --directory NEW_DIRECTORY.');
+    return print(await checkoutProject({ projectId: id, directory: options.directory, request, target: await getTarget() }));
+  }
   if (sub === 'configure') {
     if (!options.file) throw Error('Provide --file with project settings.');
     return print(await request(base, 'PATCH', await settings()));
@@ -32,5 +37,5 @@ export async function projectCLI({ sub, id, options, request, print }) {
     }
     return print(await request(base + '/credentials'));
   }
-  throw Error('Use projects list, create, show, status, configure, duplicate, credentials, read-remote, source-plan, pull, publication or publish.');
+  throw Error('Use projects list, create, checkout ID --directory NEW_DIRECTORY, show, status, configure, duplicate, credentials, read-remote, source-plan, pull, publication or publish.');
 }

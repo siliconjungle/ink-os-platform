@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { compileInkProgram, compilerInfo } from './ink-compiler.mjs';
-import { inkEntries, inkCommands, inkSpec, inkModuleGraph } from '../shared/ink-app.mjs';
+import { inkEntries, inkCommands, inkSpec, inkModuleGraph,inkPublicEntries } from '../shared/ink-app.mjs';
+import{runInkHostBinding}from'./ink-host-bindings.mjs';
 import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
 import { sourceFiles } from '../shared/source-files.mjs';
 
@@ -42,11 +43,11 @@ export async function buildInkApp(manifest, files, { source } = {}) {
     const sourceFile = manifest.source || 'main.ink';
     sourceRelease = [encode(sourcePath, sourceText(files.find(file => file.path === sourceFile)))];
   }
-  const candidate = { source: sourcePath, exports: [], ...(graph ? { modules: graph } : {}) };
+  const candidate = { source: sourcePath, exports: [], ...(graph ? { modules: graph } : {}),...(manifest.host!==undefined?{version:2,host:manifest.host}:{}) };
   const program = inkSource(candidate, sourceRelease), artifact = await compileInkProgram(program), entries = inkEntries(artifact.manifest, artifact.module_graph);
   const spec = inkSpec({ ...candidate, view: manifest.ui?.entry ?? null, exports: manifest.exports || entries.filter(entry => entry.name !== manifest.ui?.entry).map(entry => entry.name) });
   const commands = inkCommands(spec, entries);
-  const visibleEntries = entries.filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name);
+  const visibleEntries = inkPublicEntries(spec,entries).filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name);
   const metadata = { title: manifest.title || manifest.slug, ink: spec, entries: visibleEntries, namedTypes: artifact.manifest.named_types, compiler: await compilerInfo(), ...(artifact.module_graph ? { moduleGraph: artifact.module_graph } : {}) };
   const release = [
     ...sourceRelease,
@@ -126,13 +127,14 @@ export async function installedInk(platform, appId, releaseId) {
   const source = inkSource(spec, bundle.files);
   const compiled = await platform.code.compile(source);
   inkCommands(spec, compiled.entries);
-  return { source, spec, entries: compiled.entries.filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name), namedTypes: compiled.artifact.manifest.named_types, releaseId: selected, ...(compiled.sourceIdentity ? { sourceIdentity: compiled.sourceIdentity } : {}) };
+  return { source, spec, entries: inkPublicEntries(spec,compiled.entries).filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name), namedTypes: compiled.artifact.manifest.named_types, releaseId: selected, ...(compiled.sourceIdentity ? { sourceIdentity: compiled.sourceIdentity } : {}) };
 }
 
 export async function runInstalledInk(platform, appId, input = {}, principal, releaseId) {
   if (principal?.releaseId && input.releaseId && principal.releaseId !== input.releaseId) fail(403, 'A runtime cannot change its release identity.');
   const app = await installedInk(platform, appId, releaseId || principal?.releaseId || input.releaseId);
   if (!app.spec.exports.includes(input.entry) && app.spec.view !== input.entry) fail(403, 'The Ink entry is not exported by this app.');
+  const hosted=await runInkHostBinding(platform,appId,app,input,principal);if(hosted)return hosted;
   const authority = platform.runtime.bind({ owner: false, appId, namespace: appId, releaseId: app.releaseId });
   const result = await platform.code.run({ source: app.source, entry: input.entry, input: input.input, args: input.args, backend: input.backend, namespace: appId, stateKey: 'ink-app:state', principal: authority });
   if (result.needsArguments) fail(400, 'Provide a JSON argument array for this Ink entry.');

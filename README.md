@@ -51,6 +51,8 @@ node cli/bin/ink-os.mjs deploy ./my-app
 
 JavaScript apps can also deploy from committed local Git without a repository URL. Build their frontend first, then run `ink-os deploy DIRECTORY`. An installed app with a source project updates that same project from the clean checkout, including apps whose older manifest still records a repository URL. `--project PROJECT_ID` selects an existing managed project for a new app; an installed app keeps its existing binding. A project snapshot uses the checkout's actual commit, and an explicit `--commit` must match it. Repository-based prebuilt deployments continue to accept their explicit source repository and revision.
 
+`ink-os projects checkout PROJECT_ID --directory NEW_DIRECTORY` (also `projects export`) materializes exact managed source into a new private local Git checkout and writes a token-free `.git/ink-os-project.json` binding. Edit and commit normally, then use `ink-os deploy NEW_DIRECTORY --app APP_ID`. Existing directories are never overwritten and no remote HEAD/history is fabricated. A stale managed base conflicts; explicitly reconcile it or create another checkout. The server SDK also supports `projects.snapshot(id,input,{expectedCommit})` (or `input.expectedCommit`), using a full SHA or null for an unborn project; omitted CAS remains backward compatible.
+
 Module backends keep the selected release's custom runtime image when their source manifest omits it. Set `--runtime-image REGISTRY/IMAGE@sha256:DIGEST` or `INK_OS_APP_RUNTIME_IMAGE` to choose a pinned runtime outside source control. `--runtime-image default` explicitly returns to the instance runtime. These options require a module backend entry.
 
 An Ink manifest declares `language: "ink"`, a source file, `ui.entry`, and exported function/query/change names. A view returns records using `kind` values `column`, `row`, `panel`, `heading`, `text`, `value`, `button`, or `field`. Buttons name an exported `entry` and an `args` JSON array string. Fields have a `name`; argument templates can reference them with `{"$field":"name"}`. The generated interface uses the SDK styles. App code needs no JavaScript.
@@ -64,6 +66,19 @@ node cli/bin/ink-os.mjs apps duplicate APP_ID
 ```
 
 The server SDK exposes `projects.import`, `projects.snapshot`, `projects.files`, `apps.build`, `apps.publish`, and `apps.ink.describe/run`. Browser clients use `client.ink.describe()` and `client.ink.run(entry, input)` with the app's `code.execute` capability. Apps call other apps through exported commands and `apps.invoke`.
+
+Inspect an app's exported backend API before calling it:
+
+```sh
+ink-os apps api APP_ID
+ink-os apps read APP_ID READ_NAME --body '{"id":"record-1"}'
+ink-os apps send APP_ID MESSAGE_NAME --body '{"id":"record-1","text":"Hello"}'
+ink-os call APP_ID /exported/path --method POST --body '{"text":"Hello"}'
+ink-os apps open APP_ID --data '{"record":"record-1"}'
+ink-os apps action REQUEST_ID
+```
+
+Named reads use exported GET routes and messages use exported POST routes. Route parameters come from the JSON object; remaining read fields become query parameters and remaining message fields become the body. `call` also requires an exported route and method; `invoke` retains its existing backend invocation behavior. The server verifies owner or app caller identity and an app caller still needs `apps.invoke`; the CLI cannot grant that permission. `apps open` requires a signed-in owner account and returns a queued handoff receipt, not proof that a window opened. Check `apps action` for the UI's acknowledged `opened` or `failed` result. `INK_OS_UI_CLIENT_ID` optionally selects a desktop client and `INK_OS_APP_ID` labels the source app. Credentials remain in `INK_OS_CONFIG` or explicit `INK_OS_TOKEN`, subject to the same origin and instance checks as other commands.
 
 Native builds use a host Rust toolchain and a committed dependency lock. Build once, then choose a backend:
 
@@ -107,7 +122,28 @@ Ink apps accept a single source or an explicit committed module graph. For examp
 
 With `main.ink` containing `module app;fn run(n:u32)->u32{return bump(n);}` and `lib/math.ink` containing `module math;fn bump(n:u32)->u32{return n+1;}`, the same CLI build/deploy and exported command APIs work. The root can own state, queries and changes; graph version1 links pure libraries with explicit dependencies and exports. It rejects stateful libraries, record-update syntax and unsupported advanced metadata. There is no filesystem, URL or package discovery during compilation.
 
-Releases, checkpoints and native artifacts bind the complete graph and checked core identity. Package root exports bound callable entries; app exports/view can narrow them further. A library-only source change invalidates the old source identity, even when its generated core is unchanged. Persistent checkpoints survive restarts and duplicate independently with the app. A changed source identity requires an explicit migration; execution rejects incompatible saved state instead of silently resetting it. Host I/O bindings remain unfinished. The desktop configures a private pinned native installer; startup/status do not install tools, and an explicit native build bootstraps them on supported hosts. Real installer and packaged acceptance remain release gates.
+Releases, checkpoints and native artifacts bind the complete graph and checked core identity. Package root exports bound callable entries; app exports/view can narrow them further. A library-only source change invalidates the old source identity, even when its generated core is unchanged. Persistent checkpoints survive restarts and duplicate independently with the app. A changed source identity requires an explicit migration; execution rejects incompatible saved state instead of silently resetting it. The desktop configures a private pinned native installer; startup/status do not install tools, and an explicit native build bootstraps them on supported hosts. Packaged native acceptance remains a separate release gate.
+
+Ink apps can bind checked stateless functions to fixed keys in their own persistent app data, without an authored JavaScript backend. For example, add this to `ink-app.json`:
+
+```json
+{"host":{"version":1,"bindings":[{"entry":"read_note","effect":"read","key":"note"},{"entry":"write_note","effect":"write","key":"note"}]},"exports":["read_note","write_note"]}
+```
+
+The corresponding Ink source can contain:
+
+```ink
+fn read_note(body:String)->String{return body;}
+fn write_note(body:String,text:String)->String{if(text=="reset"){return "";}return text;}
+```
+
+Read bindings take no public arguments and receive the stored body as their checked `String` parameter. Write bindings take `[expectedRevision,text]`; the host injects the current body as the first source parameter, executes the pure transform through the selected JavaScript/native backend, then commits its resulting `String` with one record CAS. Read responses expose `hostRecord.revision`; use zero to create the initially absent record. Bodies and input text are bounded to 64 KiB. Bindings require the app's existing `world.read` capability, plus `world.write` for writes, retain the selected-release write fence, and cannot choose another namespace or overwrite document-bound records. Commands derive their actual read/write effects from the validated binding. Writes are non-idempotent: after a lost reply, read the current row and explicitly reconcile its revision rather than automatically replaying a write. They do not also mutate Ink state, files, workflow stores or arbitrary World objects. No cross-store atomic transaction is claimed.
+
+A read binding may supply the Ink view from the stored body. Generated views may put `{"$revision":"write_note"}` into a button's JSON argument array to use the last read revision of that same fixed key, alongside existing `{"$field":"name"}` tokens. The binding contract and its parameter/result descriptors are checked when building and reading the release. Host-bound releases use Ink contract version 2; older releases retain version 1. This data binding does not provide filesystem, network, process, credential or arbitrary FFI access.
+
+`ink-os ink preview DIRECTORY --entry ENTRY --input '[]'` captures clean committed source and creates a genuinely executable, unpublished preview. `ink preview-run PREVIEW_ID ENTRY --input JSON`, `ink preview-status PREVIEW_ID`, and `ink preview-close PREVIEW_ID` operate on it. No app/project registration, release publication, production checkpoint, runtime provider or toolchain installation occurs. The returned URL renders the generated UI in an opaque sandbox with a dedicated preview-only MessagePort bridge. Browser sign-in is required to open that URL; API credentials are never put in it.
+
+Owner API routes are `POST /api/v1/ink/previews`, `GET|DELETE /api/v1/ink/previews/:id`, `POST /api/v1/ink/previews/:id/run`, and `GET /api/v1/ink/previews/:id/view`; the server SDK exposes `client.ink.previews.create/get/run/remove`. Creation accepts exact `files` plus optional verified `tree`/`originCommit`, or an existing `projectId` and full `commit`. Previews start with empty private Ink state and host data, run through the ordinary bounded JavaScript worker, serialize their own changes, expire after ten minutes, and disappear on host restart. Explicit native preview execution is rejected; native installation/execution belongs to installed apps. Existing installed state remains unchanged, and the normal selected-release guard remains in force. Preview access uses existing owner and `apps:deploy`/`computer` permissions and is bound to the creating account.
 
 Development: `npm run dev`. Validation: `npm test`, `npm run check`, `npm run audit`.
 
@@ -119,6 +155,8 @@ ink-os migrations namespaces apply --file import.json --plan plan.json
 ```
 
 The input contains a stable 32-hex `operation`, full `sourceVersion`, `sourceVersionCut` (`id`, original `manifestDigest`, `worldVersion`, `core`, `capturedAt`), and explicit `namespaces`, `recordIds`, `documentIds` and `bootstrapDocumentIds`. The original manifest digest hashes `JSON.stringify(sourceVersion)` in its exported key order. The inspected plan binds destination revisions and scope; changes require a new plan. Only explicitly listed bootstrap documents can be replaced. Import preserves text/state checkpoint bytes, tombstones and file IDs, maps file revisions to the destination, and records a durable decision for restart recovery. App registrations, releases, credentials, workflows and schedules use separate services. Transfer content-addressed assets first; top-level `locationRemap` entries must preserve the digest and pass destination readback. Existing operation receipts replay without overwriting later target edits. Use `migrations namespaces status OPERATION` to read the durable receipt. Server SDK callers use `migrations.namespaces.plan/apply/get`; these endpoints require administrator authority.
+
+Draft seeds may reference explicitly selected desktop files or notes from another selected namespace. Optional `referenceNamespaces` permits only seed records required by selected drafts from namespaces without an app registration; it cannot import documents, protected app-source files or unrelated records from those namespaces. Archived seed records and draft checkpoints are retained; drafts stay inaccessible until the seed is restored.
 
 For saved references that must retain their original storage strings, administrators can call `migrations.storage.installAliases({operation,inputDigest,aliases})` or `ink-os migrations storage-aliases apply --file aliases.json`. Aliases map exact content-addressed locations to the currently configured local/R2/S3 store with the same digest. Installation checks complete destination bytes; reads verify integrity and never contact the old store. The private alias journal is included in local backups; retained aliases pin their blobs against garbage collection. Transfer remote bytes separately before installing aliases.
 
