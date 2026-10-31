@@ -8,7 +8,7 @@ export async function fetch(request, { ink }) {
       try {
         const deadline = Date.now() + 10000;
         for (;;) {
-          const health = await fetch(new URL('/api/health', process.env.INK_OS_URL), { redirect: 'error' }).then(response => response.json());
+          const health = await globalThis.fetch(new URL('/api/health', process.env.INK_OS_URL), { redirect: 'error' }).then(response => response.json());
           if (health.draining) break;
           if (Date.now() >= deadline) throw Error('Host did not close admission');
           await new Promise(resolve => setTimeout(resolve, 50));
