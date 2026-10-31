@@ -1,0 +1,57 @@
+{
+  "name": "@ink-os/platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/start.mjs --dev",
+    "build:ink": "node scripts/compile-ink.mjs",
+    "build": "npm run build:cloud",
+    "check": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "build:cloud": "npm run build:runtime && tsc --noEmit && vite build",
+    "start": "node scripts/start.mjs",
+    "build:runtime": "node scripts/build-runtime.mjs",
+    "audit": "node scripts/audit-source.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1158.0",
+    "@chenglou/pretext": "1.0.0",
+    "@fontsource-variable/inter": "^5.3.0",
+    "vite": "^8.3.5",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  },
+  "license": "MIT",
+  "description": "Portable Ink OS web platform, API, SDK, and CLI",
+  "bin": {
+    "ink-os": "cli/bin/ink-os.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "server",
+    "shared",
+    "generated",
+    "ink",
+    "infra",
+    "app-runtime",
+    "sdk",
+    "cli",
+    "dist",
+    "scripts/start.mjs",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./sdk/src/server.js",
+    "./browser": "./sdk/src/browser.js",
+    "./styles": "./sdk/styles/ink.css",
+    "./commands": "./sdk/src/commands.js",
+    "./workflows": "./sdk/src/workflows.js",
+    "./tables": "./sdk/src/tables.js"
+  }
+}

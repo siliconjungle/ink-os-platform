@@ -1,0 +1,1 @@
+export class EventConnection{constructor(options:{url:string;heartbeat:(signal:AbortSignal)=>Promise<{connected?:boolean}>;onOpen?:()=>void;onError?:()=>void;onMessage?:(event:MessageEvent)=>void});source?:EventSource;connect():EventSource|undefined;destroy():void;}

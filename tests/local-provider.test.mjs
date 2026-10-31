@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
+import { LocalProvider } from '../infra/local-provider.mjs';
+import { sign } from '../server/platform.mjs';
+
+test('local releases use separate origins, require launch grants, and hide server source', async t => {
+  const provider = new LocalProvider(); t.after(() => provider.close());
+  const key = randomBytes(32).toString('base64url'), appId = 'a'.repeat(32), releaseId = 'b'.repeat(32);
+  const files = [{ path: 'index.html', base64: Buffer.from('<p>local</p>').toString('base64') }, { path: 'server/private.mjs', base64: Buffer.from('private').toString('base64') }];
+  provider.attach({ bundle: async () => ({ entry: 'index.html', files }) });
+  const first = await provider.deploy({ appId, releaseId, key, origin: 'http://127.0.0.1:4318' });
+  const second = await provider.deploy({ appId, releaseId: 'c'.repeat(32), key, origin: 'http://127.0.0.1:4318' });
+  assert.notEqual(first.url, second.url);
+  assert.equal((await fetch(first.url)).status, 401);
+  const ticket = sign({ appId, releaseId, exp: Date.now() + 60000 }, key);
+  const launch = await fetch(first.url + '/_ink/launch?ticket=' + ticket, { redirect: 'manual' });
+  assert.equal(launch.status, 302);
+  const cookie = launch.headers.get('set-cookie').split(';')[0];
+  assert.equal(await (await fetch(first.url, { headers: { cookie } })).text(), '<p>local</p>');
+  assert.equal((await fetch(first.url + '/server/private.mjs', { headers: { cookie } })).status, 404);
+  assert.equal((await fetch(second.url, { headers: { cookie } })).status, 401);
+});

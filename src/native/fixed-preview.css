@@ -1,0 +1,14 @@
+.overview-canvas{height:auto!important;aspect-ratio:var(--preview-aspect,16/9);background:#141414 url('/art/desktop.svg?design=contours-v1') center/cover!important;box-shadow:0 8px 24px #0004}
+.fixed-desktop-preview{position:absolute;inset:0;container-type:inline-size;pointer-events:none;background:#141414 url('/art/desktop.svg?design=contours-v1') center/cover;overflow:hidden}
+.fixed-preview-bar{position:absolute;inset:0 0 auto;height:calc(100cqw*32/var(--desktop-width));background:#242424aa;border-bottom:1px solid #ffffff0b}
+.fixed-preview-icon{position:absolute;display:flex;flex-direction:column;align-items:center;gap:calc(100cqw*7/var(--desktop-width));padding-top:calc(100cqw*8/var(--desktop-width));color:#b8b8b8}
+.fixed-preview-icon>svg,.fixed-preview-icon>.custom-app-icon{width:calc(100cqw*31/var(--desktop-width))!important;height:calc(100cqw*31/var(--desktop-width))!important}
+.fixed-preview-icon>small{font-size:max(3px,calc(100cqw*10/var(--desktop-width)));max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fixed-preview-window{position:absolute;display:flex;flex-direction:column;border:1px solid #ffffff23;background:#222;border-radius:4px;overflow:hidden;padding:0;box-shadow:0 2px 7px #0006;pointer-events:auto;min-width:0}
+.fixed-preview-window>header{display:flex;position:relative;justify-content:center;align-items:center;width:100%;height:calc(100cqw*36/var(--desktop-width));min-height:5px;background:#303030;border-bottom:1px solid #ffffff0a;font-size:max(3px,calc(100cqw*11/var(--desktop-width)));overflow:hidden}
+.fixed-preview-window>header>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:70%}
+.fixed-preview-window>header>i{position:absolute;left:4%;display:flex;gap:2px}.fixed-preview-window b{width:2px;height:2px;background:#777;border-radius:50%}
+.fixed-preview-window>div{flex:1;display:grid;place-items:center}.fixed-preview-window>div>svg,.fixed-preview-window>div>.custom-app-icon{width:calc(100cqw*28/var(--desktop-width))!important;height:calc(100cqw*28/var(--desktop-width))!important;opacity:.45}
+.fixed-preview-window:hover,.fixed-preview-window:focus-visible{border-color:#ddd;outline:none}
+.workspace-drop-card{height:auto;aspect-ratio:16/10;background:#171717!important}.workspace-drop-card>.fixed-desktop-preview{top:29px;bottom:6px;left:6px;right:6px;border-radius:5px;aspect-ratio:auto}
+.workspace-drop-card .fixed-preview-window{pointer-events:none}

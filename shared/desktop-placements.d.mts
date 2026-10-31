@@ -1,0 +1,13 @@
+import type {WorldObject} from '../src/types';
+import type {Workspace} from '../src/workspace-model';
+export type Point={x:number;y:number};
+export type Placements=Record<string,Record<string,Point>>;
+export function validPlacement(point:unknown):boolean;
+export function placementMaps(input:unknown,workspaces:Workspace[]):Placements;
+export function migratePlacements(input:unknown,icons:unknown,workspaces:Workspace[]):Placements;
+export function desktopFile(object?:WorldObject):boolean;
+export function placedObjects(objects:WorldObject[],positions:Record<string,Point>):WorldObject[];
+export type PlacementChange={space:number;id:string;point?:Point};
+export function placementTransfer(placements:Placements,workspaces:Workspace[],ids:string[],options:{from:number;to:number;cut?:boolean;point:Point}):{before:PlacementChange[];after:PlacementChange[]};
+export function applyPlacementChanges(placements:Placements,workspaces:Workspace[],changes:PlacementChange[]):void;
+export function placementMove(placements:Placements,workspaces:Workspace[],ids:string[],options:{from:number;to:number;positions:Record<string,Point>}):{before:PlacementChange[];after:PlacementChange[]};

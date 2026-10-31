@@ -1,0 +1,13 @@
+.fixed-desktop>.desktop-items{visibility:visible;inset:0;z-index:1}
+.fixed-desktop>.desktop-stage{position:absolute;inset:32px 0 0;width:100%;height:calc(100% - 32px);z-index:2}
+.fixed-desktop>.desktop-bottom{position:absolute;bottom:0;left:0;right:0}
+.fixed-desktop.has-expanded-window>.desktop-stage{inset:0;height:100%}
+.fixed-desktop .window-content{touch-action:auto}
+.fixed-desktop .desktop-window:not(.is-active) .window-content::after{display:none!important}
+.fixed-desktop .desktop-window .app-frame{pointer-events:auto}
+.desktop-activity{position:absolute;right:1px;top:2px;display:flex;gap:2px;pointer-events:none;z-index:3}
+.desktop-activity>span{display:grid;place-items:center;width:15px;height:15px;border-radius:50%;border:1.5px solid #191919;background:var(--peer-color);color:#17202b;font-size:8px;font-weight:650;box-shadow:0 1px 4px #0006}
+.desktop-dock>button>.desktop-activity{right:-2px;top:-3px}
+
+.fixed-desktop .desktop-object-icon{position:relative}
+.desktop-object-icon>.desktop-activity{right:-5px;top:-5px}

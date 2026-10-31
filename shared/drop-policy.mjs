@@ -1,0 +1,6 @@
+import{acceptsFile,fileInfo}from'./file-types.mjs';
+export function acceptsDropPreview(types,files){if(!types.length||files.length>12)return false;return files.every(file=>{const info=fileInfo(file);if(info.extension||file.source||file.title||file.name)return acceptsFile(types,file);if(!info.mime||info.mime==='application/octet-stream')return true;const hasMIME=types.some(type=>type.includes('/')||type==='*'||type===file.kind);return hasMIME&&acceptsFile(types,file)||types.some(type=>type.startsWith('.'));});}
+export function dropDestination(window,accepted,desktop='the desktop'){return window?{kind:accepted?'window':'reject',key:window.key,name:window.name,node:window.node,reason:accepted?'':window.name+' does not accept these files'}:{kind:'desktop',name:desktop};}
+
+// Geometry remains authoritative while drag overlays or disabled frames change DOM hit testing.
+export function windowAtPoint(windows,x,y){if(!Number.isFinite(x)||!Number.isFinite(y))return undefined;let selected;for(const window of windows){const r=window.rect;if(window.hidden||!r||r.width<=0||r.height<=0||x<r.x||x>=r.x+r.width||y<r.y||y>=r.y+r.height)continue;if(!selected||window.z>=selected.z)selected=window;}return selected?.key;}

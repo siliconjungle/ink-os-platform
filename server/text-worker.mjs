@@ -1,0 +1,2 @@
+import{parentPort}from'node:worker_threads';import{textWorkerHandler}from'../shared/text-worker-core.mjs';
+const handle=textWorkerHandler();let tail=Promise.resolve();parentPort.on('message',message=>{tail=tail.then(async()=>{try{const result=await handle(message);parentPort.postMessage({id:message.id,result});if(message.method==='close')parentPort.close();}catch(error){parentPort.postMessage({id:message.id,error:error.message,code:error.code});}});});

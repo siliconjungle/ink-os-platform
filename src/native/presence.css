@@ -1,0 +1,10 @@
+/* Presence is the color layer over otherwise quiet desktop chrome. */
+.peer-cursor{position:fixed;left:0;top:0;width:0;height:0;display:block;pointer-events:none;z-index:1;isolation:isolate;transition:none;color:var(--peer-color)}
+.peer-cursor[data-moving=true]{transition:transform 80ms linear}
+.peer-pointer{position:absolute;left:-1.833px;top:-1.833px;overflow:visible;fill:var(--peer-color);stroke:#fffffff0;stroke-width:1.6;stroke-linejoin:round;filter:drop-shadow(0 1px 2px #0009)}
+.peer-cursor>.peer-name{position:absolute;display:block;height:23px;max-width:180px;padding:4px 7px;border:0;border-radius:3px 6px 6px 6px;background:var(--peer-color);color:var(--peer-ink,#17202b);font-size:11px;line-height:15px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 2px #0005,0 3px 10px #0002;text-align:left}
+.peer-cursor[data-side=left]>.peer-name{border-radius:6px 3px 6px 6px}
+.desktop-presence>span{width:22px;height:22px;font-size:9px;font-weight:600;color:var(--peer-ink,#17202b);background:var(--peer-color)!important;filter:none;border:2px solid #191919;box-shadow:0 0 0 1px #ffffff0b}
+.peer-window-preview{position:absolute;pointer-events:none;z-index:4500;border:1.5px solid var(--peer-color,#aaa);border-radius:17px;background:color-mix(in srgb,var(--peer-color,#aaa) 5%,transparent);box-shadow:inset 0 0 0 1px #0008}
+.peer-window-preview>span{position:absolute;top:8px;left:12px;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 7px;border-radius:5px;background:var(--peer-color,#aaa);color:var(--peer-ink,#17202b);font-size:11px;line-height:15px;font-weight:550;box-shadow:0 1px 3px #0004}
+@media(prefers-reduced-motion:reduce){.peer-cursor[data-moving=true]{transition:none}}

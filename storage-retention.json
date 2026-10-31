@@ -1,0 +1,20 @@
+{
+  "keep": {
+    "server": "Platform API and persistent services.",
+    "shared": "Shared execution and application contracts.",
+    "src": "Shared web and desktop interface.",
+    "generated": "Required precompiled Ink database modules.",
+    "ink": "Reproduction source for generated modules.",
+    "sdk": "Programmatic app and agent interfaces.",
+    "cli": "Headless platform operations.",
+    "infra": "Hosting provider implementations.",
+    "app-runtime": "Isolated application execution.",
+    "scripts": "Build and source audit tools.",
+    "tests": "Selected regression proofs.",
+    "public": "Desktop assets."
+  },
+  "safe_to_remove": {
+    "dist": "Completed generated web build; reproducible with npm run build.",
+    "public/ink-runtime": "Completed generated runtime bundles; reproducible from shared sources."
+  }
+}

@@ -1,0 +1,3 @@
+const kinds={audio:'audio/*',video:'video/*',image:'image/*',note:'text/plain',code:'text/plain',link:'text/uri-list'};
+export function fileInfo(file){let data={};try{data=JSON.parse(file.body);}catch{}const name=String(data?.originalName||file.source||file.title||'Untitled file').split(/[\\/]/).at(-1),extension=name.match(/\.[a-z0-9][a-z0-9.+_-]{0,20}$/i)?.[0].toLowerCase()||'';return{name,extension,mime:String(data?.mime||kinds[file.kind]||'application/octet-stream').toLowerCase(),bytes:Number(data?.bytes)||0};}
+export function acceptsFile(types,file){const info=fileInfo(file);return types.some(type=>type==='*'||type===file.kind||type===info.extension||type===info.mime||type.endsWith('/*')&&info.mime.startsWith(type.slice(0,-1)));}

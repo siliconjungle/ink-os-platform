@@ -1,0 +1,1 @@
+import{textWorkerHandler}from'./text-worker-core.mjs';const handle=textWorkerHandler();let tail=Promise.resolve();self.onmessage=event=>{const message=event.data;tail=tail.then(async()=>{try{self.postMessage({id:message.id,result:await handle(message)});}catch(error){self.postMessage({id:message.id,error:error.message,code:error.code});}});};

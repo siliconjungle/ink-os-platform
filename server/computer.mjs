@@ -1,0 +1,8 @@
+import{sign}from'./platform.mjs';
+export class Computer{
+ constructor(platform,{url=process.env.INK_OS_COMPUTER_URL,token=process.env.INK_OS_COMPUTER_TOKEN}={}){Object.assign(this,{platform,url,token});}
+ async request(path,method='GET',body){if(!this.url||!this.token)throw Object.assign(Error('Computer runtime is not configured'),{status:503});if(method==='GET'&&body){path+=(path.includes('?')?'&':'?')+new URLSearchParams(body);body=undefined;}const response=await fetch(this.url+path,{method,headers:{Authorization:'Bearer '+this.token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(60000)});const result=await response.json();if(!response.ok)throw Object.assign(Error(result.error||'Computer operation failed'),{status:response.status});return result;}
+ actor(principal){return principal.keyId||'owner';}
+ async create(principal,input){const accountSession=sign({owner:true,...(principal.keyId?{keyId:principal.keyId}:{}),exp:Math.min(Date.now()+12*3600000,principal.keyId?this.platform.apiKeys.find(principal.keyId).expiresAt:Infinity)},this.platform.adminToken);const origins=[this.platform.origin,...this.platform.apps().map(a=>{try{return JSON.parse(a.body).url;}catch{return null;}}).filter(Boolean)];return this.request('/sessions','POST',{actor:this.actor(principal),origin:this.platform.origin,cookie:accountSession,allowedOrigins:origins,width:input.width,height:input.height});}
+ async call(principal,id,action,body){return this.request('/sessions/'+encodeURIComponent(id)+(action?'/'+action:''),action==='close'?'DELETE':action==='observe'||!action?'GET':'POST',{actor:this.actor(principal),...body});}
+}

@@ -1,0 +1,8 @@
+const appID=id=>{if(!/^[a-f0-9]{32}$/.test(id||''))throw Error('Provide a valid app ID');return id;};
+function routePath(route,input,query=false){const rest={...input},path=route.path.replace(/:([a-z][a-z0-9_]*)/g,(_,key)=>{const value=String(rest[key]??'');if(!/^[a-zA-Z0-9_-]{1,100}$/.test(value))throw Error('Provide the '+key+' route parameter');delete rest[key];return encodeURIComponent(value);});return{path:path+(query&&Object.keys(rest).length?'?'+new URLSearchParams(Object.entries(rest).map(([k,v])=>[k,String(v)])):'') ,body:rest};}
+export function createAppCalls({describe,call,open}){
+ const api=id=>describe(appID(id));
+ const invoke=async(id,path,init={})=>{appID(id);const result=await call(id,path,init),body=result&&Object.hasOwn(result,'body')?result.body:result;if(result?.status>=400)throw Object.assign(Error(body?.error||'App API request failed'),{status:result.status});return body;};
+ const named=async(id,name,input,method)=>{if(!input||typeof input!=='object'||Array.isArray(input))throw Error('Named app messages and reads accept JSON objects');const schema=await api(id),route=schema.routes.find(route=>route.name===name&&route.methods.includes(method));if(!route)throw Error('This app does not expose a '+name+' '+(method==='GET'?'read':'message')+' handler');const request=routePath(route,input,method==='GET');return invoke(id,request.path,{method,...(method==='GET'?{}:{body:request.body})});};
+ return{api,invoke,send:(id,name,data={})=>named(id,name,data,'POST'),read:(id,name,params={})=>named(id,name,params,'GET'),...(open?{open:(id,data,options={})=>open(appID(id),data,options)}:{})};
+}

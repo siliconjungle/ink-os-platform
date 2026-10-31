@@ -1,0 +1,1905 @@
+{
+  "applied_rule_ids": [],
+  "backend": {
+    "abi": "ink-javascript-trusted-values-v2",
+    "backend": "javascript",
+    "caller_contract": "trusted, well-typed target-native values; no input validation, snapshot capture or host resource budgets",
+    "core_semantics": "ink-executable-core-v8",
+    "core_sha256": "1b575cdf4ce9067c049a653c2c9fb99facce42b424999c8b9bc8ff61431e7cca",
+    "destination_abi": {
+      "aliasing": "destination-disjoint-from-all-reachable-inputs",
+      "capacity": "trusted",
+      "count_unit": "elements",
+      "name": "ink-javascript-into-v1",
+      "ownership": "caller-owned",
+      "tail": "unwritten"
+    },
+    "f32_computation": "native-number-with-exact-nonfinite-tags",
+    "f32_storage": "exact-u32-bits",
+    "functions": [
+      {
+        "destination": null,
+        "index": 0,
+        "internal": false,
+        "name": "similarity",
+        "parallel": false,
+        "params": [
+          {
+            "name": "left",
+            "type": {
+              "element": {
+                "kind": "f32"
+              },
+              "kind": "list"
+            }
+          },
+          {
+            "name": "right",
+            "type": {
+              "element": {
+                "kind": "f32"
+              },
+              "kind": "list"
+            }
+          }
+        ],
+        "precondition": null,
+        "result": {
+          "kind": "f32"
+        }
+      },
+      {
+        "destination": null,
+        "index": 1,
+        "internal": false,
+        "name": "__ink_surface_129",
+        "parallel": false,
+        "params": [
+          {
+            "name": "__ink_local_0",
+            "type": {
+              "element": {
+                "kind": "string"
+              },
+              "kind": "list"
+            }
+          },
+          {
+            "name": "__ink_local_1",
+            "type": {
+              "kind": "bool"
+            }
+          },
+          {
+            "name": "tag",
+            "type": {
+              "kind": "string"
+            }
+          }
+        ],
+        "precondition": null,
+        "result": {
+          "kind": "bool"
+        }
+      },
+      {
+        "destination": null,
+        "index": 2,
+        "internal": false,
+        "name": "__ink_surface_161",
+        "parallel": false,
+        "params": [
+          {
+            "name": "__ink_local_5",
+            "type": {
+              "element": {
+                "kind": "id",
+                "name": "ObjectId"
+              },
+              "kind": "list"
+            }
+          },
+          {
+            "name": "__ink_local_6",
+            "type": {
+              "kind": "bool"
+            }
+          },
+          {
+            "name": "space",
+            "type": {
+              "kind": "id",
+              "name": "ObjectId"
+            }
+          }
+        ],
+        "precondition": null,
+        "result": {
+          "kind": "bool"
+        }
+      }
+    ],
+    "javascript_sha256": "900f8caa7735fa950854bd6e6f294e847013ad990928850113ca732e005df115",
+    "named_types": {
+      "Match": {
+        "fields": [
+          {
+            "name": "id",
+            "type": {
+              "kind": "id",
+              "name": "ObjectId"
+            }
+          },
+          {
+            "name": "score",
+            "type": {
+              "kind": "f32"
+            }
+          }
+        ],
+        "kind": "record",
+        "name": "Match"
+      },
+      "Object": {
+        "fields": [
+          {
+            "name": "id",
+            "type": {
+              "kind": "id",
+              "name": "ObjectId"
+            }
+          },
+          {
+            "name": "namespace",
+            "type": {
+              "kind": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "type": {
+              "kind": "string"
+            }
+          },
+          {
+            "name": "title",
+            "type": {
+              "kind": "string"
+            }
+          },
+          {
+            "name": "body",
+            "type": {
+              "kind": "string"
+            }
+          },
+          {
+            "name": "summary",
+            "type": {
+              "kind": "string"
+            }
+          },
+          {
+            "name": "tags",
+            "type": {
+              "element": {
+                "kind": "string"
+              },
+              "kind": "list"
+            }
+          },
+          {
+            "name": "spaces",
+            "type": {
+              "element": {
+                "kind": "id",
+                "name": "ObjectId"
+              },
+              "kind": "list"
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "kind": "string"
+            }
+          },
+          {
+            "name": "cover",
+            "type": {
+              "kind": "string"
+            }
+          },
+          {
+            "name": "source",
+            "type": {
+              "kind": "string"
+            }
+          },
+          {
+            "name": "location",
+            "type": {
+              "kind": "string"
+            }
+          },
+          {
+            "name": "revision",
+            "type": {
+              "kind": "u32"
+            }
+          },
+          {
+            "name": "created",
+            "type": {
+              "kind": "u64"
+            }
+          },
+          {
+            "name": "updated",
+            "type": {
+              "kind": "u64"
+            }
+          },
+          {
+            "name": "starred",
+            "type": {
+              "kind": "bool"
+            }
+          },
+          {
+            "name": "archived",
+            "type": {
+              "kind": "bool"
+            }
+          },
+          {
+            "name": "vector",
+            "type": {
+              "element": {
+                "kind": "f32"
+              },
+              "kind": "list"
+            }
+          }
+        ],
+        "kind": "record",
+        "name": "Object"
+      },
+      "ObjectChange": {
+        "fields": [
+          {
+            "name": "id",
+            "type": {
+              "kind": "id",
+              "name": "ObjectId"
+            }
+          },
+          {
+            "name": "revision",
+            "type": {
+              "kind": "u32"
+            }
+          }
+        ],
+        "kind": "record",
+        "name": "ObjectChange"
+      }
+    },
+    "owned_result_contract": {
+      "functions": 3,
+      "inputs": "same trusted caller contract",
+      "results": "canonical detached values with ABI byte/node/depth limits",
+      "unsupported": []
+    },
+    "prepared_compiled": {
+      "destination": {
+        "call": "callPreparedCompiledInto",
+        "capacity": "trusted",
+        "failure": "destination may be partially written",
+        "float_values": "trusted public representation",
+        "inputs": "sealed compiled values",
+        "ownership": "caller-owned",
+        "structured_elements": "detached",
+        "tail": "unwritten"
+      },
+      "evaluation": "lazy source-order; successful bindings only",
+      "functions": [
+        {
+          "factory": false,
+          "function": "similarity",
+          "reason": "no reusable captured work"
+        },
+        {
+          "factory": false,
+          "function": "__ink_surface_129",
+          "reason": "no reusable captured work"
+        },
+        {
+          "factory": false,
+          "function": "__ink_surface_161",
+          "reason": "no reusable captured work"
+        }
+      ],
+      "lifetime": "prepared token",
+      "semantics": "sealed-value-residual-v1"
+    },
+    "private_record_elisions": [],
+    "private_sum_spines": [],
+    "schema": 1,
+    "scope": "trusted pure functions and temporary collections; state/actions with portable snapshots and ordered transaction events",
+    "state": {
+      "actions": [
+        {
+          "change": true,
+          "directKeep": null,
+          "fallible": true,
+          "flatFailure": false,
+          "freshResult": true,
+          "index": 0,
+          "name": "put",
+          "params": [
+            {
+              "name": "item",
+              "type": {
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "kind": "id",
+                      "name": "ObjectId"
+                    }
+                  },
+                  {
+                    "name": "namespace",
+                    "type": {
+                      "kind": "string"
+                    }
+                  },
+                  {
+                    "name": "kind",
+                    "type": {
+                      "kind": "string"
+                    }
+                  },
+                  {
+                    "name": "title",
+                    "type": {
+                      "kind": "string"
+                    }
+                  },
+                  {
+                    "name": "body",
+                    "type": {
+                      "kind": "string"
+                    }
+                  },
+                  {
+                    "name": "summary",
+                    "type": {
+                      "kind": "string"
+                    }
+                  },
+                  {
+                    "name": "tags",
+                    "type": {
+                      "element": {
+                        "kind": "string"
+                      },
+                      "kind": "list"
+                    }
+                  },
+                  {
+                    "name": "spaces",
+                    "type": {
+                      "element": {
+                        "kind": "id",
+                        "name": "ObjectId"
+                      },
+                      "kind": "list"
+                    }
+                  },
+                  {
+                    "name": "status",
+                    "type": {
+                      "kind": "string"
+                    }
+                  },
+                  {
+                    "name": "cover",
+                    "type": {
+                      "kind": "string"
+                    }
+                  },
+                  {
+                    "name": "source",
+                    "type": {
+                      "kind": "string"
+                    }
+                  },
+                  {
+                    "name": "location",
+                    "type": {
+                      "kind": "string"
+                    }
+                  },
+                  {
+                    "name": "revision",
+                    "type": {
+                      "kind": "u32"
+                    }
+                  },
+                  {
+                    "name": "created",
+                    "type": {
+                      "kind": "u64"
+                    }
+                  },
+                  {
+                    "name": "updated",
+                    "type": {
+                      "kind": "u64"
+                    }
+                  },
+                  {
+                    "name": "starred",
+                    "type": {
+                      "kind": "bool"
+                    }
+                  },
+                  {
+                    "name": "archived",
+                    "type": {
+                      "kind": "bool"
+                    }
+                  },
+                  {
+                    "name": "vector",
+                    "type": {
+                      "element": {
+                        "kind": "f32"
+                      },
+                      "kind": "list"
+                    }
+                  }
+                ],
+                "kind": "record",
+                "name": "Object"
+              }
+            },
+            {
+              "name": "expected",
+              "type": {
+                "kind": "u32"
+              }
+            },
+            {
+              "name": "writer",
+              "type": {
+                "kind": "string"
+              }
+            }
+          ],
+          "precondition": null,
+          "result": {
+            "error": {
+              "kind": "enum",
+              "name": "Error",
+              "variants": [
+                "Error.Missing",
+                "Error.Stale",
+                "Error.Forbidden"
+              ]
+            },
+            "kind": "result",
+            "ok": {
+              "kind": "unit"
+            }
+          },
+          "roots": [
+            0
+          ],
+          "singleCell": true
+        },
+        {
+          "change": true,
+          "directKeep": null,
+          "fallible": true,
+          "flatFailure": false,
+          "freshResult": true,
+          "index": 1,
+          "name": "erase",
+          "params": [
+            {
+              "name": "id",
+              "type": {
+                "kind": "id",
+                "name": "ObjectId"
+              }
+            },
+            {
+              "name": "writer",
+              "type": {
+                "kind": "string"
+              }
+            }
+          ],
+          "precondition": null,
+          "result": {
+            "error": {
+              "kind": "enum",
+              "name": "Error",
+              "variants": [
+                "Error.Missing",
+                "Error.Stale",
+                "Error.Forbidden"
+              ]
+            },
+            "kind": "result",
+            "ok": {
+              "kind": "unit"
+            }
+          },
+          "roots": [
+            0
+          ],
+          "singleCell": true
+        },
+        {
+          "change": false,
+          "directKeep": null,
+          "fallible": false,
+          "flatFailure": false,
+          "freshResult": false,
+          "index": 2,
+          "name": "get",
+          "params": [
+            {
+              "name": "id",
+              "type": {
+                "kind": "id",
+                "name": "ObjectId"
+              }
+            }
+          ],
+          "precondition": null,
+          "result": {
+            "element": {
+              "fields": [
+                {
+                  "name": "id",
+                  "type": {
+                    "kind": "id",
+                    "name": "ObjectId"
+                  }
+                },
+                {
+                  "name": "namespace",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "kind",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "title",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "body",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "summary",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "tags",
+                  "type": {
+                    "element": {
+                      "kind": "string"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "spaces",
+                  "type": {
+                    "element": {
+                      "kind": "id",
+                      "name": "ObjectId"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "status",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "cover",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "source",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "location",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "revision",
+                  "type": {
+                    "kind": "u32"
+                  }
+                },
+                {
+                  "name": "created",
+                  "type": {
+                    "kind": "u64"
+                  }
+                },
+                {
+                  "name": "updated",
+                  "type": {
+                    "kind": "u64"
+                  }
+                },
+                {
+                  "name": "starred",
+                  "type": {
+                    "kind": "bool"
+                  }
+                },
+                {
+                  "name": "archived",
+                  "type": {
+                    "kind": "bool"
+                  }
+                },
+                {
+                  "name": "vector",
+                  "type": {
+                    "element": {
+                      "kind": "f32"
+                    },
+                    "kind": "list"
+                  }
+                }
+              ],
+              "kind": "record",
+              "name": "Object"
+            },
+            "kind": "option"
+          },
+          "roots": [
+            0
+          ],
+          "singleCell": true
+        },
+        {
+          "change": false,
+          "directKeep": null,
+          "fallible": false,
+          "flatFailure": false,
+          "freshResult": false,
+          "index": 3,
+          "name": "all",
+          "params": [],
+          "precondition": null,
+          "result": {
+            "element": {
+              "fields": [
+                {
+                  "name": "id",
+                  "type": {
+                    "kind": "id",
+                    "name": "ObjectId"
+                  }
+                },
+                {
+                  "name": "namespace",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "kind",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "title",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "body",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "summary",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "tags",
+                  "type": {
+                    "element": {
+                      "kind": "string"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "spaces",
+                  "type": {
+                    "element": {
+                      "kind": "id",
+                      "name": "ObjectId"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "status",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "cover",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "source",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "location",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "revision",
+                  "type": {
+                    "kind": "u32"
+                  }
+                },
+                {
+                  "name": "created",
+                  "type": {
+                    "kind": "u64"
+                  }
+                },
+                {
+                  "name": "updated",
+                  "type": {
+                    "kind": "u64"
+                  }
+                },
+                {
+                  "name": "starred",
+                  "type": {
+                    "kind": "bool"
+                  }
+                },
+                {
+                  "name": "archived",
+                  "type": {
+                    "kind": "bool"
+                  }
+                },
+                {
+                  "name": "vector",
+                  "type": {
+                    "element": {
+                      "kind": "f32"
+                    },
+                    "kind": "list"
+                  }
+                }
+              ],
+              "kind": "record",
+              "name": "Object"
+            },
+            "kind": "list"
+          },
+          "roots": [
+            0
+          ],
+          "singleCell": true
+        },
+        {
+          "change": false,
+          "directKeep": null,
+          "fallible": false,
+          "flatFailure": false,
+          "freshResult": false,
+          "index": 4,
+          "name": "count_objects",
+          "params": [],
+          "precondition": null,
+          "result": {
+            "kind": "int"
+          },
+          "roots": [
+            0
+          ],
+          "singleCell": true
+        },
+        {
+          "change": false,
+          "directKeep": null,
+          "fallible": false,
+          "flatFailure": false,
+          "freshResult": false,
+          "index": 5,
+          "name": "select",
+          "params": [
+            {
+              "name": "kind",
+              "type": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "tag",
+              "type": {
+                "kind": "string"
+              }
+            },
+            {
+              "name": "starred",
+              "type": {
+                "kind": "bool"
+              }
+            }
+          ],
+          "precondition": null,
+          "result": {
+            "element": {
+              "fields": [
+                {
+                  "name": "id",
+                  "type": {
+                    "kind": "id",
+                    "name": "ObjectId"
+                  }
+                },
+                {
+                  "name": "namespace",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "kind",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "title",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "body",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "summary",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "tags",
+                  "type": {
+                    "element": {
+                      "kind": "string"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "spaces",
+                  "type": {
+                    "element": {
+                      "kind": "id",
+                      "name": "ObjectId"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "status",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "cover",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "source",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "location",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "revision",
+                  "type": {
+                    "kind": "u32"
+                  }
+                },
+                {
+                  "name": "created",
+                  "type": {
+                    "kind": "u64"
+                  }
+                },
+                {
+                  "name": "updated",
+                  "type": {
+                    "kind": "u64"
+                  }
+                },
+                {
+                  "name": "starred",
+                  "type": {
+                    "kind": "bool"
+                  }
+                },
+                {
+                  "name": "archived",
+                  "type": {
+                    "kind": "bool"
+                  }
+                },
+                {
+                  "name": "vector",
+                  "type": {
+                    "element": {
+                      "kind": "f32"
+                    },
+                    "kind": "list"
+                  }
+                }
+              ],
+              "kind": "record",
+              "name": "Object"
+            },
+            "kind": "list"
+          },
+          "roots": [
+            0
+          ],
+          "singleCell": true
+        },
+        {
+          "change": false,
+          "directKeep": null,
+          "fallible": false,
+          "flatFailure": false,
+          "freshResult": false,
+          "index": 6,
+          "name": "in_space",
+          "params": [
+            {
+              "name": "space",
+              "type": {
+                "kind": "id",
+                "name": "ObjectId"
+              }
+            }
+          ],
+          "precondition": null,
+          "result": {
+            "element": {
+              "fields": [
+                {
+                  "name": "id",
+                  "type": {
+                    "kind": "id",
+                    "name": "ObjectId"
+                  }
+                },
+                {
+                  "name": "namespace",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "kind",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "title",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "body",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "summary",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "tags",
+                  "type": {
+                    "element": {
+                      "kind": "string"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "spaces",
+                  "type": {
+                    "element": {
+                      "kind": "id",
+                      "name": "ObjectId"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "status",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "cover",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "source",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "location",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "revision",
+                  "type": {
+                    "kind": "u32"
+                  }
+                },
+                {
+                  "name": "created",
+                  "type": {
+                    "kind": "u64"
+                  }
+                },
+                {
+                  "name": "updated",
+                  "type": {
+                    "kind": "u64"
+                  }
+                },
+                {
+                  "name": "starred",
+                  "type": {
+                    "kind": "bool"
+                  }
+                },
+                {
+                  "name": "archived",
+                  "type": {
+                    "kind": "bool"
+                  }
+                },
+                {
+                  "name": "vector",
+                  "type": {
+                    "element": {
+                      "kind": "f32"
+                    },
+                    "kind": "list"
+                  }
+                }
+              ],
+              "kind": "record",
+              "name": "Object"
+            },
+            "kind": "list"
+          },
+          "roots": [
+            0
+          ],
+          "singleCell": true
+        },
+        {
+          "change": false,
+          "directKeep": null,
+          "fallible": false,
+          "flatFailure": false,
+          "freshResult": false,
+          "index": 7,
+          "name": "semantic",
+          "params": [
+            {
+              "name": "vector",
+              "type": {
+                "element": {
+                  "kind": "f32"
+                },
+                "kind": "list"
+              }
+            }
+          ],
+          "precondition": null,
+          "result": {
+            "element": {
+              "fields": [
+                {
+                  "name": "id",
+                  "type": {
+                    "kind": "id",
+                    "name": "ObjectId"
+                  }
+                },
+                {
+                  "name": "score",
+                  "type": {
+                    "kind": "f32"
+                  }
+                }
+              ],
+              "kind": "record",
+              "name": "Match"
+            },
+            "kind": "list"
+          },
+          "roots": [
+            0
+          ],
+          "singleCell": true
+        },
+        {
+          "change": false,
+          "directKeep": null,
+          "fallible": false,
+          "flatFailure": false,
+          "freshResult": false,
+          "index": 8,
+          "name": "in_namespace",
+          "params": [
+            {
+              "name": "namespace",
+              "type": {
+                "kind": "string"
+              }
+            }
+          ],
+          "precondition": null,
+          "result": {
+            "element": {
+              "fields": [
+                {
+                  "name": "id",
+                  "type": {
+                    "kind": "id",
+                    "name": "ObjectId"
+                  }
+                },
+                {
+                  "name": "namespace",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "kind",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "title",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "body",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "summary",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "tags",
+                  "type": {
+                    "element": {
+                      "kind": "string"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "spaces",
+                  "type": {
+                    "element": {
+                      "kind": "id",
+                      "name": "ObjectId"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "status",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "cover",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "source",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "location",
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                {
+                  "name": "revision",
+                  "type": {
+                    "kind": "u32"
+                  }
+                },
+                {
+                  "name": "created",
+                  "type": {
+                    "kind": "u64"
+                  }
+                },
+                {
+                  "name": "updated",
+                  "type": {
+                    "kind": "u64"
+                  }
+                },
+                {
+                  "name": "starred",
+                  "type": {
+                    "kind": "bool"
+                  }
+                },
+                {
+                  "name": "archived",
+                  "type": {
+                    "kind": "bool"
+                  }
+                },
+                {
+                  "name": "vector",
+                  "type": {
+                    "element": {
+                      "kind": "f32"
+                    },
+                    "kind": "list"
+                  }
+                }
+              ],
+              "kind": "record",
+              "name": "Object"
+            },
+            "kind": "list"
+          },
+          "roots": [
+            0
+          ],
+          "singleCell": true
+        }
+      ],
+      "compactCommits": false,
+      "eventColumns": false,
+      "eventRuns": false,
+      "events": [
+        {
+          "name": "changed",
+          "snapshotType": {
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "kind": "id"
+                }
+              },
+              {
+                "name": "revision",
+                "type": {
+                  "kind": "u32"
+                }
+              }
+            ],
+            "kind": "record"
+          },
+          "type": {
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "kind": "id",
+                  "name": "ObjectId"
+                }
+              },
+              {
+                "name": "revision",
+                "type": {
+                  "kind": "u32"
+                }
+              }
+            ],
+            "kind": "record",
+            "name": "ObjectChange"
+          }
+        }
+      ],
+      "invariantChecks": [],
+      "keepInvalidations": [
+        [
+          0
+        ]
+      ],
+      "keeps": [
+        {
+          "cached": true,
+          "name": "object_count"
+        }
+      ],
+      "lazyMaintenance": true,
+      "outputPublication": false,
+      "roots": [
+        {
+          "key": {
+            "kind": "id",
+            "name": "ObjectId"
+          },
+          "name": "Objects",
+          "snapshotKey": {
+            "kind": "id"
+          },
+          "snapshotValue": {
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "kind": "id"
+                }
+              },
+              {
+                "name": "namespace",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "kind",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "title",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "body",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "summary",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "tags",
+                "type": {
+                  "element": {
+                    "kind": "string"
+                  },
+                  "kind": "list"
+                }
+              },
+              {
+                "name": "spaces",
+                "type": {
+                  "element": {
+                    "kind": "id"
+                  },
+                  "kind": "list"
+                }
+              },
+              {
+                "name": "status",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "cover",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "source",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "location",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "revision",
+                "type": {
+                  "kind": "u32"
+                }
+              },
+              {
+                "name": "created",
+                "type": {
+                  "kind": "u64"
+                }
+              },
+              {
+                "name": "updated",
+                "type": {
+                  "kind": "u64"
+                }
+              },
+              {
+                "name": "starred",
+                "type": {
+                  "kind": "bool"
+                }
+              },
+              {
+                "name": "archived",
+                "type": {
+                  "kind": "bool"
+                }
+              },
+              {
+                "name": "vector",
+                "type": {
+                  "element": {
+                    "kind": "f32"
+                  },
+                  "kind": "list"
+                }
+              }
+            ],
+            "kind": "record"
+          },
+          "value": {
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "kind": "id",
+                  "name": "ObjectId"
+                }
+              },
+              {
+                "name": "namespace",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "kind",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "title",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "body",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "summary",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "tags",
+                "type": {
+                  "element": {
+                    "kind": "string"
+                  },
+                  "kind": "list"
+                }
+              },
+              {
+                "name": "spaces",
+                "type": {
+                  "element": {
+                    "kind": "id",
+                    "name": "ObjectId"
+                  },
+                  "kind": "list"
+                }
+              },
+              {
+                "name": "status",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "cover",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "source",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "location",
+                "type": {
+                  "kind": "string"
+                }
+              },
+              {
+                "name": "revision",
+                "type": {
+                  "kind": "u32"
+                }
+              },
+              {
+                "name": "created",
+                "type": {
+                  "kind": "u64"
+                }
+              },
+              {
+                "name": "updated",
+                "type": {
+                  "kind": "u64"
+                }
+              },
+              {
+                "name": "starred",
+                "type": {
+                  "kind": "bool"
+                }
+              },
+              {
+                "name": "archived",
+                "type": {
+                  "kind": "bool"
+                }
+              },
+              {
+                "name": "vector",
+                "type": {
+                  "element": {
+                    "kind": "f32"
+                  },
+                  "kind": "list"
+                }
+              }
+            ],
+            "kind": "record",
+            "name": "Object"
+          }
+        }
+      ],
+      "snapshot": {
+        "program": [
+          237,
+          196,
+          123,
+          69,
+          160,
+          189,
+          222,
+          145,
+          255,
+          134,
+          124,
+          96,
+          239,
+          139,
+          143,
+          132,
+          250,
+          22,
+          184,
+          249,
+          107,
+          173,
+          53,
+          138,
+          65,
+          189,
+          221,
+          81,
+          193,
+          7,
+          58,
+          209
+        ],
+        "schema": [
+          90,
+          187,
+          108,
+          158,
+          107,
+          102,
+          204,
+          39,
+          17,
+          108,
+          131,
+          77,
+          107,
+          145,
+          197,
+          23,
+          240,
+          50,
+          249,
+          55,
+          166,
+          195,
+          58,
+          119,
+          112,
+          215,
+          224,
+          134,
+          185,
+          83,
+          16,
+          68
+        ]
+      },
+      "snapshotRows": false
+    },
+    "trusted": [
+      "Ink checker and source correspondence",
+      "JavaScript emitter and representation conversion",
+      "JavaScript engine and host"
+    ],
+    "wire": {
+      "format": "ink-value-wire-v1",
+      "functions": {
+        "__ink_surface_129": {
+          "arguments": {
+            "format": "ink-value-wire-v1",
+            "identity": "ee2b8a9ec54eecbb6f6d24713282fc244b874478a465789e2430c8384d7c3267",
+            "named": {},
+            "root": {
+              "fields": [
+                {
+                  "name": "__ink_local_0",
+                  "type": {
+                    "element": {
+                      "kind": "string"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "__ink_local_1",
+                  "type": {
+                    "kind": "bool"
+                  }
+                },
+                {
+                  "name": "tag",
+                  "type": {
+                    "kind": "string"
+                  }
+                }
+              ],
+              "kind": "record",
+              "name": "arguments"
+            }
+          },
+          "result": {
+            "format": "ink-value-wire-v1",
+            "identity": "32f3d3b2f14a1a5d5ed940c0f1126e8a0b1b1f76ff20ac48fac23528d7033176",
+            "named": {},
+            "root": {
+              "kind": "bool"
+            }
+          }
+        },
+        "__ink_surface_161": {
+          "arguments": {
+            "format": "ink-value-wire-v1",
+            "identity": "ab14c0bdb2507d6a98e8c9449e603e2b992923e46004785302d3366b22adba9d",
+            "named": {},
+            "root": {
+              "fields": [
+                {
+                  "name": "__ink_local_5",
+                  "type": {
+                    "element": {
+                      "kind": "id",
+                      "name": "ObjectId"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "__ink_local_6",
+                  "type": {
+                    "kind": "bool"
+                  }
+                },
+                {
+                  "name": "space",
+                  "type": {
+                    "kind": "id",
+                    "name": "ObjectId"
+                  }
+                }
+              ],
+              "kind": "record",
+              "name": "arguments"
+            }
+          },
+          "result": {
+            "format": "ink-value-wire-v1",
+            "identity": "32f3d3b2f14a1a5d5ed940c0f1126e8a0b1b1f76ff20ac48fac23528d7033176",
+            "named": {},
+            "root": {
+              "kind": "bool"
+            }
+          }
+        },
+        "similarity": {
+          "arguments": {
+            "format": "ink-value-wire-v1",
+            "identity": "8851e83063313f4b215afa48a6d7d4f5a84cf6d2abe099ea4fd92d4abd8f90f5",
+            "named": {},
+            "root": {
+              "fields": [
+                {
+                  "name": "left",
+                  "type": {
+                    "element": {
+                      "kind": "f32"
+                    },
+                    "kind": "list"
+                  }
+                },
+                {
+                  "name": "right",
+                  "type": {
+                    "element": {
+                      "kind": "f32"
+                    },
+                    "kind": "list"
+                  }
+                }
+              ],
+              "kind": "record",
+              "name": "arguments"
+            }
+          },
+          "result": {
+            "format": "ink-value-wire-v1",
+            "identity": "fde3b27ba939906c22dbea906c407580e89648dd4d5a55c4f4001e45157ebe45",
+            "named": {},
+            "root": {
+              "kind": "f32"
+            }
+          }
+        }
+      }
+    }
+  },
+  "checked_implementation": null,
+  "checked_replacement": null,
+  "initial_state": null,
+  "input_core_sha256": "1b575cdf4ce9067c049a653c2c9fb99facce42b424999c8b9bc8ff61431e7cca",
+  "selected_core_sha256": "1b575cdf4ce9067c049a653c2c9fb99facce42b424999c8b9bc8ff61431e7cca",
+  "semantic_package": null,
+  "semantic_selection": null,
+  "source": "ink/world.ink",
+  "target": "javascript",
+  "trust": "checked transformations; JavaScript emission and engine remain trusted"
+}

@@ -1,0 +1,1 @@
+export class StateReplica {constructor(options:{host:any;namespace?:string;key:string;onChange?:()=>void;onError?:(error:Error)=>void});state:any;ready:boolean;saved:Promise<any>;tail:Promise<any>;open():Promise<this>;commit(writes:any[]):Promise<any>;rebaseIntents(prepare:(intents:any[],state:any)=>any[][]):Promise<void>;close():Promise<void>;}

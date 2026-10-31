@@ -1,0 +1,1 @@
+export async function fetch(request,{ink}){for(let attempt=0;attempt<8;attempt++){const state=await ink.state.get('counter');if(request.method!=='POST')return Response.json(state);try{return Response.json(await ink.state.set('counter',{count:(state.value?.count||0)+1},state.revision));}catch(error){if(error.status!==409||attempt===7)throw error;}}}

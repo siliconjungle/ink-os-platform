@@ -1,0 +1,11 @@
+node_modules
+dist/
+.data/
+.env
+.env.*
+!.env.example
+.local/
+*.log
+*.tgz
+coverage/
+public/ink-runtime/

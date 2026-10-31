@@ -1,0 +1,1 @@
+export class AppLaunchCache{constructor(load:(appId:string,releaseId:string)=>Promise<any>,options?:{now?:()=>number;ttl?:number});get(appId:string,releaseId:string):Promise<any>;invalidate(appId:string):void;}

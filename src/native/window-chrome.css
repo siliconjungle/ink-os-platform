@@ -1,0 +1,9 @@
+/* Original icon buttons, kept on the left with a centered title and drag area. */
+.desktop-window>.window-chrome{position:relative;justify-content:center;padding:0 100px;height:36px;min-height:36px;gap:0}
+.window-chrome>.window-controls{position:absolute;left:13px;top:0;height:36px;display:flex;align-items:center;gap:5px;z-index:2}
+.window-chrome>.window-caption{justify-content:center;max-width:100%;pointer-events:none;gap:6px}
+.window-chrome>.window-controls>button{display:grid!important;place-items:center;width:23px;height:23px;min-width:23px;border-radius:50%;padding:0;border:1px solid #c7c7c71c;box-shadow:inset 0 .6px 0 #f3f3f310,0 1px 3px #00000033;background:radial-gradient(ellipse at 30% 0%,#e1e1e121,#4a4a4a10 55%,#00000022);color:#959595}
+.window-chrome>.window-controls>button>svg{width:13px;height:13px;opacity:1}
+.window-chrome>.window-controls>button:hover{background:radial-gradient(ellipse at 30% 0%,#d2d2d249,#55555538 55%,#14141477);color:#e5e5e5;border-color:#dddddd3d}
+.window-chrome>.window-controls>.window-close:hover{background:radial-gradient(ellipse at 30% 0%,#93939366,#43434388);color:#d5d5d5}
+.window-chrome>.window-controls>button:focus-visible{outline:2px solid #eee;outline-offset:2px}
