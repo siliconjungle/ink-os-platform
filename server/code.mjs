@@ -1,92 +1,71 @@
-import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { resolve, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { hash, plain } from './world.mjs';import{stateObjectId}from './app-data.mjs';
-const execute = promisify(execFile);
-function native(value, type, named) {
-  if (!type) return value;
-  switch (type.kind) {
-    case 'ref': return native(value, named[type.name], named);
-    case 'u64': case 'i64': return BigInt(value);
-    case 'int': return BigInt(value?.Int ?? value);
-    case 'list': case 'vector': return value.map(v => native(v, type.element, named));
-    case 'record': return Object.fromEntries(type.fields.map(f => [f.name, native(value[f.name], f.type, named)]));
-    default: return value;
-  }
-}
+import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
+import { join } from 'node:path';
+import { hash } from './world.mjs';
+import { stateObjectId } from './app-data.mjs';
+import { compileInk, compilerRequest, isolatedWorker } from './ink-compiler.mjs';
+import { stringifyExactJSON } from '../shared/exact-json.mjs';
+
 export class Code {
-  constructor(root, directory = join(root, '.data/code'),world) { this.world=world;this.directory = directory; this.tasks = new Map(); this.compilations = new Map(); this.root = root; this.compiler = process.env.INK_COMPILER || 'ink'; this.states = new Map(); }
+  constructor(root, directory = join(root, '.data/code'), world) {
+    Object.assign(this, { root, directory, world });
+    this.tasks = new Map(); this.compilations = new Map();
+  }
   async compile(source) {
-    if (typeof source !== 'string' || source.length > 100000) throw Error('Keep prototype programs below 100 KB');
-    const digest = hash(source); let pending = this.compilations.get(digest);
-    if (!pending) {
-      pending = this.compileSource(source, digest); this.compilations.set(digest, pending);
-      pending.catch(() => { if (this.compilations.get(digest) === pending) this.compilations.delete(digest); });
+    if (typeof source !== 'string') throw Error('Provide Ink source text.');
+    if (!/^\s*module\s/m.test(source)) source = 'module app;\n' + source;
+    const digest = hash(source);
+    if (!this.compilations.has(digest)) {
+      const task = compileInk(source).then(artifact => ({
+        digest, artifact,
+        entries: [
+          ...artifact.manifest.functions.filter(fn => !fn.internal && !fn.name.startsWith('__')).map(fn => ({ ...fn, action: false })),
+          ...(artifact.manifest.state?.actions || []).map(fn => ({ ...fn, action: true })),
+        ],
+      }));
+      this.compilations.set(digest, task);
+      task.catch(() => this.compilations.delete(digest));
+      if (this.compilations.size > 16) this.compilations.delete(this.compilations.keys().next().value);
     }
-    return pending;
+    return this.compilations.get(digest);
   }
-  async compileSource(source, digest) {
-    const dir = join(this.directory, digest);
-    await mkdir(dir, { recursive: true });
-    const file = join(dir, 'program.ink'); const output = join(dir, 'program.mjs');
-    if (!existsSync(output)) {
-      await writeFile(file, /^\s*module\s/m.test(source) ? source : 'module user_program;\n\n' + source);
-      try { await execute(this.compiler, ['build', file, '--target', 'javascript', '-o', output], { maxBuffer: 1024 * 1024 }); }
-      catch (e) { throw Error((e.stderr || e.message).replaceAll(dir + '/', '')); }
-    }
-    const module = await import(pathToFileURL(output).href);
-    const functions = module.metadata.functions.filter(f => !f.internal && !f.name.startsWith('__'));
-    const actions = module.metadata.state?.actions || [];
-    return { digest, dir, module, entries: [...functions.map(f => ({ ...f, action: false })), ...actions.map(f => ({ ...f, action: true }))] };
-  }
-  async run(input) {
-    const key = hash(typeof input.source === 'string' ? input.source : '') + ':' + (input.namespace || input.instance || 'preview');
-    const next = (this.tasks.get(key) || Promise.resolve()).catch(() => {}).then(() => this.execute(input));
-    this.tasks.set(key, next);
-    next.finally(() => { if (this.tasks.get(key) === next) this.tasks.delete(key); }).catch(() => {});
-    return next;
+  run(input) {
+    if (typeof input.source !== 'string') return Promise.reject(Error('Provide Ink source text.'));
+    const key = hash(input.source || '') + ':' + (input.namespace || input.instance || 'preview');
+    const task = (this.tasks.get(key) || Promise.resolve()).catch(() => {}).then(() => this.execute(input));
+    this.tasks.set(key, task);
+    task.finally(() => { if (this.tasks.get(key) === task) this.tasks.delete(key); }).catch(() => {});
+    return task;
   }
   async loadCheckpoint(namespace, key, principal) {
-    if (this.world.collaboration) return this.world.collaboration.state(principal||{namespace}, key, namespace);
+    if (this.world.collaboration) return this.world.collaboration.state(principal || { namespace }, key, namespace);
     const object = this.world.get(stateObjectId(namespace, key));
     return { value: object && !object.archived ? JSON.parse(object.body) : null, revision: object?.revision || 0 };
   }
   async saveCheckpoint(namespace, key, value, expected, principal) {
-    if (this.world.collaboration) return this.world.collaboration.state(principal||{namespace}, key, namespace, value, expected, true);
-    return this.world.put({id:stateObjectId(namespace,key),namespace,kind:'state',title:key,body:JSON.stringify(value)}, {writer:namespace,expected,actor:'Ink program',action:'saved app state',writeAccess:principal?.writeAccess});
+    if (this.world.collaboration) return this.world.collaboration.state(principal || { namespace }, key, namespace, value, expected, true);
+    return this.world.put({ id: stateObjectId(namespace, key), namespace, kind: 'state', title: key, body: JSON.stringify(value) }, { writer: namespace, expected, actor: 'Ink program', action: 'saved app state', writeAccess: principal?.writeAccess });
   }
-  async execute({ source, entry, args = [], instance = '', namespace, principal }) {
-    const started = performance.now(); const compiled = await this.compile(source);
-    const selected = compiled.entries.find(f => f.name === entry) || compiled.entries[0];
-    if (!selected) throw Error('Add an exported function, query, or change to run this program');
-    if (selected.params.length !== args.length) return { entries: compiled.entries, needsArguments: true, selected: selected.name, digest: compiled.digest };
-    const nativeArgs = args.map((v, i) => native(v, selected.params[i].type, compiled.module.metadata.named_types));
-    let output;
+  async execute(input) {
+    if (input.backend && !['javascript', 'auto'].includes(input.backend)) throw Object.assign(Error('Select native execution through the native build service.'), { status: 503 });
+    const started = performance.now(), compiled = await this.compile(input.source);
+    const selected = input.entry ? compiled.entries.find(fn => fn.name === input.entry) : compiled.entries[0];
+    if (!selected) throw Error('Select an exported function, query, or change.');
+    if (input.input === undefined && selected.params.length !== (input.args || []).length) return { entries: compiled.entries, needsArguments: true, selected: selected.name, digest: compiled.digest };
+    const prepared = await compilerRequest({ op: 'prepare', core: compiled.artifact.core, identity: compiled.artifact.manifest.core_sha256, entry: selected.name, input: input.input ?? stringifyExactJSON(input.args || []) });
+    const stateKey = 'ink-program:' + compiled.digest;
+    let saved = { value: null, revision: 0 };
+    const path = join(this.directory, hash((input.namespace || input.instance || 'preview') + ':' + compiled.digest) + '.json');
     if (selected.action) {
-      const stateKey='ink-program:'+compiled.digest;const key = compiled.digest + ':' + (namespace||instance || 'preview'); let state = this.states.get(key);
-      const checkpointPath = join(compiled.dir, hash(key) + '.snapshot');
-      let saved;
-      if (namespace && this.world) {
-        saved = await this.loadCheckpoint(namespace, stateKey, principal);
-        state = compiled.module.createState();
-        if (saved.value !== null) {
-          if (saved.value.digest !== compiled.digest || typeof saved.value.snapshot !== 'string') throw Error('Invalid Ink program checkpoint');
-          await state.restore(new Uint8Array(Buffer.from(saved.value.snapshot, 'base64')));
-        }
-      } else if (!state) {
-        state = compiled.module.createState();
-        try { await state.restore(new Uint8Array(await readFile(checkpointPath))); } catch (e) { if (e.code !== 'ENOENT') throw e; }
-        this.states.set(key, state);
-      }
-      const before=await state.checkpoint();output = state.invoke(selected.name, nativeArgs);
-      if (output.committed) {
-        try{const checkpoint=await state.checkpoint();if(namespace&&this.world){await this.saveCheckpoint(namespace,stateKey,{digest:compiled.digest,snapshot:Buffer.from(checkpoint).toString('base64')},saved.revision,principal);}else{await writeFile(checkpointPath + '.next',checkpoint);await rename(checkpointPath + '.next', checkpointPath);}}catch(error){await state.restore(before);throw error;}
-      }
-    } else output = compiled.module.callOwned(selected.name, nativeArgs);
-    return { output: plain(output), entries: compiled.entries, selected: selected.name, digest: compiled.digest,
-      elapsed: performance.now() - started, backend: 'Ink → JavaScript', sourceHash: compiled.module.metadata.core_sha256 };
+      if (input.namespace && this.world) saved = await this.loadCheckpoint(input.namespace, stateKey, input.principal);
+      else { try { saved.value = JSON.parse(await readFile(path, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
+      if (saved.value && saved.value.digest !== compiled.digest) throw Error('Ink checkpoint source identity mismatch.');
+    }
+    const result = await isolatedWorker(new URL('./ink-run-worker.mjs', import.meta.url), { artifact: compiled.artifact, selected, input: prepared.input, snapshot: saved.value?.snapshot });
+    if (result.committed) {
+      const value = { digest: compiled.digest, snapshot: result.snapshot };
+      if (input.namespace && this.world) await this.saveCheckpoint(input.namespace, stateKey, value, saved.revision, input.principal);
+      else { await mkdir(this.directory, { recursive: true }); await writeFile(path + '.next', JSON.stringify(value), { mode: 0o600, flush: true }); await rename(path + '.next', path); }
+    }
+    return { output: result.output, wire: result.wire, entries: compiled.entries, selected: selected.name, digest: compiled.digest, elapsed: performance.now() - started, backend: 'javascript', sourceHash: compiled.artifact.manifest.core_sha256 };
   }
 }

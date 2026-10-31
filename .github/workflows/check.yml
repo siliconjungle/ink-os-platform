@@ -23,3 +23,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
       - run: INK_TEST_NATIVE=1 node --test tests/native-ink.test.mjs
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t ink-os-check .
+      - run: docker run -d --name ink-os-check -p 127.0.0.1:4318:4318 ink-os-check
+      - run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4318/api/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs ink-os-check
+          exit 1
+      - run: docker exec ink-os-check node --input-type=module -e 'import{readFile}from"node:fs/promises";const c=JSON.parse(await readFile("/data/client.json"));const r=await fetch(c.url+"/api/v1/apps",{headers:{authorization:"Bearer "+c.token}});const apps=await r.json();if(!r.ok||!Array.isArray(apps)||apps.length)process.exit(1);console.log("Authenticated container starts with zero apps");'
+      - if: always()
+        run: docker rm -f ink-os-check || true

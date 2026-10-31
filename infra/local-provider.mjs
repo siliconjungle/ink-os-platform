@@ -5,7 +5,10 @@ import { sign, verify } from '../server/platform.mjs';
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json', '.wasm': 'application/wasm', '.woff2': 'font/woff2' };
 
 export class LocalProvider {
-  constructor({ originTemplate = process.env.INK_OS_APP_ORIGIN_TEMPLATE } = {}) { this.servers = new Map(); this.originTemplate = originTemplate; }
+  constructor({ originTemplate = process.env.INK_OS_APP_ORIGIN_TEMPLATE } = {}) {
+    if (originTemplate && !originTemplate.includes('{release}') && !originTemplate.includes('__RELEASE__')) throw Error('App origin template must contain a release placeholder.');
+    this.servers = new Map(); this.originTemplate = originTemplate;
+  }
   attach(platform) { this.platform = platform; }
   available(releaseId) { return this.servers.has(releaseId); }
   async deploy({ appId, releaseId, meta, key, origin }) {
@@ -44,7 +47,7 @@ export class LocalProvider {
     });
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
     const internalURL = `http://127.0.0.1:${server.address().port}`;
-    const publicURL = this.originTemplate ? this.originTemplate.replace('{release}', releaseId) : internalURL;
+    const publicURL = this.originTemplate ? this.originTemplate.replace('{release}', releaseId).replace('__RELEASE__', releaseId) : internalURL;
     const parsed = new URL(publicURL);
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.pathname !== '/') { server.close(); throw Error('Invalid app origin template.'); }
     const deployment = { provider: 'local', url: publicURL, appId, releaseId };
