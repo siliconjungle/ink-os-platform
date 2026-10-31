@@ -1,5 +1,6 @@
 import{workflowRoute}from './workflow-router.mjs';
 import { namespaceMigrationRoute } from './namespace-migration-router.mjs';
+import { automationMigrationRoute } from './automation-migration-router.mjs';
 import { buildProjectRelease, installedInk, runInstalledInk } from './ink-apps.mjs';
 import { migrateInstalledInk } from './ink-migrations.mjs';
 import { projectRoute } from './project-router.mjs';
@@ -23,6 +24,7 @@ export function platformRouter(platform,{send,body}){return async(req,res,url,pr
  if(!principal)error(401,'Sign in to Ink OS');
  authorizeRoute(principal,path,method);
  if(await namespaceMigrationRoute(platform,req,res,url,principal,{send,body}))return;
+ if(await automationMigrationRoute(platform,req,res,url,principal,{send,body}))return;
  if(await projectRoute(platform,req,res,url,principal,{send,body}))return;
  if(await commandRoute(platform,req,res,url,principal,{send,body}))return;
  if(await workflowRoute(platform,req,res,url,principal,{send,body}))return;

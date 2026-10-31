@@ -13,6 +13,8 @@ import { Collaboration } from '../server/collaboration.mjs';
 import { Versions } from '../server/versions.mjs';
 import { SharedState } from '../shared/state.mjs';
 import { createClient } from '../sdk/src/server.js';
+import { workflowDefinition } from '../shared/workflows.mjs';
+import { validateCommands } from '../shared/app-commands.mjs';
 const execute = promisify(execFile);
 
 test('administrator migrates exact causal namespaces through CLI/SDK/HTTP and host restart without replaying source work', { timeout: 90000 }, async t => {
@@ -93,4 +95,32 @@ test('administrator migrates exact causal namespaces through CLI/SDK/HTTP and ho
   await stop();await start();
   assert.deepEqual(Buffer.from(await sdk.assets.get(relocated.id)),assetBytes);
   assert.equal((await sdk.migrations.storage.installAliases(aliasInput)).replayed,true);
+
+  const workflowId='4'.repeat(32),historicalRunId='5'.repeat(32),jobId='6'.repeat(32),scheduleRunId='7'.repeat(32);
+  const command=validateCommands([{id:'notes',title:'Find notes',handler:{type:'query',query:{kind:'note'}},effect:'read',idempotent:true}])[0];
+  await sdk.request('apps/'+appId,{method:'PATCH',body:{commands:[command]}});
+  const definition={...workflowDefinition({title:'Imported note workflow',steps:[{id:'find',appId,commandId:'notes',bindings:{}}]}),id:workflowId,appId,revision:2,createdAt:100,updatedAt:200,updatedBy:{type:'account',id:'previous-owner',name:'Previous author'},archived:false};
+  const history={id:historicalRunId,executionId:historicalRunId,requestId:'original-request-on-source',workflowId,title:definition.title,workflowRevision:2,definition,inputs:{},fingerprint:'historical-fingerprint',actor:{type:'account',id:'previous-owner',name:'Previous author'},authority:{type:'account',accountId:'previous-owner',keyId:'previous-private-key-identity',scopes:['apps:invoke']},status:'queued',createdAt:100,updatedAt:200,finishedAt:null,steps:[{id:'find',appId,commandId:'notes',bindings:{},command,pollCommand:null,releaseId:'8'.repeat(32),effect:'read',status:'pending'}],artifacts:[]};
+  const job={id:jobId,appId,ownerType:'app',ownerId:appId,name:'Imported future job',path:'/job',method:'POST',body:{marker:'saved-input'},everyMs:60000,nextAt:100,enabled:true,createdAt:100,updatedAt:200,cancelledAt:null};
+  const scheduleHistory={id:scheduleRunId,jobId,appId,scheduledFor:100,startedAt:110,finishedAt:null,status:'running',manual:false,releaseId:'8'.repeat(32)};
+  const wrap=value=>{const bytes=Buffer.from(JSON.stringify(value));return{bytes:bytes.length,sha256:hash(bytes),base64:bytes.toString('base64')};};
+  const automationInput={operation:'9'.repeat(32),rebindToAuthenticatedAdmin:true,workflowIds:[workflowId],scheduleIds:[jobId],source:{format:'ink-os-automation-export-v1',capturedAt:'2026-10-01T00:00:00.000Z',consistency:'individually-atomic-files-not-joint',sourceVersionCut:input.sourceVersionCut&&{id:input.sourceVersionCut.id,manifestDigest:input.sourceVersionCut.manifestDigest},files:{'workflows.json':wrap({version:1,definitions:[definition],runs:[history]}),'schedules.json':wrap({version:1,jobs:[job],runs:[scheduleHistory]})}}};
+  const automationFile=join(root,'automation.json'),automationPlan=join(root,'automation-plan.json');await writeFile(automationFile,JSON.stringify(automationInput),{mode:0o600});
+  await assert.rejects(appSDK.migrations.automation.plan(automationInput),{status:403});await assert.rejects(memberSDK.migrations.automation.plan(automationInput),{status:403});
+  assert.equal((await cli('migrations','automation','plan','--file',automationFile,'--output',automationPlan)).format,'ink-os-automation-plan-v1');
+  const automationReceipt=await cli('migrations','automation','apply','--file',automationFile,'--plan',automationPlan);assert.equal(automationReceipt.jointCut,false);assert.equal(automationReceipt.mode,'inert-history');
+  await stop();await start();
+  assert.equal((await sdk.workflows.runs({runId:historicalRunId})).status,'interrupted');
+  const schedules=await sdk.schedules.forApp(appId).list();assert.equal(schedules[0].enabled,false);assert.equal(schedules[0].ownerId,'owner');
+  assert.equal((await sdk.schedules.forApp(appId).runs(jobId))[0].status,'interrupted');
+  await assert.rejects(sdk.workflows.retry(historicalRunId,{approved:true}),{status:409});await assert.rejects(sdk.schedules.forApp(appId).run(jobId),{status:409});
+  const release=await sdk.request('apps/'+appId+'/releases',{method:'POST',body:{entry:'index.html',commands:[command],files:[{path:'index.html',base64:Buffer.from('<p>Imported workflow query</p>').toString('base64')}]}});await sdk.apps.publish(appId,release.id);
+  const preview=await sdk.workflows.preview(workflowId,{}),started=await sdk.workflows.run(workflowId,{}, {fingerprint:preview.fingerprint,approved:true});
+  let finished;for(let n=0;n<100;n++){finished=await sdk.workflows.runs({runId:started.id});if(finished.status==='succeeded'||finished.status==='failed')break;await new Promise(resolve=>setTimeout(resolve,20));}
+  assert.equal(finished.status,'succeeded');assert.ok(JSON.stringify(finished.steps[0].output).includes('Target edit'));
+  const originalDefinition=await sdk.workflows.get(workflowId);await sdk.workflows.save({...originalDefinition,title:'Target workflow edit'},{id:workflowId,expected:originalDefinition.revision});
+  const inspected=JSON.parse(await readFile(automationPlan));assert.equal((await sdk.migrations.automation.apply({...automationInput,expected:inspected.expected})).replayed,true);assert.equal((await sdk.workflows.get(workflowId)).title,'Target workflow edit');
+  assert.equal((await cli('migrations','automation','status',automationInput.operation)).inputDigest,automationReceipt.inputDigest);
+  assert.equal((await sdk.migrations.automation.get(automationInput.operation)).inputDigest,automationReceipt.inputDigest);
+
 });

@@ -1,5 +1,6 @@
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const missing=error=>error.flyStatus===404;
+const retirementFailure=(message,code='POOL_RETIREMENT_UNCONFIRMED')=>Object.assign(Error(message),{status:409,code});
 export const poolMethods={
  async poolCapacity(slots,{accountLimit=100}={}){
   if(this.capacityPending)return this.capacityPending;
@@ -12,6 +13,31 @@ export const poolMethods={
  poolNames(slot){const app=`${this.prefix}-p-${slot.id.slice(0,12)}`;return{app,backendApp:app+'-srv'};},
  async poolMachines(slot){const{app,backendApp}=this.poolNames(slot),result=[];for(const name of slot.kind==='oci'?[app,backendApp]:[app])try{for(const machine of await this.api('/apps/'+name+'/machines',undefined,'GET'))result.push({app:name,...machine});}catch(error){if(!missing(error))throw error;}return result;},
  async poolStopped(slot){return(await this.poolMachines(slot)).every(machine=>machine.state==='stopped');},
+ async removeStopped(slot){
+  const id=value=>typeof value==='string'&&/^[a-f0-9]{32}$/.test(value),machineID=value=>typeof value==='string'&&/^[a-f0-9]{8,32}$/.test(value);
+  if(!slot||!id(slot.id))throw retirementFailure('Provide the exact saved pool slot identity');
+  const deployment=slot.deployment,names=this.poolNames(slot);
+  if(!id(slot.id)||!['module','oci'].includes(slot.kind)||![names.app,names.backendApp].every(name=>/^[a-z0-9][a-z0-9-]{0,62}$/.test(name))||deployment?.app!==names.app||deployment.backendApp!==undefined&&deployment.backendApp!==names.backendApp||!machineID(deployment?.machineId)||slot.kind==='oci'&&!machineID(deployment.backendMachineId)||slot.kind==='module'&&deployment.backendMachineId)throw retirementFailure('Stopped pool deployment identity differs from the exact owned slot');
+  const authority={};for(const key of ['leaseId','appId','releaseId']){if(slot[key]&&deployment[key]&&slot[key]!==deployment[key])throw retirementFailure('Saved pool assignment identities disagree');authority[key]=deployment[key]||slot[key];if(!id(authority[key]))throw retirementFailure('Legacy stopped slot has no retained assignment authority','LEGACY_POOL_RETIREMENT_AUTHORITY_MISSING');}
+  if(!/@sha256:[a-f0-9]{64}$/.test(deployment.runtimeImage||'')||slot.kind==='oci'&&typeof deployment.backendImage!=='string')throw retirementFailure('Stopped slot image authority is unavailable');
+  const targets=[{app:names.app,machineId:deployment.machineId,image:deployment.runtimeImage},...(slot.kind==='oci'?[{app:names.backendApp,machineId:deployment.backendMachineId,image:deployment.backendImage}]:[])],options={sensitive:true},leases=[],removed=[];
+  const version=machine=>{if(machine.version&&machine.instance_id&&machine.version!==machine.instance_id)throw retirementFailure('Pool machine version identity is ambiguous');return machine.version||machine.instance_id;};
+  const validate=(machine,target)=>{if(machine.id!==target.machineId||machine.name!=='runtime'||machine.state!=='stopped'||typeof version(machine)!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(version(machine))||machine.config?.metadata?.ink_pool_slot!==slot.id||machine.config?.metadata?.ink_pool_lease!==authority.leaseId||machine.config?.env?.INK_OS_APP_ID!==authority.appId||machine.config?.env?.INK_OS_RELEASE_ID!==authority.releaseId||machine.config?.env?.INK_OS_LEASE_ID!==authority.leaseId||machine.config?.image!==target.image||machine.config?.persist_rootfs!=='never'||['mounts','files','containers'].some(key=>machine.config[key]!=null&&(!Array.isArray(machine.config[key])||machine.config[key].length)))throw retirementFailure('Stopped pool machine ownership, state or stateless configuration changed');return machine;};
+  const inventory=async()=>{const found=[];for(const app of [names.app,names.backendApp]){let machines;try{machines=await this.api('/apps/'+app+'/machines',undefined,'GET',options);}catch(error){if(missing(error))machines=[];else throw error;}if(!Array.isArray(machines)||machines.length>1)throw retirementFailure('Unexpected machine inventory in an owned pool app');for(const machine of machines){const target=targets.find(target=>target.app===app&&target.machineId===machine.id);if(!target)throw retirementFailure('Foreign or unexpected pool machine was preserved');found.push({target,machine:validate(machine,target)});}}return found;};
+  const before=await inventory();
+  try{
+   for(const row of before){const path='/apps/'+row.target.app+'/machines/'+row.target.machineId,grant=await this.api(path+'/lease',{ttl:120,description:'Ink OS stopped pool retirement'},'POST',options),lease=grant.data?.nonce;if(typeof lease!=='string'||!lease||lease.length>1024||/[\r\n\0]/.test(lease))throw retirementFailure('Stopped pool machine lease was not granted');leases.push({...row,path,lease});const current=validate(await this.api(path,undefined,'GET',{...options,lease}),row.target);if(version(current)!==version(row.machine)||grant.data?.version&&grant.data.version!==version(current))throw retirementFailure('Stopped pool machine version changed before retirement');}
+   const checked=await inventory();if(checked.length!==before.length||checked.some(row=>!before.some(old=>old.target.machineId===row.target.machineId&&version(old.machine)===version(row.machine))))throw retirementFailure('Pool inventory changed while acquiring retirement leases');
+   for(const row of leases){
+    const current=validate(await this.api(row.path,undefined,'GET',{...options,lease:row.lease}),row.target);if(version(current)!==version(row.machine))throw retirementFailure('Stopped pool machine version changed before deletion');
+    try{await this.api(row.path,undefined,'DELETE',{...options,lease:row.lease});}
+    catch(error){try{await this.api(row.path,undefined,'GET',{...options,lease:row.lease});}catch(readError){if(missing(readError)){removed.push({app:row.target.app,machineId:row.target.machineId,version:version(current)});continue;}throw readError;}throw error;}
+    removed.push({app:row.target.app,machineId:row.target.machineId,version:version(current)});
+   }
+   if((await inventory()).length)throw retirementFailure('Stopped pool removal was not confirmed');
+   return{removed,alreadyAbsent:targets.filter(target=>!before.some(row=>row.target.machineId===target.machineId)).map(({app,machineId})=>({app,machineId})),retainedAppShells:[names.app,names.backendApp]};
+  }finally{for(const row of leases)try{await this.api(row.path+'/lease',undefined,'DELETE',{...options,lease:row.lease});}catch{/* A removed Machine has no lease; any unreleased lease expires. */}}
+ },
  async resetPoolMachine(app,config,minSecretsVersion){
   const base='/apps/'+app+'/machines',machines=await this.api(base,undefined,'GET');
   if(machines.length===1&&machines[0].name==='runtime'&&machines[0].config?.metadata?.ink_pool_lease===config.metadata?.ink_pool_lease&&config.metadata?.ink_pool_lease&&['started','starting','created'].includes(machines[0].state)&&!machines[0].config?.mounts?.length&&machines[0].config?.image===config.image&&machines[0].config?.env?.INK_OS_APP_ID===config.env?.INK_OS_APP_ID&&machines[0].config?.env?.INK_OS_RELEASE_ID===config.env?.INK_OS_RELEASE_ID)return machines[0];
@@ -34,7 +60,7 @@ export const poolMethods={
   if(slot.kind==='oci'){await this.ensureApp(backendApp,app);await this.privatePoolAddress(backendApp,app);const version=await this.syncEnvironment(backendApp,environment);backendMachine=await this.resetPoolMachine(backendApp,{...base,image:meta.backend.image,env:{...env,PORT:String(meta.backend.port)},...(meta.backend.command?{init:{exec:meta.backend.command}}:{}),services:[{protocol:'tcp',internal_port:meta.backend.port,autostart:false,autostop:'off',min_machines_running:0,ports:[{port:80,handlers:['http']}],checks:[{type:'tcp',port:meta.backend.port,interval:'5s',timeout:'2s',grace_period:'5s'}]}]},version);backendURL=`http://${backendApp}.flycast`;}
   const version=await this.syncEnvironment(app,slot.kind==='oci'?{}:environment);
   const machine=await this.resetPoolMachine(app,{...base,...(slot.kind==='oci'?{guest:{cpu_kind:'shared',cpus:1,memory_mb:256}}:{}),image:runtimeImage,env:{...env,PORT:'8080',INK_OS_POOL:'1',...(backendURL?{INK_OS_BACKEND_URL:backendURL}:{})},services:[{protocol:'tcp',internal_port:8080,autostart:false,autostop:'off',min_machines_running:0,ports:[{port:80,handlers:['http']},{port:443,handlers:['tls','http']}]}]},version);
-  const deployment={app,machineId:machine.id,...(backendMachine?{backendApp,backendMachineId:backendMachine.id}:{}),url:'https://'+app+'.fly.dev',runtimeImage};
+  const deployment={app,machineId:machine.id,leaseId:slot.leaseId,appId,releaseId,runtimeMachineVersion:machine.version||machine.instance_id,...(backendMachine?{backendApp,backendMachineId:backendMachine.id,backendImage:meta.backend.image,backendMachineVersion:backendMachine.version||backendMachine.instance_id}:{}),url:'https://'+app+'.fly.dev',runtimeImage};
   for(let attempt=0;attempt<45;attempt++){try{const status=await this.poolStatus({...slot,deployment},key);if(status.appId===appId&&status.releaseId===releaseId&&status.leaseId===slot.leaseId&&!status.draining)return deployment;}catch{}await pause(1500);}throw Error('Pool assignment did not become ready; worker was preserved');
  },
  resumePoolSlot(input){return this.assignPoolSlot(input);},

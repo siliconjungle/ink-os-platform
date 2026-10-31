@@ -26,7 +26,18 @@
     "tests/namespace-migrations.test.mjs": "Real generated checkpoint, isolation, actor allocation and durable interruption proofs.",
     "tests/namespace-migration-api.test.mjs": "Actual host/CLI/SDK/admin denial, source isolation and restart migration proof.",
     "server/storage-aliases.mjs": "Private operation-bound verified content-addressed storage aliases.",
-    "tests/storage-aliases.test.mjs": "Exact bytes, backend boundaries, alias retention/restart and backup proofs."
+    "tests/storage-aliases.test.mjs": "Exact bytes, backend boundaries, alias retention/restart and backup proofs.",
+    "server/automation-migrations.mjs": "Authoritative workflow/schedule migration, inert history and durable two-store/World recovery.",
+    "server/automation-migration-router.mjs": "Administrator automation plan/apply/receipt and explicit schedule review API.",
+    "tests/automation-migrations.test.mjs": "Actual automation schemas, authority, no-replay, review and crash recovery proofs.",
+    "server/maintenance.mjs": "Durable image/boot-bound external admission, committed receipts and serialized stop authorization.",
+    "server/maintenance-host.mjs": "Actual host queue/writer/runtime proof and reusable collaborative checkpoint barrier.",
+    "server/maintenance-router.mjs": "Bounded administrator maintenance protocol including stop seal and cancellation.",
+    "tests/maintenance.test.mjs": "Durability/concurrent GET, seal/cancellation ordering, restart and continuation correctness.",
+    "tests/maintenance-api.test.mjs": "Actual HTTP/SDK/CLI admission, admitted writer preservation, transport drain and target restart proof.",
+    "tests/maintenance-host.test.mjs": "Actual CRDT/native/workflow/queue/pool and callable-runtime inventory maintenance proofs.",
+    "tests/runtime-pool-maintenance.test.mjs": "Idle proof/admission races, held-work preservation and durable runtime retirement recovery.",
+    "tests/fly-pool-retirement.test.mjs": "Exact stopped-machine authority, provider leases/versions and non-force retirement proofs."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",

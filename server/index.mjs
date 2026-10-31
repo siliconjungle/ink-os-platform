@@ -19,6 +19,10 @@ import{updatePresence,visiblePeer,announcedPresence,expiredPresence,touchPresenc
 import{serveModule}from './modules.mjs';
 import{Collaboration}from './collaboration.mjs';
 import { NamespaceMigrations } from './namespace-migrations.mjs';
+import { AutomationMigrations } from './automation-migrations.mjs';
+import { Maintenance } from './maintenance.mjs';
+import { maintenanceRoute } from './maintenance-router.mjs';
+import { createMaintenanceHostAdapter } from './maintenance-host.mjs';
 import{Computer}from './computer.mjs';
 import{GitHubSources}from './github-sources.mjs';import http from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -42,11 +46,17 @@ const port = Number(process.env.PORT || 4318);
 const production=process.env.NODE_ENV==='production';
 const origin=process.env.INK_OS_ORIGIN||`http://127.0.0.1:${port}`;
 const data = process.env.INK_OS_DATA_DIR || join(root, '.data');
+let maintenanceHost,sockets;
+const requests=new Set(),responses=new Set();
+const maintenanceAdapter=Object.fromEntries(['closeAdmission','resumeAdmission','continueDraining','activity','quiescePool','flush'].map(method=>[method,(...args)=>{if(!maintenanceHost)throw Error('Maintenance host adapter is not initialized');return maintenanceHost[method](...args);} ]));
+const maintenance=await new Maintenance({directory:data,instanceId:process.env.INK_OS_INSTANCE_ID,images:()=>({os:process.env.INK_OS_IMAGE_PIN,runtime:process.env.INK_OS_RUNTIME_IMAGE}),adapter:maintenanceAdapter}).open();
 const world = await new World(data).open();
 const storage = await new Storage(data).open();
 const collaboration = new Collaboration({directory:data,world,storage});
 const namespaceMigrations = new NamespaceMigrations({directory:data,world,collaboration,storage});
 await namespaceMigrations.recover();
+const automationMigrations=new AutomationMigrations({directory:data,world});
+await automationMigrations.recover();
 await collaboration.recover();
 const embeddings={describe:()=>({status:'disabled',model:'',dimensions:0,error:''})}; const code = new Code(root,join(data,'code'),world);
 const clients = new Map();
@@ -62,6 +72,7 @@ code.nativeJobs=platform.nativeJobs;
 if(production&&!platform.adminToken)throw Error('INK_OS_ADMIN_TOKEN is required');
 platform.schedules=await new Schedules({directory:data,platform}).open();
 platform.workflows=await new Workflows({directory:data,platform}).open();
+platform.automationMigrations=automationMigrations.attach({platform,workflows:platform.workflows,schedules:platform.schedules});
 platform.desktopActions=await new DesktopActions(data).open();
 const send = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(plain(body))); };
 const clientAuthorized=client=>{const principal=platform.principal(client.request);return !production||principal?.owner&&(!principal.keyId||principal.scopes.includes('computer'));};
@@ -172,19 +183,25 @@ async function api(req, res, url) {
 }
 
 const platformAPI=platformRouter(platform,{send,body});
-const requests=new Set(),responses=new Set();let draining=false,sealed=false,shutdownTask;
+let draining=false,sealed=false,shutdownTask;
+maintenanceHost=createMaintenanceHostAdapter({platform,world,storage,code,requests,responses,sockets:()=>sockets,externalClosed:()=>maintenance.closed});
+await maintenance.activate();
+platform.maintenance=maintenance;
 const server = http.createServer(async (req, res) => {
- let finish;const task=new Promise(resolve=>finish=resolve);requests.add(task);responses.add(res);res.once('close',()=>responses.delete(res));
+ let finish;const task=new Promise(resolve=>finish=resolve);let tracked=false;
  try{
   const url=new URL(req.url,origin);
+  tracked=url.pathname!=='/api/health'&&!url.pathname.startsWith('/api/v1/maintenance');if(tracked){requests.add(task);responses.add(res);res.once('close',()=>responses.delete(res));}
   if(sealed){res.setHeader('Connection','close');return send(res,503,{error:'This host is stopping.'});}
+  if(url.pathname==='/api/health')return send(res,200,{ok:true,engine:'Ink',version:world.version,instanceId:process.env.INK_OS_INSTANCE_ID,draining:draining||maintenance.closed});
+  const principal=platform.principal(req)||(!production?{owner:true,admin:true,accountId:'owner',namespace:'os'}:null);
+  if(await maintenanceRoute(maintenance,req,res,url,principal,{send,body}))return;
+  if(maintenance.closed&&!(principal?.leaseId&&!platform.provider?.pool?.admissionClosed&&url.pathname.startsWith('/api/v1/'))){res.setHeader('Retry-After','2');return send(res,503,{error:'This computer is in maintenance; admitted work is being preserved.'});}
   if(platform.provider?.route?.(req,res))return;
   if(req.method==='GET'&&url.pathname==='/ink.svg'){res.setHeader('Content-Type','image/svg+xml');res.setHeader('Cache-Control','public, max-age=3600');return res.end(await readFile(join(root,production?'dist':'public','ink.svg')));}
-  if(url.pathname==='/api/health')return send(res,200,{ok:true,engine:'Ink',version:world.version,instanceId:process.env.INK_OS_INSTANCE_ID,draining});
   if(url.pathname==='/login'&&req.method==='GET'){res.setHeader('Content-Type','text/html');res.setHeader('Cache-Control','private, no-store');return res.end(loginPage(url.searchParams.get('next')));}
   if(url.pathname==='/login'&&req.method==='POST'){const input=await body(req);const principal=platform.principal({headers:{authorization:'Bearer '+input.token}});if(!principal?.owner)return send(res,401,{error:'Account key not accepted'});if(principal.keyId&&!principal.scopes.includes('computer'))return send(res,403,{error:'This key does not grant computer access'});res.setHeader('Set-Cookie',`ink_os_session=${sign({owner:true,...(principal.keyId?{keyId:principal.keyId}:{}),exp:Date.now()+7*86400000},platform.adminToken)}; Path=/; HttpOnly; ${origin.startsWith('https:')?'Secure; ':''}SameSite=Lax`);return send(res,200,{ok:true});}
   if(await edgeGatewayRoute(platform,req,res,url,{body,send}))return;
-  const principal=platform.principal(req)||(!production?{owner:true,admin:true,accountId:'owner',namespace:'os'}:null);
   if(draining&&principal?.owner&&!['GET','HEAD'].includes(req.method))return send(res,503,{error:'This host is finishing its background jobs before stopping.'});
   if(req.method==='GET'&&/^\/api\/modules\/(documents|text-worker)\.mjs$/.test(url.pathname)){if(!principal?.owner&&!platform.assetAccess(url.searchParams.get('access')))return send(res,401,{error:'App read grant required'});return serveModule(req,res,url,join(root,production?'dist':'public'));}
   if(req.method==='GET'&&url.pathname==='/api/blob'&&platform.assetAccess(url.searchParams.get('access')))return await api(req,res,url);
@@ -193,10 +210,10 @@ const server = http.createServer(async (req, res) => {
   if(production&&(!principal?.owner||(principal.keyId&&!principal.scopes.includes('computer')))){if(url.pathname.startsWith('/api/'))return send(res,401,{error:'Owner access required'});res.setHeader('Content-Type','text/html');res.setHeader('Cache-Control','private, no-store');return res.end(loginPage(url.pathname+url.search));}
   if(url.pathname.startsWith('/api/'))return await api(req,res,url);
   return serve(req,res);
- }catch(error){if(!res.headersSent)send(res,errorStatus(error),{error:error.message,current:error.current?world.publicObject(error.current):undefined});else res.end();}finally{requests.delete(task);finish();}
+ }catch(error){if(!res.headersSent)send(res,errorStatus(error),{error:error.message,current:error.current?world.publicObject(error.current):undefined});else res.end();}finally{if(tracked)requests.delete(task);finish();}
 });
 const connections=httpConnections(server);
-const sockets=platform.collaboration.attach(server,req=>sealed?null:platform.principal(req)||(!production?{owner:true,admin:true,accountId:'owner',namespace:'os'}:null));
+sockets=platform.collaboration.attach(server,req=>{if(sealed)return null;const principal=platform.principal(req)||(!production?{owner:true,admin:true,accountId:'owner',namespace:'os'}:null);return maintenance.closed&&!(principal?.leaseId&&!platform.provider?.pool?.admissionClosed)?null:principal;});
 const shutdown=()=>{if(shutdownTask)return shutdownTask;draining=true;console.log('Ink OS is finishing background jobs before stopping.');shutdownTask=drainHost({server,connections,platform,world,requests,responses,sockets,vite,stopAdmission:()=>{sealed=true;}}).then(()=>{console.log('Ink OS stopped cleanly.');process.exitCode=0;}).catch(error=>{console.error('Ink OS shutdown:',error.message);process.exitCode=1;});return shutdownTask;};
 process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);
-server.listen(port, process.env.INK_OS_BIND||'127.0.0.1',()=>{platform.schedules.start();platform.workflows.start();console.log(`Ink OS: ${origin}; engine=Ink; production=${production}`);});
+server.listen(port, process.env.INK_OS_BIND||'127.0.0.1',()=>{if(!maintenance.closed){platform.schedules.start();platform.workflows.start();}console.log(`Ink OS: ${origin}; engine=Ink; production=${production}`);});
