@@ -5,7 +5,7 @@ export interface WorldObject {
   updated: number; starred: boolean; archived: boolean; score?: number;
 }
 export interface Activity { id: string; objectId: string; title: string; kind: Kind; action: string; actor: string; at: number; before?: WorldObject; after?: WorldObject; }
-export interface Peer { accountId?:string; appId?:string;objectId?:string;id: string; name: string; color: string; view: string; window?:string; gesture?:{key:string;kind:'move'|'resize';rect:{x:number;y:number;width:number;height:number};at:number}; cursor?: { x: number; y: number } }
+export interface Peer { accountId?:string; appId?:string;objectId?:string;id: string; name: string; color: string; view: string; window?:string; gesture?:{key:string;kind:'move'|'resize';rect:{x:number;y:number;width:number;height:number};at:number}; cursor?: { x: number; y: number; space?:'desktop' } }
 export interface Stats { count: number; version: number; indexed: number; engine: string; core: string; source: string }
 export interface ModelState { status: string; model: string; dimensions: number; error: string }
 export interface StorageState { r2?:{managed:boolean;bucket:string};local: boolean; s3: null | { bucket: string; endpoint: string; region: string } }

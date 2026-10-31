@@ -1,3 +1,4 @@
+import{presenceCursor}from'../shared/presence-cursor.mjs';
 const finite=value=>Number.isFinite(value)&&Math.abs(value)<1e8;
 const windowKey=value=>typeof value==='string'&&/^[-a-zA-Z0-9]{1,100}$/.test(value)?value:undefined;
 export function updatePresence(client,input,now=Date.now()){
@@ -6,7 +7,7 @@ export function updatePresence(client,input,now=Date.now()){
  if(typeof input.view==='string'&&/^desktop\/[0-9]{1,16}$/.test(input.view)&&Number.isSafeInteger(Number(input.view.slice(8)))){if(client.view!==input.view){client.cursor=null;client.gesture=null;}client.view=input.view;}
  if('window'in input)client.window=windowKey(input.window);
  for(const key of ['appId','objectId'])if(key in input)client[key]=typeof input[key]==='string'&&/^[a-f0-9]{32}$/.test(input[key])?input[key]:undefined;
- if(input.cursor===null)client.cursor=null;else if(input.cursor&&Number.isFinite(input.cursor.x)&&Number.isFinite(input.cursor.y))client.cursor={x:Math.max(0,Math.min(1,input.cursor.x)),y:Math.max(0,Math.min(1,input.cursor.y))};
+ if('cursor'in input)client.cursor=presenceCursor(input.cursor);
  if(input.gesture===null)client.gesture=null;else if(input.gesture){const{key,rect,kind}=input.gesture;if(windowKey(key)&&['move','resize'].includes(kind)&&rect&&[rect.x,rect.y,rect.width,rect.height].every(finite)&&rect.width>0&&rect.height>0)client.gesture={key,kind,rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},at:now};}
  return before!==JSON.stringify([client.view,client.window,client.cursor,client.gesture,client.appId,client.objectId]);
 }
