@@ -1,4 +1,5 @@
-import { compileInk, compilerInfo, compilerRequest } from './ink-compiler.mjs';
+import { compileInkProgram, compilerInfo, compilerRequest, normalizeInkProgram, inkProgramKey, inkProgramIdentity } from './ink-compiler.mjs';
+import { inkEntries } from '../shared/ink-app.mjs';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdir, readFile, writeFile, copyFile, chmod } from 'node:fs/promises';
@@ -77,20 +78,24 @@ export class NativeInk {
     } catch { return { available: false, reason: 'Native Rust toolchain is unavailable on this host.' }; }
   }
   async compile(source) {
-    if (!this.compilations.has(source)) {
-      const task = compileInk(source); this.compilations.set(source, task);
-      task.catch(() => this.compilations.delete(source));
+    source = normalizeInkProgram(source);
+    const key = inkProgramKey(source);
+    if (!this.compilations.has(key)) {
+      const task = compileInkProgram(source); this.compilations.set(key, task);
+      task.catch(() => this.compilations.delete(key));
       if (this.compilations.size > 16) this.compilations.delete(this.compilations.keys().next().value);
     }
-    return this.compilations.get(source);
+    return this.compilations.get(key);
   }
   async compatibility(source, namespace, compiled) {
-    const artifact = compiled || await this.compile(source);
+    source = normalizeInkProgram(source);
+    const artifact = typeof source === 'string' && compiled ? compiled : await this.compile(source);
+    if (compiled && artifact.module_graph && compiled.module_graph?.identity !== artifact.module_graph.identity) throw Error('Native module graph source identity mismatch.');
     if (!artifact.rust) throw Object.assign(Error(artifact.rust_reason || 'Native target is unsupported for this program.'), { status: 422 });
     const info = await compilerInfo(), lock = await readFile(new URL('./native-runtime.lock', import.meta.url));
     const host = { platform: process.platform, arch: process.arch };
     const compatibilityKey = createHash('sha256').update(JSON.stringify({ source, namespace, compiler: info.sha256, manifest: cargoManifest, lock: lock.toString(), driver, host })).digest('hex');
-    return { compatibilityKey, artifact, info, lock, host };
+    return { compatibilityKey, artifact, info, lock, host, source };
   }
   async plan(source, namespace, compiled) {
     const context = await this.compatibility(source, namespace, compiled), toolchain = this.managed ? await this.managed.plan() : await this.availability();
@@ -103,9 +108,12 @@ export class NativeInk {
     this.tail = task.catch(() => {}); return task;
   }
   async buildSource(source, namespace, onProcess, onStage) {
-    const { id, toolchain, artifact, info, lock, compatibilityKey, host } = await this.plan(source, namespace);
+    const plan = await this.plan(source, namespace);
+    const { id, toolchain, artifact, info, lock, compatibilityKey, host } = plan;
+    source = plan.source ?? source;
+    const programIdentity = inkProgramIdentity(artifact);
     const directory = join(this.directory, id), executable = join(directory, process.platform === 'win32' ? 'program.exe' : 'program');
-    try { await this.record(id, namespace); return { id, target: 'native', sourceIdentity: artifact.manifest.core_sha256, cached: true }; } catch (error) { if (!['ENOENT', 'INK_NATIVE_INTEGRITY'].includes(error.code)) throw error; }
+    try { await this.record(id, namespace); return { id, target: 'native', sourceIdentity: artifact.manifest.core_sha256, ...(programIdentity ? { programIdentity } : {}), cached: true }; } catch (error) { if (!['ENOENT', 'INK_NATIVE_INTEGRITY'].includes(error.code)) throw error; }
     let tools = { cargo: this.cargo, rustc: this.rustc, runtimeEnvironment: {} };
     if (this.managed) {
       await onStage?.({ phase: 'toolchain' });
@@ -130,8 +138,8 @@ export class NativeInk {
     await copyFile(join(env.CARGO_TARGET_DIR, 'release', process.platform === 'win32' ? 'ink-native-app.exe' : 'ink-native-app'), executable);
     await chmod(executable, 0o700);
     const executableSHA256 = createHash('sha256').update(await readFile(executable)).digest('hex');
-    await writeFile(join(directory, 'artifact.json'), JSON.stringify({ id, namespace, source, compiler: info.sha256, toolchain, host, compatibilityKey, executableSHA256, sourceIdentity: artifact.manifest.core_sha256 }), { mode: 0o600 });
-    return { id, target: 'native', sourceIdentity: artifact.manifest.core_sha256, cached: false };
+    await writeFile(join(directory, 'artifact.json'), JSON.stringify({ id, namespace, source, compiler: info.sha256, toolchain, host, compatibilityKey, executableSHA256, sourceIdentity: artifact.manifest.core_sha256, ...(programIdentity ? { programIdentity } : {}) }), { mode: 0o600 });
+    return { id, target: 'native', sourceIdentity: artifact.manifest.core_sha256, ...(programIdentity ? { programIdentity } : {}), cached: false };
   }
   async record(id, namespace) {
     if (!/^[a-f0-9]{64}$/.test(id || '')) throw Error('Invalid native artifact ID.');
@@ -145,6 +153,9 @@ export class NativeInk {
   async run(id, { namespace = 'preview', entry, args = [], input: raw, snapshot } = {}) {
     const record = await this.record(id, namespace), directory = join(this.directory, id);
     const artifact = await this.compile(record.source);
+    const programIdentity = inkProgramIdentity(artifact);
+    if (record.sourceIdentity !== artifact.manifest.core_sha256 || programIdentity && JSON.stringify(record.programIdentity) !== JSON.stringify(programIdentity)) throw Object.assign(Error('Native artifact module/source identity mismatch.'), { status: 409 });
+    if (!inkEntries(artifact.manifest, artifact.module_graph).some(candidate => candidate.name === entry)) throw Object.assign(Error('Select an exported native Ink entry.'), { status: 403 });
     const prepared = await compilerRequest({ op: 'prepare', core: artifact.core, identity: artifact.manifest.core_sha256, entry, input: raw ?? stringifyExactJSON(args) });
     const action = artifact.manifest.state?.actions.find(action => action.name === entry);
     const kind = action ? action.change ? 'change' : 'query' : 'function';
@@ -164,7 +175,7 @@ export class NativeInk {
           if (code || result.error) throw Error(result.error || 'Native execution failed: ' + errorOutput);
           const selected = action ? { ...action, action: true } : artifact.manifest.functions.find(fn => fn.name === entry);
           const visible = publicResult(result.output, selected, artifact.manifest);
-          finish(null, { ...visible, snapshot: result.snapshot ? Buffer.from(result.snapshot.map(Number)).toString('base64') : undefined, committed: !!action?.change && result.output.committed === true, backend: 'native', sourceIdentity: record.sourceIdentity });
+          finish(null, { ...visible, snapshot: result.snapshot ? Buffer.from(result.snapshot.map(Number)).toString('base64') : undefined, committed: !!action?.change && result.output.committed === true, backend: 'native', sourceIdentity: record.sourceIdentity, ...(programIdentity ? { programIdentity } : {}) });
         } catch (error) { finish(error); }
       });
       child.stdin.on('error', error => finish(error)); child.stdin.end(input);

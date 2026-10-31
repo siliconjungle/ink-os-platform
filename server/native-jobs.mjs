@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile, rename, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { captureProcessReceipt, checkProcessReceipt } from './process-receipt.mjs';
+import { inkProgramIdentity } from './ink-compiler.mjs';
 
 const fail = (status, message) => { throw Object.assign(Error(message), { status }); };
 const active = new Set(['queued', 'running', 'recovering']);
@@ -57,7 +58,8 @@ export class NativeJobs {
       const existing = jobs.findLast(job => job.appId === appId && job.compatibilityKey === plan.compatibilityKey && ['queued', 'running', 'recovering', 'succeeded'].includes(job.status));
       if (existing) return existing;
       if (jobs.filter(job => active.has(job.status)).length >= 32) fail(429, 'Native build queue is full.');
-      const job = { id: randomBytes(16).toString('hex'), appId, releaseId, compatibilityKey: plan.compatibilityKey, artifactId: plan.id, sourceIdentity: plan.artifact.manifest.core_sha256, ...(plan.toolchain?.managed ? { toolchain: plan.toolchain } : {}), status: 'queued', createdAt: Date.now() };
+      const programIdentity = inkProgramIdentity(plan.artifact);
+      const job = { id: randomBytes(16).toString('hex'), appId, releaseId, compatibilityKey: plan.compatibilityKey, artifactId: plan.id, sourceIdentity: plan.artifact.manifest.core_sha256, ...(programIdentity ? { programIdentity } : {}), ...(plan.toolchain?.managed ? { toolchain: plan.toolchain } : {}), status: 'queued', createdAt: Date.now() };
       jobs.push(job); return job;
     });
     void this.pump(); return this.visible(job);
@@ -72,7 +74,11 @@ export class NativeJobs {
       const worker = job.processReceipt || Number.isInteger(job.pid) && job.pid > 0 ? await this.checkProcess(job.processReceipt, { directory: this.directory, pid: job.pid }) : { state: 'gone', blocksCurrentRoot: false };
       if (job.workerState !== worker.state) await this.patch(job.id, { workerState: worker.state });
       if (['same-process', 'unverified'].includes(worker.state) && worker.blocksCurrentRoot !== false) continue;
-      try { const record = await this.native.record(job.artifactId, job.appId); await this.patch(job.id, { status: 'succeeded', sourceIdentity: record.sourceIdentity, pid: null, processReceipt: null, processReceiptState: null, finishedAt: Date.now() }); }
+      try {
+        const record = await this.native.record(job.artifactId, job.appId);
+        if (job.programIdentity && (record.sourceIdentity !== job.sourceIdentity || JSON.stringify(record.programIdentity) !== JSON.stringify(job.programIdentity))) fail(409, 'Recovered native module graph identity mismatch.');
+        await this.patch(job.id, { status: 'succeeded', sourceIdentity: record.sourceIdentity, pid: null, processReceipt: null, processReceiptState: null, finishedAt: Date.now() });
+      }
       catch { await this.patch(job.id, { status: 'interrupted', error: 'The previous build host exited before publishing its artifact. Submit the build again to resume.', pid: null, processReceipt: null, processReceiptState: null, finishedAt: Date.now() }); }
     }
   }
@@ -95,9 +101,11 @@ export class NativeJobs {
         const source = await this.source(job.appId, job.releaseId);
         const context = await this.native.compatibility(source, job.appId);
         if (context.compatibilityKey !== job.compatibilityKey) fail(409, 'The compiler or native runtime changed. Submit a fresh build.');
+        if (context.artifact?.module_graph && JSON.stringify(job.programIdentity) !== JSON.stringify(inkProgramIdentity(context.artifact))) fail(409, 'The native build module graph identity changed. Submit a fresh build.');
         if (job.toolchain?.managed && (await this.native.plan(source, job.appId, context.artifact)).id !== job.artifactId) throw Object.assign(Error('The pinned managed toolchain changed. Submit a fresh native build.'), { status: 409, code: 'INK_NATIVE_TOOLCHAIN_CHANGED' });
         const result = await this.native.build(source, { namespace: job.appId, onProcess: value => this.recordProcess(job.id, value), onStage: value => this.patch(job.id, value) });
-        await this.patch(job.id, { status: 'succeeded', phase: 'ready', artifactId: result.id, sourceIdentity: result.sourceIdentity, cached: result.cached, pid: null, processReceipt: null, processReceiptState: null, finishedAt: Date.now() });
+        if (job.programIdentity && (result.sourceIdentity !== job.sourceIdentity || JSON.stringify(result.programIdentity) !== JSON.stringify(job.programIdentity))) fail(409, 'Built native module graph identity mismatch.');
+        await this.patch(job.id, { status: 'succeeded', phase: 'ready', artifactId: result.id, sourceIdentity: result.sourceIdentity, ...(result.programIdentity ? { programIdentity: result.programIdentity } : {}), cached: result.cached, pid: null, processReceipt: null, processReceiptState: null, finishedAt: Date.now() });
       } catch (error) { await this.patch(job.id, { status: 'failed', phase: 'failed', error: String(error.message).slice(0, 2000), ...(typeof error.code === 'string' && /^[A-Z][A-Z0-9_]{0,80}$/.test(error.code) ? { errorCode: error.code } : {}), pid: null, processReceipt: null, processReceiptState: null, finishedAt: Date.now() }); }
     }
   }
@@ -107,7 +115,12 @@ export class NativeJobs {
     try { context = await this.native.compatibility(source, appId, compiled); } catch (error) { if (error.status === 422) return null; throw error; }
     const job = this.jobs.findLast(job => job.appId === appId && job.status === 'succeeded' && job.compatibilityKey === context.compatibilityKey);
     if (!job) return null;
-    try { await this.native.record(job.artifactId, appId); return job.artifactId; } catch (error) { if (error.code === 'ENOENT' || error.status === 409) return null; throw error; }
+    if (context.artifact?.module_graph && JSON.stringify(job.programIdentity) !== JSON.stringify(inkProgramIdentity(context.artifact))) return null;
+    try {
+      const record = await this.native.record(job.artifactId, appId);
+      if (job.programIdentity && (record.sourceIdentity !== job.sourceIdentity || JSON.stringify(record.programIdentity) !== JSON.stringify(job.programIdentity))) return null;
+      return job.artifactId;
+    } catch (error) { if (error.code === 'ENOENT' || error.status === 409) return null; throw error; }
   }
   async close() {
     this.accepting = false; clearTimeout(this.timer);

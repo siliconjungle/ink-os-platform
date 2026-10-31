@@ -1,6 +1,7 @@
 import { hash } from './world.mjs';
 import { compilerRequest, isolatedWorker } from './ink-compiler.mjs';
 import { inkSpec } from '../shared/ink-app.mjs';
+import { inkSource } from './ink-apps.mjs';
 import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
 
 const STATE_KEY = 'ink-app:state';
@@ -17,10 +18,8 @@ async function checkedRelease(platform, appId, releaseId) {
   const bundle = await platform.bundle(releaseId);
   if (hash(JSON.stringify(bundle)) !== metadata.digest || !bundle.ink || !Array.isArray(bundle.files)) fail(409, 'release-bundle-integrity-mismatch');
   const spec = inkSpec(bundle.ink, new Set(bundle.files.map(file => file.path)));
-  const file = bundle.files.find(file => file.path === spec.source);
-  if (typeof file?.base64 !== 'string' || Buffer.from(file.base64, 'base64').toString('base64') !== file.base64) fail(409, 'release-source-bytes-invalid');
-  const bytes = Buffer.from(file.base64, 'base64'), source = bytes.toString('utf8');
-  if (!Buffer.from(source).equals(bytes)) fail(409, 'release-source-not-utf8');
+  let source;
+  try { source = inkSource(spec, bundle.files); } catch { fail(409, 'release-source-bytes-invalid'); }
   return { record, spec, compiled: await platform.code.compile(source), digest: metadata.digest };
 }
 
@@ -63,6 +62,7 @@ export function migrateInstalledInk(platform, appId, input, principal) {
     if (typeof saved.value.snapshot !== 'string' || saved.value.snapshot.length > 44 * 1024 * 1024 || Buffer.from(saved.value.snapshot, 'base64').toString('base64') !== saved.value.snapshot || !saved.value.snapshot) fail(409, 'checkpoint-snapshot-invalid');
     const old = await checkedRelease(platform, appId, input.fromReleaseId), next = await checkedRelease(platform, appId, input.toReleaseId);
     if (saved.value.digest !== old.compiled.digest) fail(409, 'old-release-does-not-match-checkpoint');
+    if (old.compiled.sourceIdentity && JSON.stringify(saved.value.sourceIdentity) !== JSON.stringify(old.compiled.sourceIdentity)) fail(409, 'old-release-module-identity-does-not-match-checkpoint');
     const query = old.compiled.entries.find(entry => entry.name === input.query), change = next.compiled.entries.find(entry => entry.name === input.change);
     if (!old.spec.exports.includes(input.query) || !query?.action || query.change !== false) fail(400, 'old-entry-must-be-exported-state-query');
     if (!next.spec.exports.includes(input.change) || !change?.action || change.change !== true || change.params.length !== 1) fail(400, 'new-entry-must-be-exported-single-argument-change');
@@ -86,10 +86,11 @@ export function migrateInstalledInk(platform, appId, input, principal) {
     };
     const authority = { ...principal, writeAccess: { check: guard, run: run => { guard(); return principal.writeAccess ? principal.writeAccess.run(run) : run(); } } };
     guard();
-    const committed = await platform.code.saveCheckpoint(appId, STATE_KEY, { digest: next.compiled.digest, snapshot: migrated.snapshot }, saved.revision, authority);
+    const committed = await platform.code.saveCheckpoint(appId, STATE_KEY, { digest: next.compiled.digest, snapshot: migrated.snapshot, ...(next.compiled.sourceIdentity ? { sourceIdentity: next.compiled.sourceIdentity } : {}) }, saved.revision, authority);
     return { appId, fromReleaseId: input.fromReleaseId, toReleaseId: input.toReleaseId, query: query.name, change: change.name,
       previousRevision: saved.revision, revision: committed.revision, fromDigest: old.compiled.digest, digest: next.compiled.digest,
       fromSourceHash: old.compiled.artifact.manifest.core_sha256, sourceHash: next.compiled.artifact.manifest.core_sha256,
+      ...(old.compiled.sourceIdentity ? { fromSourceIdentity: old.compiled.sourceIdentity } : {}), ...(next.compiled.sourceIdentity ? { sourceIdentity: next.compiled.sourceIdentity } : {}),
       exportValueWire: exportResult.valueWire, valueWire: migrationResult.valueWire, backend: 'javascript', committed: true };
   })));
   platform.publishTail = task.catch(() => {});

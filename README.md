@@ -95,6 +95,14 @@ node cli/bin/ink-os.mjs backup restore --offline --directory /path/to/restored-d
 
 Restore requires an absent or empty destination and authenticates the complete archive before publishing it. It preserves instance keys and local blob bytes, rebases managed project paths, and renews connection metadata on startup. External project directories, environment-provided secrets and remote object storage require separate recovery; inspect the returned coverage. The local owner SDK exports `createStoppedBackup` and `recoverBackup` from `@ink-os/platform/backup`. This interface does not establish a live snapshot barrier.
 
-Current Ink app builds accept one source file. Persistent checkpoints survive restarts and duplicate independently with the app. A changed source identity requires an explicit migration; execution rejects incompatible saved state instead of silently resetting it. Module linking and host I/O bindings remain unfinished. The desktop configures a private pinned native installer; startup/status do not install tools, and an explicit native build bootstraps them on supported hosts. Real installer and packaged acceptance remain release gates.
+Ink apps accept a single source or an explicit committed module graph. For example, `ink-app.json` can declare:
+
+```json
+{"slug":"linked-app","title":"Linked app","language":"ink","modules":{"version":1,"root":"main.ink","modules":[{"path":"main.ink","name":"app","dependencies":["lib/math.ink"],"exports":["run"]},{"path":"lib/math.ink","name":"math","dependencies":[],"exports":["bump"]}]},"exports":["run"]}
+```
+
+With `main.ink` containing `module app;fn run(n:u32)->u32{return bump(n);}` and `lib/math.ink` containing `module math;fn bump(n:u32)->u32{return n+1;}`, the same CLI build/deploy and exported command APIs work. The root can own state, queries and changes; graph version1 links pure libraries with explicit dependencies and exports. It rejects stateful libraries, record-update syntax and unsupported advanced metadata. There is no filesystem, URL or package discovery during compilation.
+
+Releases, checkpoints and native artifacts bind the complete graph and checked core identity. Package root exports bound callable entries; app exports/view can narrow them further. A library-only source change invalidates the old source identity, even when its generated core is unchanged. Persistent checkpoints survive restarts and duplicate independently with the app. A changed source identity requires an explicit migration; execution rejects incompatible saved state instead of silently resetting it. Host I/O bindings remain unfinished. The desktop configures a private pinned native installer; startup/status do not install tools, and an explicit native build bootstraps them on supported hosts. Real installer and packaged acceptance remain release gates.
 
 Development: `npm run dev`. Validation: `npm test`, `npm run check`, `npm run audit`.

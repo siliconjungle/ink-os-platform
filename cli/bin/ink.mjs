@@ -4,6 +4,7 @@ import { Projects } from '../../server/projects.mjs';
 import { buildInkApp } from '../../server/ink-apps.mjs';
 import { parseEnv } from 'node:util';
 import { sourceFiles } from '../../shared/source-files.mjs';
+import { inkModuleGraph } from '../../shared/ink-app.mjs';
 
 async function manifestFrom(files) {
   const file = files.find(file => file.path === 'ink-app.json');
@@ -47,7 +48,7 @@ export async function initInk(directory, options = {}) {
 export async function buildInk(directory, options = {}) {
   directory = await realpath(resolve(directory));
   const manifest = JSON.parse(await readFile(join(directory, 'ink-app.json'), 'utf8'));
-  const names = new Set([manifest.source || 'main.ink']);
+  const names = new Set(manifest.modules !== undefined ? inkModuleGraph(manifest.modules).modules.map(module => module.path) : [manifest.source || 'main.ink']);
   const icon = manifest.desktop?.icon;
   if (typeof icon === 'string' && /\.svg$/i.test(icon)) names.add(icon);
   if (typeof icon?.svg === 'string' && !icon.svg.trim().startsWith('<')) names.add(icon.svg);
