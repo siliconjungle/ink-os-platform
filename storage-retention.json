@@ -118,7 +118,8 @@
     "tests/fixtures/adapters-speech.wav": "Selected synthetic speech input for the real provider proof.",
     "evidence/adapters-validation.json": "Sanitized selected browser/native/provider validation and test outcomes.",
     "evidence/adapters-browser.png": "Selected browser transcript reuse proof.",
-    ".local/adapters-proof-data": "Active isolated validation host state, encrypted package environment and durable transformations; retain while host is live."
+    ".local/adapters-proof-data": "Active isolated validation host state, encrypted package environment and durable transformations; retain while host is live.",
+    "evidence/adapters-deployment.json": "Selected merged/deployed/installed adapter acceptance and exact source/artifact bindings."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",
