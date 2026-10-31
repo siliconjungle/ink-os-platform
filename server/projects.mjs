@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomBytes } from 'node:crypto';
 import { sourceFiles } from '../shared/source-files.mjs';
+import { gitRuntime } from './git-runtime.mjs';
 
 const execute = promisify(execFile);
 const fail = (status, message) => { throw Object.assign(Error(message), { status }); };
@@ -32,7 +33,7 @@ export function projectSettings(input = {}) {
 }
 
 export class Projects {
-  constructor(directory, { git = 'git' } = {}) {
+  constructor(directory, { git = gitRuntime().executable } = {}) {
     this.directory = directory;
     this.catalogPath = join(directory, 'projects.json');
     this.root = join(directory, 'projects');
@@ -54,7 +55,7 @@ export class Projects {
     const invocation = execute(this.gitExecutable, ['-C', directory, ...args], {
       maxBuffer: 26 * 1024 * 1024,
       ...settings,
-      env: { ...environment, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null', ...options.env },
+      env: { ...environment, ...gitRuntime().environment, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null', ...options.env },
     });
     if (input !== undefined) { invocation.child.stdin.on('error', () => {}); invocation.child.stdin.end(input); }
     return (await invocation).stdout;
