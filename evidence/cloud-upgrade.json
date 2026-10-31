@@ -1,0 +1,37 @@
+{
+  "format": "ink-os-cloud-upgrade-acceptance-v1",
+  "observedAt": "2026-10-31T06:28:54.748Z",
+  "sourceCommits": {
+    "before": "032bae44c85e47bec7f339e4bc5e3cd0842f1043",
+    "after": "ad737fa16e8205f7a0212b4116b22bca026190a8"
+  },
+  "imageDigests": {
+    "before": "sha256:1d8936b1f77abd31d7ae4cd55d356470e73f71085f6359535c2bdb6b53333e4e",
+    "after": "sha256:fe907e8e0b26fe8a03643bbbb52f74039de90fc5fe3256c12440f660fc61cefd",
+    "runtime": "sha256:83e07c7577de46954e8af58bc52cf06506d8114aa5cc74a1c78233e75d882605"
+  },
+  "privateUpgradeEvidenceSha256": "a6b55292290651048afb00811ae7bbb99a01658309551fa0e6c2586a8b87fbd5",
+  "privateUpgradeReceiptSha256": "4780c9e71acd716d37e891eb0de9427eb7e9aae2ea54c6a548da115c8af3622a",
+  "privatePersistenceProofSha256": "58523dbc52d5ac809306462529c601152f018f2adc86fd8b96045485570c58e4",
+  "privateRuntimeProofSha256": "b951f02c5914efd354c1de03196a95bad8dba4f5b2f7cdd32ad18f2bc37de755",
+  "observed": {
+    "durableGate": true,
+    "sourceBootBoundStopSeal": true,
+    "newBootObserved": true,
+    "admissionReopened": true,
+    "existingAppStateSurvived": true,
+    "existingAppBackendReadAfterRestart": true,
+    "nonemptyCatalogPreserved": true,
+    "currentGenerationRuntimeAcceptance": "passed",
+    "edgeAuthentication": true,
+    "sourcePrivacy": true,
+    "canarySourceDeletionAcknowledged": true,
+    "foreignMutationRequests": 0
+  },
+  "limits": [
+    "Historical controlled-instance acceptance, not a live availability audit.",
+    "The generated persistence app and separate runtime canary were exercised; installed custom runtime and all application parity remain separate.",
+    "Initial legacy bootstrap relied on explicit external quiescence evidence; this subsequent transition used the actual durable host maintenance protocol.",
+    "Provider target validation required same-operation resume; no force update, duplicate image mutation or guard relaxation was used."
+  ]
+}

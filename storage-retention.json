@@ -40,7 +40,8 @@
     "tests/fly-pool-retirement.test.mjs": "Exact stopped-machine authority, provider leases/versions and non-force retirement proofs.",
     "scripts/verify-upgraded-host.mjs": "Current-generation hosted canary verification scoped to its own app and bound images, preserving installed apps and foreign workers.",
     "tests/upgraded-host-verifier.test.mjs": "Actual host and edge lost-reply, cleanup, current-image and foreign-state preservation proofs.",
-    "tests/cli-connections.test.mjs": "Real loopback identity/origin/redirect and credential isolation proofs for desktop and standalone CLI."
+    "tests/cli-connections.test.mjs": "Real loopback identity/origin/redirect and credential isolation proofs for desktop and standalone CLI.",
+    "evidence/cloud-upgrade.json": "Selected real durable maintenance/stop seal/new boot, preexisting app persistence and nonempty current-generation scoped runtime acceptance; provider identities remain private."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",
