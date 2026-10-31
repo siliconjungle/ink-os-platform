@@ -58,7 +58,8 @@
     "cli/bin/app-api.mjs": "Interapp command and desktop handoff CLI backed by the existing scoped app API.",
     "tests/cli-app-api.test.mjs": "Actual server CLI/caller/scope/handoff plus origin/credential and unknown-command rejection proofs.",
     "evidence/ink-authoring.json": "Selected actual rendered unpublished preview interaction and zero-catalog mutation proof bound to exact implementation/style inputs.",
-    "evidence/ink-preview.png": "Selected screenshot of actual isolated rendered Ink preview count1 in shared SDK styling."
+    "evidence/ink-preview.png": "Selected screenshot of actual isolated rendered Ink preview count1 in shared SDK styling.",
+    "tests/account-provisioning.test.mjs": "Actual HTTP/restart explicit member identity with no key, later separate issuance, collision and permission rejection proof."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",

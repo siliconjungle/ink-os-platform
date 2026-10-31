@@ -12,6 +12,8 @@ npm start
 
 The server listens on loopback port 4318. Its private `.data/client.json` contains the generated local account credential. Set `INK_OS_CONFIG=.data/client.json` when using `node cli/bin/ink-os.mjs`. Keep the entire data directory outside Git.
 
+Administrators can create member identities with `POST /api/v1/accounts` (or `client.request('accounts', {method:'POST', body:input})` in the server SDK). Alongside `name` and `scopes`, an optional `id` preserves an existing 24-character lowercase hexadecimal account identity; collisions are rejected. Set `issueKey:false` to create the identity without any sign-in key, for example when preserving author references. Such an account cannot authenticate until a key is separately issued. Omitting this flag preserves the default creation of a sign-in key; member permissions cannot include `accounts:manage`.
+
 ```sh
 INK_OS_CONFIG=.data/client.json node cli/bin/ink-os.mjs projects create --title "My project"
 INK_OS_CONFIG=.data/client.json node cli/bin/ink-os.mjs projects list

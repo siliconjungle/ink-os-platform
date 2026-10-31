@@ -21,7 +21,20 @@ export class APIKeys{
  listAccounts(){return structuredClone(this.accounts);}
  list(accountId='owner'){return this.keys.filter(k=>k.accountId===accountId).map(k=>this.public(k));}
  create(input={},accountId='owner',ceiling){return this.mutate(draft=>{const account=draft.accounts.find(a=>a.id===accountId);if(!account||account.disabledAt)fail(403,'Account access is disabled');const issued=issue(input,accountId);if(issued.key.scopes.some(scope=>!account.scopes.includes(scope)||ceiling&&!ceiling.includes(scope)))fail(403,'A key cannot exceed the permissions granted to its account or creator');draft.keys.push(issued.key);return {...this.public(issued.key),token:issued.token};});}
- createAccount(input){return this.mutate(draft=>{const name=named(input.name),scopes=memberScopes(input.scopes??DEFAULT_SCOPES),account={id:randomBytes(12).toString('hex'),name,role:'member',scopes,createdAt:Date.now(),disabledAt:null};const issued=issue({name:name.slice(0,92)+' sign-in',scopes,expiresInDays:input.expiresInDays},account.id);draft.accounts.push(account);draft.keys.push(issued.key);return {account,key:{...this.public(issued.key),token:issued.token}};});}
+ createAccount(input={}){return this.mutate(draft=>{
+  if(!input||typeof input!=='object'||Array.isArray(input))fail(400,'Invalid account');
+  if(input.issueKey!==undefined&&typeof input.issueKey!=='boolean')fail(400,'Invalid key issuance setting');
+  if(input.id!==undefined&&(typeof input.id!=='string'||!(/^[a-f0-9]{24}$/).test(input.id)))fail(400,'Account ID must be 24 lowercase hexadecimal characters');
+  const name=named(input.name),scopes=memberScopes(input.scopes??DEFAULT_SCOPES);
+  let id=input.id;
+  if(id!==undefined&&draft.accounts.some(account=>account.id===id))fail(409,'Account ID already exists');
+  if(id===undefined)do{id=randomBytes(12).toString('hex');}while(draft.accounts.some(account=>account.id===id));
+  const account={id,name,role:'member',scopes,createdAt:Date.now(),disabledAt:null};
+  const issued=input.issueKey===false?null:issue({name:name.slice(0,92)+' sign-in',scopes,expiresInDays:input.expiresInDays},id);
+  draft.accounts.push(account);
+  if(!issued)return {account};
+  draft.keys.push(issued.key);return {account,key:{...this.public(issued.key),token:issued.token}};
+ });}
  updateAccount(id,input){return this.mutate(draft=>{const account=draft.accounts.find(a=>a.id===id);if(!account)fail(404,'Account not found');if(account.role==='admin')fail(403,'The admin account cannot be changed here');if(input.name!==undefined)account.name=named(input.name);if(input.scopes!==undefined)account.scopes=memberScopes(input.scopes);if(input.disabled!==undefined){if(typeof input.disabled!=='boolean')fail(400,'Invalid access setting');account.disabledAt=input.disabled?(account.disabledAt||Date.now()):null;}return {...account};});}
  find(id){const key=this.keys.find(k=>k.id===id),account=key&&this.account(key.accountId);return key&&!key.revokedAt&&key.expiresAt>Date.now()&&account&&!account.disabledAt?key:null;}
  authenticate(token){if(typeof token!=='string'||!token.startsWith('ink_os_'))return null;const hash=digest(token);const key=this.keys.find(k=>typeof k.hash==='string'&&k.hash.length===hash.length&&timingSafeEqual(Buffer.from(k.hash),Buffer.from(hash)));return key?this.principal(key.id):null;}
