@@ -11,10 +11,12 @@
     "app-runtime": "Isolated application execution.",
     "scripts": "Build and source audit tools.",
     "tests": "Selected regression proofs.",
-    "public": "Desktop assets."
+    "public": "Desktop assets.",
+    "compiler": "Pinned browser/host Ink compiler source and dependency lock."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",
-    "public/ink-runtime": "Completed generated runtime bundles; reproducible from shared sources."
+    "public/ink-runtime": "Completed generated runtime bundles; reproducible from shared sources.",
+    "compiler/target": "Completed compiler build cache; public compiler artifact, exact source, Cargo.lock, and reproduction script are retained."
   }
 }

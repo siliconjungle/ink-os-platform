@@ -1,0 +1,28 @@
+[package]
+license = "MIT"
+name = "ink-browser-compiler"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+ink-lowering-rust = { git = "https://github.com/siliconjungle/ink-lowering-rust", rev = "de96f9cb57c67b1bfab75fca1ae6cc7f853f9325" }
+ink-core = { git = "https://github.com/siliconjungle/ink-lang", rev = "b5895f1d79be47076ff97734c887a580e09c2a29" }
+ink-lowering-js = { git = "https://github.com/siliconjungle/ink-lowering-js", rev = "cdc21a284331168148d43e0e0221bc8ddf7b3fff" }
+ink-lowering-gpu = { git = "https://github.com/siliconjungle/ink-lowering-gpu", rev = "def274b5222ad65861f530e1002d34f491602356" }
+ink-lowering-wasm = { git = "https://github.com/siliconjungle/ink-lowering-wasm", rev = "f1c82e706362c3845b294c1887bc1fda62f86692" }
+ink-abi = { git = "https://github.com/siliconjungle/ink-abi", rev = "8f9de93cf30bf658195bb94ad7ebba9e37bf1c05" }
+sha2 = "0.10"
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[workspace]

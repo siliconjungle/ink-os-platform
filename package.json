@@ -12,7 +12,8 @@
     "build:cloud": "npm run build:runtime && tsc --noEmit && vite build",
     "start": "node scripts/start.mjs",
     "build:runtime": "node scripts/build-runtime.mjs",
-    "audit": "node scripts/audit-source.mjs"
+    "audit": "node scripts/audit-source.mjs",
+    "build:compiler": "node scripts/build-compiler.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1158.0",

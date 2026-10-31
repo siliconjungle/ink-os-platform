@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "license": "MIT",
+  "sha256": "362852928a54fa96ea5d568d2b6d1407911856b42d32291dbd13861076b396aa",
+  "bytes": 6506336,
+  "dependencyLockSHA256": "b872d35ee263b9ab615446722cefe6a8cb356024ce3bf5bfdd7d29a4ca1ca6be",
+  "transportSourceSHA256": "68abd1e047c9176a34bd7755c675ab9527c8b247bbb9fe6bf41fa152e73e415a",
+  "outputs": [
+    "javascript",
+    "rust",
+    "wgsl"
+  ]
+}
