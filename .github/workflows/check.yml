@@ -130,6 +130,12 @@ jobs:
           PROOF_TOOLCHAIN: ${{ inputs.toolchainBase64 }}
         run: |
           node --input-type=module -e 'import{mkdir,writeFile}from"node:fs/promises";import{gunzipSync}from"node:zlib";const compressed=Buffer.from(process.env.PROOF_TOOLCHAIN,"base64");if(process.env.PROOF_TOOLCHAIN.length>65000||compressed.toString("base64")!==process.env.PROOF_TOOLCHAIN)throw Error("Invalid toolchain input");const bytes=gunzipSync(compressed,{maxOutputLength:262144});const source=JSON.parse(bytes);if(typeof source.installer!=="string"||typeof source.verifier!=="string"||Object.keys(source).length!==2)throw Error("Invalid source bundle");await mkdir("../ink-os-desktop/src",{recursive:true});await mkdir("../ink-os-desktop/scripts");await writeFile("../ink-os-desktop/src/native-toolchain.mjs",source.installer);await writeFile("../ink-os-desktop/scripts/verify-native-toolchain.mjs",source.verifier);'
+      - name: Install the API host dependencies
+        if: inputs.toolchainApiBootstrap
+        run: npm ci
+      - name: Build the API host interface
+        if: inputs.toolchainApiBootstrap
+        run: npm run build
       - name: Verify the selected managed native path
         env:
           PROOF_API: ${{ inputs.toolchainApiBootstrap }}
