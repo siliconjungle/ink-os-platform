@@ -8,9 +8,13 @@ on:
         description: Canonical deployment Compose file, encoded as base64
         required: false
         type: string
+      toolchainBase64:
+        description: Exact managed-toolchain installer/verifier source bundle, encoded as base64 JSON
+        required: false
+        type: string
 jobs:
   platform:
-    if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == ''
+    if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == '' && inputs.toolchainBase64 == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +27,7 @@ jobs:
       - run: npm run build
       - run: npm test
   native:
-    if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == ''
+    if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == '' && inputs.toolchainBase64 == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +38,7 @@ jobs:
       - run: npm ci
       - run: INK_TEST_NATIVE=1 node --test tests/native-*.test.mjs
   container:
-    if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == ''
+    if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == '' && inputs.toolchainBase64 == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +59,7 @@ jobs:
       - if: always()
         run: docker rm -f ink-os-check || true
   docker-backends:
-    if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == ''
+    if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == '' && inputs.toolchainBase64 == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -101,4 +105,32 @@ jobs:
         with:
           name: compose-proof
           path: ink-os-platform/evidence/compose.json
+          retention-days: 7
+  managed-native:
+    if: github.event_name == 'workflow_dispatch' && inputs.toolchainBase64 != ''
+    runs-on: macos-15
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ink-os-platform
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ink-os-platform
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Decode exact toolchain verifier source
+        env:
+          PROOF_TOOLCHAIN: ${{ inputs.toolchainBase64 }}
+        run: |
+          node --input-type=module -e 'import{mkdir,writeFile}from"node:fs/promises";const bytes=Buffer.from(process.env.PROOF_TOOLCHAIN,"base64");if(bytes.length>49000||bytes.toString("base64")!==process.env.PROOF_TOOLCHAIN)throw Error("Invalid toolchain input");const source=JSON.parse(bytes);if(typeof source.installer!=="string"||typeof source.verifier!=="string"||Object.keys(source).length!==2)throw Error("Invalid source bundle");await mkdir("../ink-os-desktop/src",{recursive:true});await mkdir("../ink-os-desktop/scripts");await writeFile("../ink-os-desktop/src/native-toolchain.mjs",source.installer);await writeFile("../ink-os-desktop/scripts/verify-native-toolchain.mjs",source.verifier);'
+      - run: node ../ink-os-desktop/scripts/verify-native-toolchain.mjs --output evidence/managed-native.json --ephemeral-runner --reserve-gib 2 --platform-dir .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: managed-native-proof
+          path: |
+            ink-os-platform/evidence/managed-native.json
+            ink-os-platform/evidence/managed-native.json.licenses
           retention-days: 7

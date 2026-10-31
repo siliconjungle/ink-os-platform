@@ -105,7 +105,7 @@ export class NativeInk {
     await writeFile(join(directory, 'Cargo.toml'), cargoManifest);
     await writeFile(join(directory, 'Cargo.lock'), lock);
     await writeFile(join(directory, 'src/main.rs'), artifact.rust + driver);
-    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(?:PATH|HOME|USERPROFILE|APPDATA|LOCALAPPDATA|TMPDIR|TEMP|TMP|SYSTEMROOT|SystemRoot|COMSPEC|CARGO_HOME|RUSTUP_HOME|RUSTUP_TOOLCHAIN|CC|CXX|AR|SDKROOT|DEVELOPER_DIR)$/.test(name)));
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(?:PATH|HOME|USERPROFILE|APPDATA|LOCALAPPDATA|TMPDIR|TEMP|TMP|SYSTEMROOT|SystemRoot|COMSPEC|CARGO_HOME|RUSTUP_HOME|RUSTUP_TOOLCHAIN|CC|CXX|AR|SDKROOT|DEVELOPER_DIR|CARGO_TARGET_[A-Z0-9_]+_LINKER)$/.test(name)));
     Object.assign(env, { RUSTC: this.rustc, CARGO_TARGET_DIR: join(this.directory, 'target'), CARGO_INCREMENTAL: '0', CARGO_PROFILE_RELEASE_DEBUG: '0', CARGO_ENCODED_RUSTFLAGS: [`--remap-path-prefix=${homedir()}=/build`, `--remap-path-prefix=${directory}=/ink/native`].join('\x1f') });
     const args = ['build', '--locked', '--release', '--manifest-path', join(directory, 'Cargo.toml')];
     if (this.offline) args.push('--offline');

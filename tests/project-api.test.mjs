@@ -14,7 +14,7 @@ test('project API/SDK/CLI keep credentials private across restart and enforce sc
   const probe = createServer(); probe.listen(0, '127.0.0.1'); await once(probe, 'listening');
   const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(INK_|FLY_|AWS_|S3_|BUCKET_NAME|GIT_)/.test(name)));
-  Object.assign(env, { PORT: String(port), INK_OS_DATA_DIR: directory, INK_OS_CONFIG: join(directory, 'client.json'), NODE_ENV: 'production', INK_OS_NATIVE: '0' });
+  Object.assign(env, { PORT: String(port), INK_OS_DATA_DIR: directory, INK_OS_CONFIG: join(directory, 'client.json'), NODE_ENV: 'production', INK_OS_NATIVE: '0', INK_OS_INSTANCE_ID: randomBytes(16).toString('hex'), INK_OS_ADMIN_TOKEN: randomBytes(32).toString('base64url'), INK_OS_ENV_KEY: randomBytes(32).toString('base64') });
   let child, output = '';
   const stop = async () => { if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); await once(child, 'exit'); } };
   t.after(async () => { await stop(); await rm(directory, { recursive: true, force: true }); });
@@ -40,6 +40,10 @@ test('project API/SDK/CLI keep credentials private across restart and enforce sc
     return JSON.parse(stdout);
   }
   await start();
+  assert.equal((await (await fetch(url + '/api/health')).json()).instanceId, env.INK_OS_INSTANCE_ID);
+  const identity = JSON.parse(await readFile(join(directory, 'instance.json'), 'utf8'));
+  assert.equal(identity.adminToken, env.INK_OS_ADMIN_TOKEN);
+  assert.equal(identity.environmentKey, env.INK_OS_ENV_KEY);
   const config = JSON.parse(await readFile(env.INK_OS_CONFIG, 'utf8')), sdk = createClient({ url, token: config.token });
   assert.deepEqual(await sdk.apps.list(), []);
   const project = await sdk.projects.import({ title: 'Source', files: [{ path: 'main.ink', base64: Buffer.from('module source;').toString('base64') }], settings: { source: { provider: 'github', github: { owner: 'example-team', repository: 'source', visibility: 'private' } } } });

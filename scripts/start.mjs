@@ -4,6 +4,9 @@ const instance = await initializeInstance({
   directory: process.env.INK_OS_DATA_DIR,
   port: Number(process.env.PORT || 4318),
   hostProcess: true,
+  id: process.env.INK_OS_INSTANCE_ID,
+  adminToken: process.env.INK_OS_ADMIN_TOKEN,
+  environmentKey: process.env.INK_OS_ENV_KEY,
 });
 process.env.NODE_ENV = 'production';
 process.env.INK_OS_DEV = process.argv.includes('--dev') ? '1' : '0';
