@@ -1,0 +1,43 @@
+{
+  "format": "ink-os-docker-backend-proof-v1",
+  "platformCommit": "23da72aca962aedb98c7285284aefc300aefa3fb",
+  "runId": 41164745335,
+  "jobs": [
+    {
+      "name": "container",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "platform",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "docker-backends",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "native",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "name": "compose",
+      "status": "completed",
+      "conclusion": "skipped"
+    }
+  ],
+  "observed": [
+    "Actual module and OCI containers run through owner CLI/API/SDK.",
+    "Held background work and the same lease survive host restart.",
+    "App environment and temporary filesystem data do not leak to the next slot assignment.",
+    "Idle slots stop through SIGTERM with Docker init and are reused with new credentials.",
+    "Old lease credentials and cross-app release source reads are rejected.",
+    "Virtual-host launch cookies gate frontend/backend access and hide server source."
+  ],
+  "limits": [
+    "Linux Docker Engine acceptance, not macOS/Windows engine acceptance or browser cookie-policy proof."
+  ]
+}

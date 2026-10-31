@@ -1,0 +1,18 @@
+{
+  "format": "ink-os-compose-proof-v1",
+  "platformCommit": "23da72aca962aedb98c7285284aefc300aefa3fb",
+  "composeSha256": "6cd1fce54f5fcc21d4acfbe573b00f08b6e406c25ec91e77e535b743a7c56002",
+  "runtimeImage": "ink-os-runtime:proof-41164763260",
+  "observed": [
+    "Compose built its runtime image and started with zero apps.",
+    "Owner API installed a module backend and the in-container CLI invoked it through a Docker lease.",
+    "Separate release hostname required its own launch cookie and hid backend source.",
+    "Gateway forwarded authenticated frontend backend requests to the container.",
+    "Compose restart preserved app data and reattached the same compute lease.",
+    "Idle workers stopped safely and their containers/networks were removed without force."
+  ],
+  "limits": [
+    "Real Linux Docker Compose acceptance; no graphical browser or desktop Docker-engine acceptance.",
+    "External domains/TLS, cloud provisioning and managed desktop engines are separate checks."
+  ]
+}
