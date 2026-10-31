@@ -49,7 +49,7 @@ export class DockerCompute {
   }
   async create(slot, { image, environment, command, network, port, backend = false, memoryMb = 256 }) {
     const name = this.name(slot, backend);
-    const host = { NetworkMode: network, ReadonlyRootfs: true, CapDrop: ['ALL'], SecurityOpt: ['no-new-privileges:true'], PidsLimit: 128, Memory: memoryMb * 1024 * 1024, NanoCpus: 1000000000, Tmpfs: { '/tmp': 'rw,nosuid,nodev,size=268435456,mode=1777' }, ExtraHosts: ['host.docker.internal:host-gateway'], LogConfig: { Type: 'local', Config: { 'max-size': '5m', 'max-file': '2' } } };
+    const host = { NetworkMode: network, Init: true, ReadonlyRootfs: true, CapDrop: ['ALL'], SecurityOpt: ['no-new-privileges:true'], PidsLimit: 128, Memory: memoryMb * 1024 * 1024, NanoCpus: 1000000000, Tmpfs: { '/tmp': 'rw,nosuid,nodev,size=268435456,mode=1777' }, ExtraHosts: ['host.docker.internal:host-gateway'], LogConfig: { Type: 'local', Config: { 'max-size': '5m', 'max-file': '2' } } };
     if (!backend && this.connection === 'host') host.PortBindings = { '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '' }] };
     const result = await this.engine.request('/containers/create?name=' + name, { method: 'POST', body: { Image: image, Labels: this.labels(slot), Env: Object.entries(environment).map(([name, value]) => name + '=' + value), ...(command ? { Cmd: command } : {}), ExposedPorts: { [String(port) + '/tcp']: {} }, HostConfig: host } });
     if (!/^[a-f0-9]{64}$/.test(result?.Id || '')) fail(502, 'Docker did not return a container identity.');

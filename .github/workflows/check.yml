@@ -10,6 +10,7 @@ on:
         type: string
 jobs:
   platform:
+    if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +23,7 @@ jobs:
       - run: npm run build
       - run: npm test
   native:
+    if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +34,7 @@ jobs:
       - run: npm ci
       - run: INK_TEST_NATIVE=1 node --test tests/native-*.test.mjs
   container:
+    if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +55,7 @@ jobs:
       - if: always()
         run: docker rm -f ink-os-check || true
   docker-backends:
+    if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

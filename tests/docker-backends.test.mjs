@@ -69,6 +69,7 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
   const initialContainer = await engine.request('/containers/' + firstDeployment.containerId + '/json');
   const oldToken = initialContainer.Config.Env.find(value => value.startsWith('INK_OS_APP_TOKEN=')).slice('INK_OS_APP_TOKEN='.length);
   assert.equal(initialContainer.HostConfig.ReadonlyRootfs, true);
+  assert.equal(initialContainer.HostConfig.Init, true);
   assert.deepEqual(initialContainer.HostConfig.CapDrop, ['ALL']);
   assert.equal(initialContainer.Mounts.some(mount => mount.Source?.endsWith('docker.sock')), false);
   assert.equal((await invoke(first.app, '/work', 'POST')).body.started, true);
