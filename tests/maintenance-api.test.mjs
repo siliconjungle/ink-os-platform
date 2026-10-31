@@ -24,6 +24,7 @@ test('real host gate preserves admitted HTTP work, closes new entries and transp
  await start();const config=JSON.parse(await readFile(env.INK_OS_CONFIG)),sdk=createClient({url,token:config.token});
  const cli=async(...args)=>JSON.parse((await execute(process.execPath,['cli/bin/ink-os.mjs',...args],{env})).stdout);
  const member=await sdk.request('accounts',{method:'POST',body:{name:'Maintenance member',scopes:['world:read','world:write','computer']}}),memberSDK=createClient({url,token:member.key.token});
+ const inspection=await sdk.maintenance.inspect();assert.equal(inspection.admissionClosed,false);assert.equal(inspection.instanceId,env.INK_OS_INSTANCE_ID);assert.equal(inspection.images.os,env.INK_OS_IMAGE_PIN);await assert.rejects(memberSDK.maintenance.inspect(),{status:403});
  const fromImages={os:image('1'),runtime:image('2')},targetImages={os:image('3'),runtime:image('2')};
  const request={format:'ink-os-maintenance-request-v1',instanceId:env.INK_OS_INSTANCE_ID,operationId:'b'.repeat(32),challenge:'c'.repeat(64),fromImages,targetImages,retireRuntimeImage:false};
  await assert.rejects(memberSDK.maintenance.prepare(request),{status:403});
@@ -42,7 +43,7 @@ test('real host gate preserves admitted HTTP work, closes new entries and transp
  const next={...request,operationId:'d'.repeat(32),challenge:'e'.repeat(64)},input=join(directory,'prepare.json');await writeFile(input,JSON.stringify(next),{mode:0o600});
  assert.equal((await cli('maintenance','prepare','--file',input)).state,'draining');await waitFor(next.operationId,'quiescent');
  const previousBoot=(await cli('maintenance','status',next.operationId)).bootId;const sealed=await sdk.maintenance.seal(next.operationId,{challenge:next.challenge,bootId:previousBoot,fromImages,targetImages});assert.equal(sealed.stopAuthorized,true);await assert.rejects(sdk.maintenance.cancel(next.operationId,{challenge:next.challenge}),{status:409});await stop();env.INK_OS_IMAGE_PIN=targetImages.os;await start();
- const restarted=await sdk.maintenance.get(next.operationId);assert.equal(restarted.state,'restarted');assert.notEqual(restarted.bootId,previousBoot);
+ const restarted=await sdk.maintenance.get(next.operationId);assert.equal((await sdk.maintenance.inspect()).bootId,restarted.bootId);assert.equal(restarted.state,'restarted');assert.notEqual(restarted.bootId,previousBoot);
  await assert.rejects(sdk.data.create({kind:'note',title:'Gate persists'}),{status:503});
  await assert.rejects(sdk.maintenance.complete(next.operationId,{challenge:'f'.repeat(64),targetImages}),{status:409});
  const done=await sdk.maintenance.complete(next.operationId,{challenge:next.challenge,targetImages});assert.equal(done.state,'complete');assert.equal(done.admissionClosed,false);assert.deepEqual(await sdk.maintenance.complete(next.operationId,{challenge:next.challenge,targetImages}),done);

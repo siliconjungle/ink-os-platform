@@ -43,6 +43,7 @@ export async function migrationCLI({ sub, action, operation, options, request, p
 }
 
 export async function maintenanceCLI({sub,id,options,request,print}) {
+ if(sub==='inspect')return print(await request('maintenance'));
  if(sub==='status') { if(!/^[a-f0-9]{32}$/.test(id||''))throw Error('Provide the maintenance operation ID'); return print(await request('maintenance/'+id)); }
  if(!['prepare','complete','cancel','seal'].includes(sub))throw Error('Use maintenance prepare --file INPUT, status ID, complete ID --file INPUT or cancel ID --file INPUT');
  if(sub!=='prepare'&&!/^[a-f0-9]{32}$/.test(id||''))throw Error('Provide the maintenance operation ID');

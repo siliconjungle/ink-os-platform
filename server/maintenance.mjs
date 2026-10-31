@@ -58,6 +58,7 @@ export class Maintenance {
     } catch(error){if(error.code!=='ENOENT'||handle)throw error;}finally{await handle?.close();}
     this.ready=true;return this;
   }
+  inspect(principal) { this.owner(principal);check(this.ready,503,'Maintenance needs recovery');return{format:'ink-os-maintenance-inspection-v1',instanceId:this.instanceId,bootId:this.bootId,images:this.currentImages(),admissionClosed:this.closed,activeOperation:this.activeOperation,ready:true}; }
   active() { return this.operations.find(op=>op.request.operationId===this.activeOperation); }
   async activate() { check(this.ready,503,'Open maintenance before activation');if(this.closed)await this.adapter.closeAdmission({poolClosed:this.active().receipt.stopAuthorized||['quiescent','restarted'].includes(this.active().receipt.state)}); }
   kick() {

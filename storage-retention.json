@@ -37,7 +37,10 @@
     "tests/maintenance-api.test.mjs": "Actual HTTP/SDK/CLI admission, admitted writer preservation, transport drain and target restart proof.",
     "tests/maintenance-host.test.mjs": "Actual CRDT/native/workflow/queue/pool and callable-runtime inventory maintenance proofs.",
     "tests/runtime-pool-maintenance.test.mjs": "Idle proof/admission races, held-work preservation and durable runtime retirement recovery.",
-    "tests/fly-pool-retirement.test.mjs": "Exact stopped-machine authority, provider leases/versions and non-force retirement proofs."
+    "tests/fly-pool-retirement.test.mjs": "Exact stopped-machine authority, provider leases/versions and non-force retirement proofs.",
+    "scripts/verify-upgraded-host.mjs": "Current-generation hosted canary verification scoped to its own app and bound images, preserving installed apps and foreign workers.",
+    "tests/upgraded-host-verifier.test.mjs": "Actual host and edge lost-reply, cleanup, current-image and foreign-state preservation proofs.",
+    "tests/cli-connections.test.mjs": "Real loopback identity/origin/redirect and credential isolation proofs for desktop and standalone CLI."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",
