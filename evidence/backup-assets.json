@@ -1,0 +1,40 @@
+{
+  "format": "ink-os-streamed-backup-assets-proof-v1",
+  "status": "passed",
+  "inputs": {
+    "server/backup-store.mjs": "d1227c70263b9035e137cd1fd8efb7a6fb720cf304164671c7f4d55e3e717042",
+    "server/backup-assets.mjs": "9b97143b9f3d95c652817af28b0ff7907e73dcb754109d627a50acc5b538260e",
+    "server/snapshot-gate.mjs": "3bc7920bb3b3fe2e37d6649d0d37bbdd55a6581e7a89ebd39ae8e9c4d251c685",
+    "server/storage.mjs": "00c4b073357213d3d1094b01b2bdc2ce5fbf466b391444096f804babac2839ba",
+    "server/storage-aliases.mjs": "4034ed928536031246066a91e928dec44fde7b787693c65ad7ab8f0cdc640450",
+    "tests/backup-assets.test.mjs": "96701b278fd8f61fb81ed99e3de1734530557e3e1e294f5a0c0dd27babc28678",
+    "tests/backup-extra-files.test.mjs": "64794e3c39c0263816874c940e31637adc8be310fbff960c83c8a2e03c4e30bc",
+    "tests/snapshot-gate.test.mjs": "9532c0a0b998d9f222de3302aa7c942104bd315c5220ca9f7dd00f19363a58b6",
+    "sdk/src/backup.js": "f5cd19f612ddc372fd27235c31432dd79a077b7ea06774e391dfb672dbe11399"
+  },
+  "verification": {
+    "command": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "tests": 304,
+    "passed": 299,
+    "failed": 0,
+    "skipped": 5,
+    "logSha256": "83792601fc05c124913719d0a9382eff277ef450506d84318535e299cc32b4b5",
+    "typecheck": "passed",
+    "sourceAudit": "passed"
+  },
+  "observed": [
+    "Actual current-store R2-style HTTP reads and official signed S3 client reads populated an encrypted live backup.",
+    "Current content was fetched once per unique digest; installed former-store aliases resolved only through the configured current store.",
+    "Raw restore recovered exact local and remote bytes and the authenticated location/digest manifest.",
+    "Retired remote references were not fetched or materialized.",
+    "Missing, corrupt and over-limit remote content did not publish an archive and released snapshot admission.",
+    "Additional streamed files rejected unsafe/colliding paths, missing parents, invalid modes, incorrect lengths/digests and shared archive limits.",
+    "A staged snapshot retained authenticated original managed-project paths without reading its original root."
+  ],
+  "limits": [
+    "These network checks use owned local R2-style and S3 endpoint fixtures, not a production cloud account.",
+    "This establishes raw backup payload recovery; changing storage/runtime providers on offline recovery remains unfinished.",
+    "Durable administrator HTTP jobs, encrypted streaming downloads and CLI integration remain unfinished.",
+    "The new full backup path has not yet been accepted against a real Docker or hosted runtime pool."
+  ]
+}

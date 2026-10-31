@@ -35,5 +35,17 @@
     "Hosted HTTP/CLI snapshot jobs and complete remote object-store materialization are not implemented by this proof.",
     "The new snapshot path has not yet been accepted against a real Docker or hosted runtime pool.",
     "Existing offline relocation/restart and maintenance regression tests passed separately in the same suite."
-  ]
+  ],
+  "ci": {
+    "sourceCommit": "a6e3566beb6233878e3216297adf06211390c550",
+    "mainRun": 41190214749,
+    "branchRun": 41190214552,
+    "status": "passed",
+    "jobs": [
+      "platform",
+      "native",
+      "container",
+      "docker-backends"
+    ]
+  }
 }

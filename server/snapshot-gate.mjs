@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import { setTimeout as wait } from 'node:timers/promises';
 import { quiescentHostActivity, quiescentRuntimePool } from './maintenance.mjs';
 import { createBackup } from './backup-store.mjs';
+import { backupAssetClosure } from './backup-assets.mjs';
 
 const fail = (status, message) => { throw Object.assign(Error(message), { status }); };
 const changed = error => error?.code === 'MAINTENANCE_ACTIVITY_CHANGED';
@@ -79,8 +80,15 @@ export class SnapshotGate {
 /** Encrypted local-tree capture with a real bound host gate. Remote asset and
  * external-project coverage is deliberately reported separately by the archive.
  */
-export function createLiveBackup({ gate, directory = gate?.directory, archive, password, limits, signal, timeoutMs } = {}) {
+export function createLiveBackup({ gate, directory = gate?.directory, archive, password, limits, signal, timeoutMs, world, storage, remoteAssets = false, assetLimits } = {}) {
   if (!(gate instanceof SnapshotGate) || !directory || resolve(directory) !== gate.directory) throw Error('Bind this backup to the same instance as its snapshot gate.');
   if ((typeof password !== 'string' && !Buffer.isBuffer(password)) || Buffer.byteLength(password) < 12 || Buffer.byteLength(password) > 4096) throw Error('Backup password must contain 12–4096 bytes');
-  return createBackup({ directory, archive, password, limits, acquireSnapshot: () => gate.acquireSnapshot({ signal, timeoutMs }) });
+  if (typeof remoteAssets !== 'boolean' || remoteAssets && (!world || !storage || resolve(world.directory) !== gate.directory || resolve(storage.directory) !== gate.directory)) throw Error('Remote asset capture requires the same instance World and current storage.');
+  return createBackup({ directory, archive, password, limits, acquireSnapshot: async () => {
+    const snapshot = await gate.acquireSnapshot({ signal, timeoutMs });
+    try {
+      const closure = remoteAssets ? backupAssetClosure({ world, storage, directory, limits: assetLimits }) : null;
+      return closure ? { ...snapshot, ...closure, coverage: { ...snapshot.coverage, ...closure.coverage } } : snapshot;
+    } catch (error) { await snapshot.release(); throw error; }
+  } });
 }

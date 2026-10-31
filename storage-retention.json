@@ -63,7 +63,12 @@
     "server/snapshot-gate.mjs": "Bound single-reader live host barrier and encrypted local-tree capture; reusable host activity/checkpoint proof and no worker stop.",
     "tests/snapshot-gate.test.mjs": "Actual local app HTTP admission, durable causal state, encrypted archive/restore/Git source and cancellation/failure reproduction inputs.",
     ".local/snapshot-foundation-tests.log": "Completed required serial regression log:292 tests,287 passed,5 explicit environment gates skipped,0 failed; exact source/test hashes retained in selected proof.",
-    "evidence/live-snapshot-gate.json": "Selected actual local SDK snapshot admission, encrypted capture/restore and complete regression proof, bound to exact source and raw log digests with explicit unfinished integration limits."
+    "evidence/live-snapshot-gate.json": "Selected actual local SDK snapshot admission, encrypted capture/restore and complete regression proof, bound to exact source and raw log digests with explicit unfinished integration limits.",
+    "server/backup-assets.mjs": "Current-store-only bounded verified retained content closure and streamed encrypted asset manifest; no former-store access.",
+    "tests/backup-assets.test.mjs": "Actual R2-style HTTP and signed official S3 client fixture capture/restore, alias deduplication, retired remote exclusion, corruption/missing/bounds and scoped gate-release proof inputs.",
+    "tests/backup-extra-files.test.mjs": "Additional streamed archive file integrity, paths, shared limits, parent/mode/collision and original source-root mapping reproduction inputs.",
+    ".local/backup-assets-tests.log": "Completed required serial regression:304 tests,299 passed,5 explicit environment gates skipped,0 failures. Selected source/log digest proof retained.",
+    "evidence/backup-assets.json": "Selected real current-store protocol/SDK backup streaming, raw restore and archive integrity/bounds proof, with exact inputs, terminal regression hash and unfinished integration limits."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",

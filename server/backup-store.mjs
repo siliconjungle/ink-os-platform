@@ -1,7 +1,7 @@
 import { constants } from 'node:fs';
 import { open, lstat, mkdir, mkdtemp, opendir, readdir, rename, link, unlink, rm, chmod } from 'node:fs/promises';
 import { resolve, join, dirname, basename, relative, sep, parse } from 'node:path';
-import { createCipheriv, createDecipheriv, randomBytes, scrypt } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, scrypt } from 'node:crypto';
 import { promisify } from 'node:util';
 
 // v1: fixed authenticated header (magic, salt, IV), AES-256-GCM ciphertext,
@@ -80,7 +80,11 @@ async function sourceManifest(source, originalDirectory, limits) {
  * Back up a stopped private instance with offline:true, or acquire a caller-owned
  * consistency barrier/snapshot. acquireSnapshot() returns {directory, release,
  * consistency:'quiesced'|'snapshot', coverage?:{remoteAssets,externalProjects,
- * externalSecrets}}. release runs after all source reads, including failures.
+ * externalSecrets}, sourceRoot?, assets?, extraFiles?}. sourceRoot preserves
+ * original managed-project mappings when directory is an owned staged copy.
+ * extraFiles() yields {path,mode,size,sha256,chunks} with raw byte chunks and an
+ * already archived parent directory. They share all archive limits. release
+ * runs after all source reads, including failures.
  * The caller must drain ALL state/project/blob writers and preserve remote asset
  * versions, or materialize a coherent snapshot. No live consistency is inferred.
  * Entire trees (including .git and identity/envelope keys) are private data.
@@ -108,10 +112,10 @@ export async function createBackup({ directory, archive, password, offline = fal
     output = await open(temp, 'wx', 0o600); await writeAll(output, header);
     let encryptedBytes = HEADER_BYTES;
     const emit = async bytes => { const encrypted = cipher.update(bytes); encryptedBytes += encrypted.length; if (encryptedBytes + 16 > limits.maxArchiveBytes) throw Error('Backup archive exceeds limit'); await writeAll(output, encrypted); };
-    const metadata = { source: await sourceManifest(source, directory, limits), format: 'ink-os-private-backup-v1', createdAt: new Date().toISOString(), consistency: snapshot.consistency, coverage: { remoteAssets: false, externalProjects: false, externalSecrets: false, ...snapshot.coverage, localTree: true } };
+    const metadata = { source: await sourceManifest(source, snapshot.sourceRoot || directory, limits), format: 'ink-os-private-backup-v1', createdAt: new Date().toISOString(), consistency: snapshot.consistency, coverage: { remoteAssets: false, externalProjects: false, externalSecrets: false, ...snapshot.coverage, localTree: true }, ...(snapshot.assets ? { assets: snapshot.assets } : {}) };
     await emit(recordBytes({ type: 'metadata', ...metadata }));
     let files = 0, directories = 0, bytes = 0;
-    const names = new Set();
+    const names = new Set(), parents = new Set();
     async function visit(local, path) {
       safePath(path, limits, true);
       const folded = path.normalize('NFC').toLowerCase();
@@ -122,6 +126,7 @@ export async function createBackup({ directory, archive, password, offline = fal
       if (files + directories >= limits.maxEntries) throw Error('Backup entry limit exceeded');
       const mode = Number(stat.mode & 0o777n);
       if (stat.isDirectory()) {
+        parents.add(path);
         directories++; await emit(recordBytes({ type: 'directory', path, mode }));
         const entries = await opendir(local);
         for await (const entry of entries) await visit(join(local, entry.name), path ? path + '/' + entry.name : entry.name);
@@ -138,7 +143,30 @@ export async function createBackup({ directory, archive, password, offline = fal
         } finally { await input.close(); }
       }
     }
-    await visit(source, ''); await emit(recordBytes({ type: 'end', files, directories, bytes }));
+    await visit(source, '');
+    if (snapshot.extraFiles !== undefined) {
+      if (typeof snapshot.extraFiles !== 'function') throw Error('Backup extraFiles must provide a bounded file iterator');
+      for await (const file of snapshot.extraFiles()) {
+        if (!file || typeof file !== 'object') throw Error('Invalid additional backup file');
+        safePath(file.path, limits);
+        const folded = file.path.normalize('NFC').toLowerCase();
+        if (names.has(folded)) throw Error('Ambiguous backup path');
+        if (!parents.has(file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '')) throw Error('Missing backup parent directory');
+        if (files + directories >= limits.maxEntries || !Number.isInteger(file.mode) || file.mode < 0 || file.mode > 0o777 || !/^[a-f0-9]{64}$/.test(file.sha256 || '')) throw Error('Invalid additional backup file');
+        if (!Number.isSafeInteger(file.size) || file.size < 0 || file.size > limits.maxFileBytes || bytes + file.size > limits.maxBytes) throw Error('Backup file or total byte limit exceeded');
+        if (!file.chunks || typeof file.chunks[Symbol.asyncIterator] !== 'function' && typeof file.chunks[Symbol.iterator] !== 'function') throw Error('Additional backup files require raw byte chunks');
+        names.add(folded); files++; bytes += file.size;
+        await emit(recordBytes({ type: 'file', path: file.path, mode: file.mode, size: file.size }));
+        const digest = createHash('sha256'); let size = 0;
+        for await (const chunk of file.chunks) {
+          if (!(chunk instanceof Uint8Array) || chunk.length > file.size - size) throw Error('Additional backup file size or bytes changed');
+          size += chunk.length; digest.update(chunk);
+          for (let offset = 0; offset < chunk.length; offset += CHUNK_BYTES) await emit(chunk.subarray(offset, offset + CHUNK_BYTES));
+        }
+        if (size !== file.size || digest.digest('hex') !== file.sha256) throw Error('Additional backup file size or digest mismatch');
+      }
+    }
+    await emit(recordBytes({ type: 'end', files, directories, bytes }));
     released = true; await snapshot.release();
     await writeAll(output, cipher.final()); await writeAll(output, cipher.getAuthTag()); await output.sync(); await output.close(); output = undefined;
     // Hard-link publication is atomic and cannot clobber an existing archive.
