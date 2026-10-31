@@ -1,0 +1,80 @@
+{
+  "format": "ink-os-compiler-source-pin-compatibility-v1",
+  "previousArtifact": {
+    "sha256": "5e380e0b7ed6291f20700b28c875fc2edc6041d1b4c4190a57a1ebf058debf90",
+    "bytes": 6589284,
+    "dependencyLockSHA256": "b872d35ee263b9ab615446722cefe6a8cb356024ce3bf5bfdd7d29a4ca1ca6be"
+  },
+  "artifact": {
+    "schema": 1,
+    "license": "MIT",
+    "sha256": "3d9368adbbd8135dc07ac30b8a09246124e5c3cdfeb2025e4a10e199a6f0c9a2",
+    "bytes": 6587004,
+    "dependencyLockSHA256": "495d6dc5a5443d2cccb13fe4a93c2fc0da2cb40dbb720aac73072e770bed88aa",
+    "transportSourceSHA256": "a1f4ac6e59d7445cb4fec55a71129388f8d5691d527ec8780655a5794f292c8c",
+    "outputs": [
+      "javascript",
+      "rust",
+      "wgsl"
+    ]
+  },
+  "coreTreeIdentical": true,
+  "loweringSourceChanges": "Only full 40-character dependency revisions changed; Rust source remains byte-identical.",
+  "packages": {
+    "core": {
+      "before": "b5895f1d79be47076ff97734c887a580e09c2a29",
+      "after": "0973dfdccfe620a0313612020340b1f75a8dcae5",
+      "tree": "6211d20af5786d5fcd47f21aed87d2082c74da9c"
+    },
+    "packages": [
+      {
+        "repository": "ink-lowering-rust",
+        "before": "de96f9cb57c67b1bfab75fca1ae6cc7f853f9325",
+        "after": "4b4631f79d6437a299ee74285aecb707f97f997f",
+        "tree": "d779dea0efde5be793a86d936f616a56f3ad829a",
+        "branch": "portable-core-20261031",
+        "onlyManifestPinChanged": true
+      },
+      {
+        "repository": "ink-lowering-js",
+        "before": "cdc21a284331168148d43e0e0221bc8ddf7b3fff",
+        "after": "18b9b46ac2b507108e7a5bd1f83f0ede4f006a5e",
+        "tree": "694d1835ddd78bedfea1c3ba3fbc8e4e6b2f5e27",
+        "branch": "portable-core-20261031",
+        "onlyManifestPinChanged": true
+      },
+      {
+        "repository": "ink-lowering-gpu",
+        "before": "def274b5222ad65861f530e1002d34f491602356",
+        "after": "bd8a81b06385e66c23072597311c81f5a9670a3d",
+        "tree": "1d14e84df222d5d709a87546a26089f56bcc89ee",
+        "branch": "portable-core-20261031",
+        "onlyManifestPinChanged": true,
+        "previousPortableCommit": "6e6501aefe2eb699390bd93b03f34d47cc2c8a7c",
+        "transitivePinsAligned": true
+      },
+      {
+        "repository": "ink-lowering-wasm",
+        "before": "f1c82e706362c3845b294c1887bc1fda62f86692",
+        "after": "efd7a3bd1f3ce6058802c8945e492bc70d943750",
+        "tree": "6b3cade2d67068c85f88cd9a5bb6ce564690d18d",
+        "branch": "portable-core-20261031",
+        "onlyManifestPinChanged": true,
+        "previousPortableCommit": "1dc05d06bf9e36b898f483cafe3e45d0fdac92fd",
+        "transitivePinsAligned": true
+      }
+    ],
+    "defaultBranchesChanged": false,
+    "allSourceChangesConfinedToManifestPins": true
+  },
+  "build": {
+    "mode": "Required untimed release compatibility validation; existing optimization flags retained, debug and incremental disabled.",
+    "logSha256": "3ace8d5986bf73908de56486a1c972d0046eec7408d610480d0d8b9b59af7a45",
+    "sourcePreflightSha256": "9c1b4f1a09b9610114d7a04ca00cf560c6de92e97b20f8d5ef21c743fd5c93d2",
+    "returnedSourceConfigurationPassed": true,
+    "localCargoReuseEntryPoint": true
+  },
+  "limits": [
+    "Compiler behavior is validated separately by the normal platform/native suites."
+  ]
+}

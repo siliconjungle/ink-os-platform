@@ -99,7 +99,9 @@
     ".local/provider-recovery-tests.log": "Completed6-test real protocol/host provider recovery proof; exact source-bound consolidation pending full regression.",
     "evidence/provider-recovery.json": "Selected exact-source CLI/host local/R2/S3 provider recovery proof, source isolation, large-object/alias coverage and terminal regression hash.",
     ".local/provider-recovery-all-tests.log": "Completed325-test serial regression:320passed5explicit environment gates0failures; exact source and log digest retained.",
-    ".local/provider-recovery-url-tests.log": "Completed6-test fresh recovered deployment and detached source URL regression."
+    ".local/provider-recovery-url-tests.log": "Completed6-test fresh recovered deployment and detached source URL regression.",
+    "evidence/compiler-source-pins.json": "Exact committed source-pin compatibility build, core tree identity and package revision binding.",
+    ".local/history-compiler-tests.log": "Required full platform regression with the new compiler artifact."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",
