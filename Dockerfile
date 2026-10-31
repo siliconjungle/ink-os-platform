@@ -8,6 +8,9 @@ RUN npm run build
 FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
 COPY app-runtime ./app-runtime
+COPY package.json ./
+COPY sdk/src ./sdk/src
+COPY shared/continuation.mjs ./shared/continuation.mjs
 USER node
 ENV PORT=8080
 EXPOSE 8080

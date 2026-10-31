@@ -20,7 +20,7 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
   Object.assign(env, { PORT: String(port), INK_OS_BIND: '0.0.0.0', INK_OS_DATA_DIR: directory, INK_OS_CONFIG: join(directory, 'client.json'), INK_OS_NATIVE: '0', INK_OS_BACKENDS: 'docker', INK_OS_DOCKER_OS_URL: 'http://host.docker.internal:' + port, INK_OS_DOCKER_IDLE_MS: '1000', HOST_ONLY_SECRET: 'host-only-canary', INK_OS_APP_ORIGIN_TEMPLATE: 'http://__RELEASE__.apps.ink.localhost:' + port });
   const url = 'http://127.0.0.1:' + port;
   let child, output = '', instanceId;
-  async function stop() { if (child && child.exitCode === null && child.signalCode === null) { child.kill('SIGTERM'); await once(child, 'exit'); } }
+  async function stop({ abrupt = false } = {}) { if (child && child.exitCode === null && child.signalCode === null) { child.kill(abrupt ? 'SIGKILL' : 'SIGTERM'); await once(child, 'exit'); } }
   t.after(async () => {
     await stop();
     if (instanceId) {
@@ -74,7 +74,9 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
   assert.equal(initialContainer.Mounts.some(mount => mount.Source?.endsWith('docker.sock')), false);
   assert.equal((await invoke(first.app, '/work', 'POST')).body.started, true);
   assert.equal((await runtimes()).slots.find(slot => slot.slotId === initial.slotId).holds.length, 1);
-  await stop();
+  // Crash only the owned host process. Its separate held worker must survive
+  // and rejoin the new host; graceful shutdown instead drains accepted work.
+  await stop({ abrupt: true });
   assert.equal((await engine.request('/containers/' + firstDeployment.containerId + '/json')).State.Running, true);
   await start();
   const resumed = (await runtimes()).slots.find(slot => slot.slotId === initial.slotId);
@@ -108,4 +110,17 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
   await new Promise(resolve => setTimeout(resolve, 2400));
   await sdk.runtimes.reap();
   assert.ok((await runtimes()).slots.every(slot => slot.status === 'idle'));
+  const accountKey = await sdk.account.keys.create({ name: 'Docker continuation proof', scopes: ['world:read', 'world:write'], expiresInDays: 1 });
+  await sdk.apps.env.set(second.app.id, { PROOF_ACCOUNT_TOKEN: accountKey.token });
+  assert.equal((await invoke(second.app, '/account-work', 'POST')).body.started, true);
+  const held = (await runtimes()).slots.find(slot => slot.appId === second.app.id);
+  assert.equal(held.holds.length, 1);
+  const deployment = JSON.parse(await readFile(join(directory, 'runtime-pool.json'))).slots.find(slot => slot.id === held.slotId).deployment;
+  await stop();
+  assert.equal((await engine.request('/containers/' + deployment.containerId + '/json')).State.Running, false);
+  await start();
+  const result = await sdk.state.get('continuation-proof', second.app.id);
+  assert.equal(result.value?.done, true, JSON.stringify(result));
+  assert.equal((await sdk.data.get(result.value.objectId)).title, 'Admitted account continuation');
+  await sdk.account.keys.revoke(accountKey.id);
 });

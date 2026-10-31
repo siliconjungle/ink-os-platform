@@ -2,6 +2,30 @@ import { writeFile, access } from 'node:fs/promises';
 let backgroundError;
 export async function fetch(request, { ink }) {
   const path = new URL(request.url).pathname;
+  if (path === '/account-work') {
+    const hold = await ink.compute.hold('Account continuation proof');
+    const complete = async () => {
+      try {
+        const deadline = Date.now() + 10000;
+        for (;;) {
+          const health = await fetch(new URL('/api/health', process.env.INK_OS_URL), { redirect: 'error' }).then(response => response.json());
+          if (health.draining) break;
+          if (Date.now() >= deadline) throw Error('Host did not close admission');
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        const { createClient } = await import(process.env.INK_OS_SDK_URL);
+        const account = createClient({ token: process.env.PROOF_ACCOUNT_TOKEN, continuation: { url: process.env.INK_OS_URL, token: process.env.INK_OS_APP_TOKEN } });
+        const object = await account.data.create({ namespace: 'os', kind: 'note', title: 'Admitted account continuation', body: 'Saved before graceful shutdown' });
+        const state = await ink.state.get('continuation-proof');
+        await ink.state.set('continuation-proof', { done: true, objectId: object.id }, state.revision);
+      } catch (error) {
+        const state = await ink.state.get('continuation-proof');
+        await ink.state.set('continuation-proof', { done: false, error: error.message }, state.revision);
+      } finally { await hold.release(); }
+    };
+    setTimeout(complete, 0);
+    return Response.json({ started: true });
+  }
   if (path === '/work') {
     const hold = await ink.compute.hold('Background proof');
     await writeFile('/tmp/tenant-marker', 'first');

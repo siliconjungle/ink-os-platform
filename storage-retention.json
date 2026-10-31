@@ -77,7 +77,10 @@
     ".local/continuation-verifier-tests.log": "Completed15-test verifier dependency-graph regression after adding the exact shared continuation source to its bounded source proof.",
     "evidence/account-continuation.json": "Selected exact-source authenticated continuation, scoped CLI deployment, raw backup and shared shutdown acceptance with explicit controlled-provider and unfinished production limits.",
     ".local/continuation-check.log": "Completed successful TypeScript validation for selected continuation source.",
-    ".local/continuation-audit.log": "Completed successful source audit for selected continuation source."
+    ".local/continuation-audit.log": "Completed successful source audit for selected continuation source.",
+    "app-runtime/sdk-server.mjs": "Stable runtime SDK entry delegates to the canonical server SDK, preventing protocol drift in application workers.",
+    "tests/fixtures/module-backend.mjs": "Required real Docker held-worker restart and account-key continuation during graceful shutdown proof fixture.",
+    ".local/runtime-sdk-tests.log": "Required focused continuation, shutdown and runtime-source regression log for canonical runtime SDK change."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",
@@ -86,6 +89,7 @@
     ".local/ink-app-browser/data": "Disposable local validation instance, after its server is stopped; contains generated test credentials and source copies, not required reproduction inputs.",
     ".local/ink-app-browser/source": "Completed generated starter checkout; exact initializer/template source and lifecycle tests are retained.",
     ".local/native-runtime-lock": "Completed dependency-lock preparation workspace; server/native-runtime.lock and the exact native Cargo manifest are retained.",
-    ".local/managed-native-proof": "Completed failed first macOS toolchain extraction diagnostic; corrected installer and exact CI runs preserve reproduction, with no selected successful proof depending on this output."
+    ".local/managed-native-proof": "Completed failed first macOS toolchain extraction diagnostic; corrected installer and exact CI runs preserve reproduction, with no selected successful proof depending on this output.",
+    ".local/continuation-docker-ci.log": "Completed failed pre-fix Docker job diagnostic; exact old commit, job ID and revised recovery test retain reproduction without storing full provider logs."
   }
 }
