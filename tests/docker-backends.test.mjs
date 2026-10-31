@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createClient } from '../sdk/src/server.js';
 import { DockerEngine } from '../infra/docker-engine.mjs';
+import { proofHTTP } from '../scripts/proof-http.mjs';
 
 const execute = promisify(execFile);
 test('real Docker backends preserve held work across restart, isolate tenants, reuse idle slots and run OCI handlers', { skip: process.env.INK_TEST_DOCKER !== '1', timeout: 180000 }, async t => {
@@ -82,11 +83,11 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
   assert.equal(completed, true);
   const launch = await sdk.request('apps/' + first.app.id + '/launch', { method: 'POST', body: {} });
   const appHost = new URL(launch.origin).host;
-  const opened = await fetch(url + new URL(launch.url).pathname + new URL(launch.url).search, { headers: { Host: appHost }, redirect: 'manual' });
+  const opened = await proofHTTP(url, new URL(launch.url).pathname + new URL(launch.url).search, { host: appHost });
   assert.equal(opened.status, 302);
   const cookie = opened.headers.get('set-cookie').split(';')[0];
-  assert.equal((await fetch(url + '/server/main.mjs', { headers: { Host: appHost, Cookie: cookie } })).status, 404);
-  const backend = await fetch(url + '/backend/count', { headers: { Host: appHost, Cookie: cookie } });
+  assert.equal((await proofHTTP(url, '/server/main.mjs', { host: appHost, headers: { Cookie: cookie } })).status, 404);
+  const backend = await proofHTTP(url, '/backend/count', { host: appHost, headers: { Cookie: cookie } });
   assert.equal((await backend.json()).value.count, 1);
   await new Promise(resolve => setTimeout(resolve, 2400));
   await sdk.runtimes.reap();

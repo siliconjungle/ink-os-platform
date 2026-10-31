@@ -5,6 +5,8 @@ import { LocalProvider } from '../infra/local-provider.mjs';
 import { sign } from '../server/platform.mjs';
 import { createConnection } from 'node:net';
 import { once } from 'node:events';
+import http from 'node:http';
+import { proofHTTP } from '../scripts/proof-http.mjs';
 
 test('local releases use separate origins, require launch grants, and hide server source', async t => {
   const provider = new LocalProvider(); t.after(() => provider.close());
@@ -28,4 +30,29 @@ test('local releases use separate origins, require launch grants, and hide serve
   const ended = new Promise(resolve => preconnect.once('close', resolve));
   await provider.retire(second); await ended;
   assert.equal(provider.available(second.releaseId), false);
+});
+
+test('virtual-host gateway preserves release authentication and rejects absolute proxy targets', async t => {
+  let provider;
+  const gateway = http.createServer((req, res) => { if (!provider?.route(req, res)) res.end('OS'); });
+  gateway.listen(0, '127.0.0.1'); await once(gateway, 'listening');
+  const address = 'http://127.0.0.1:' + gateway.address().port;
+  provider = new LocalProvider({ originTemplate: 'http://__RELEASE__.apps.ink.localhost:' + gateway.address().port });
+  t.after(async () => { await provider.close(); await new Promise(resolve => gateway.close(resolve)); });
+  const key = randomBytes(32).toString('base64url'), appId = 'a'.repeat(32), releaseId = 'b'.repeat(32);
+  await provider.attach({ bundle: async () => ({ entry: 'index.html', files: [{ path: 'index.html', base64: Buffer.from('App').toString('base64') }, { path: 'server/private.mjs', base64: Buffer.from('private').toString('base64') }] }) });
+  const deployment = await provider.deploy({ appId, releaseId, key, origin: address });
+  const host = new URL(deployment.url).host;
+  assert.equal((await proofHTTP(address, '/', { host })).status, 401);
+  const ticket = sign({ appId, releaseId, exp: Date.now() + 60000 }, key);
+  const opened = await proofHTTP(address, '/_ink/launch?ticket=' + ticket, { host });
+  assert.equal(opened.status, 302);
+  const cookie = opened.headers.get('set-cookie').split(';')[0];
+  assert.equal(await (await proofHTTP(address, '/', { host, headers: { Cookie: cookie } })).text(), 'App');
+  assert.equal((await proofHTTP(address, '/server/private.mjs', { host, headers: { Cookie: cookie } })).status, 404);
+  const rejected = await new Promise((resolve, reject) => {
+    const request = http.request(address, { path: '//outside.invalid/', headers: { Host: host } }, response => { response.resume(); resolve(response.statusCode); });
+    request.on('error', reject); request.end();
+  });
+  assert.equal(rejected, 400);
 });

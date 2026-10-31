@@ -1,5 +1,13 @@
 name: Check
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      composeBase64:
+        description: Canonical deployment Compose file, encoded as base64
+        required: false
+        type: string
 jobs:
   platform:
     runs-on: ubuntu-latest
@@ -56,3 +64,37 @@ jobs:
       - run: docker build --target runtime -t ink-os-runtime:local .
       - run: docker build -f tests/fixtures/Dockerfile.oci -t ink-os-oci-proof:local .
       - run: INK_TEST_DOCKER=1 node --test tests/docker-backends.test.mjs
+  compose:
+    if: github.event_name == 'workflow_dispatch' && inputs.composeBase64 != ''
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ink-os-platform
+    env:
+      COMPOSE_PROJECT_NAME: ink-os-proof-${{ github.run_id }}
+      INK_OS_DOCKER_NETWORK: ink-os-proof-${{ github.run_id }}
+      INK_OS_DOCKER_RUNTIME_IMAGE: ink-os-runtime:proof-${{ github.run_id }}
+      INK_OS_DOCKER_IDLE_MS: "1000"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ink-os-platform
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Decode exact deployment source
+        env:
+          PROOF_COMPOSE: ${{ inputs.composeBase64 }}
+        run: |
+          node --input-type=module -e 'import{mkdir,writeFile}from"node:fs/promises";const bytes=Buffer.from(process.env.PROOF_COMPOSE,"base64");if(bytes.length>32768||bytes.toString("base64")!==process.env.PROOF_COMPOSE)throw Error("Invalid Compose input");await mkdir("../ink-os-deploy");await writeFile("../ink-os-deploy/compose.yaml",bytes);'
+      - run: docker compose -f ../ink-os-deploy/compose.yaml config --quiet
+      - run: docker compose -f ../ink-os-deploy/compose.yaml up --build -d --wait
+      - run: INK_OS_COMPOSE_FILE=../ink-os-deploy/compose.yaml node scripts/verify-compose.mjs
+      - if: always()
+        run: docker compose -f ../ink-os-deploy/compose.yaml down --volumes --remove-orphans
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: compose-proof
+          path: ink-os-platform/evidence/compose.json
+          retention-days: 7

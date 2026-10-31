@@ -9,7 +9,7 @@ FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
 COPY app-runtime ./app-runtime
 USER node
-ENV PORT=8080 INK_OS_POOL=1
+ENV PORT=8080
 EXPOSE 8080
 CMD ["node", "app-runtime/index.mjs"]
 
