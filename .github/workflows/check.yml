@@ -22,7 +22,7 @@ jobs:
           node-version: 24
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
-      - run: INK_TEST_NATIVE=1 node --test tests/native-ink.test.mjs
+      - run: INK_TEST_NATIVE=1 node --test tests/native-*.test.mjs
   container:
     runs-on: ubuntu-latest
     steps:

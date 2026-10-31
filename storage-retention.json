@@ -21,6 +21,7 @@
     "public/ink-runtime": "Completed generated runtime bundles; reproducible from shared sources.",
     "compiler/target": "Completed compiler build cache; public compiler artifact, exact source, Cargo.lock, and reproduction script are retained.",
     ".local/ink-app-browser/data": "Disposable local validation instance, after its server is stopped; contains generated test credentials and source copies, not required reproduction inputs.",
-    ".local/ink-app-browser/source": "Completed generated starter checkout; exact initializer/template source and lifecycle tests are retained."
+    ".local/ink-app-browser/source": "Completed generated starter checkout; exact initializer/template source and lifecycle tests are retained.",
+    ".local/native-runtime-lock": "Completed dependency-lock preparation workspace; server/native-runtime.lock and the exact native Cargo manifest are retained."
   }
 }

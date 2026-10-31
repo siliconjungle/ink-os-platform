@@ -1,5 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads';
-import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
+import { parseExactJSON } from '../shared/exact-json.mjs';
+import { publicResult } from '../shared/ink-values.mjs';
 
 function native(value, type, named, depth = 0) {
   if (depth > 128) throw Error('Input nesting exceeds 128 levels.');
@@ -29,8 +30,7 @@ try {
     output = state.invoke(selected.name, args);
     if (output.committed) next = Buffer.from(await state.checkpoint()).toString('base64');
   } else output = selected.parallel ? await module.callAsync(selected.name, args) : module.callOwned(selected.name, args);
-  const wire = stringifyExactJSON(output);
+  const { wire, output: display } = publicResult(output, selected, artifact.manifest);
   if (Buffer.byteLength(wire) > 8 * 1024 * 1024) throw Error('Ink output exceeds 8 MiB.');
-  const display = JSON.parse(wire, (_key, value, context) => typeof value === 'number' && Number.isInteger(value) && !Number.isSafeInteger(value) && /^-?\d+$/.test(context?.source || '') ? context.source : value);
   parentPort.postMessage({ value: { output: display, wire, snapshot: next, committed: !!next } });
 } catch (error) { parentPort.postMessage({ error: error.message }); }

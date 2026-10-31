@@ -42,6 +42,19 @@ node cli/bin/ink-os.mjs apps duplicate APP_ID
 
 The server SDK exposes `projects.import`, `projects.snapshot`, `projects.files`, `apps.build`, `apps.publish`, and `apps.ink.describe/run`. Browser clients use `client.ink.describe()` and `client.ink.run(entry, input)` with the app's `code.execute` capability. Apps call other apps through exported commands and `apps.invoke`.
 
-Current Ink app builds accept one source file. Persistent checkpoints survive restarts and duplicate independently with the app. A changed source identity requires an explicit migration; execution rejects incompatible saved state instead of silently resetting it. Module linking, migration tooling, host I/O bindings and the native app execution service are still being integrated.
+Native builds use a host Rust toolchain and a committed dependency lock. Build once, then choose a backend:
+
+```sh
+node cli/bin/ink-os.mjs native status
+node cli/bin/ink-os.mjs native build APP_ID --wait
+node cli/bin/ink-os.mjs ink run APP_ID total --backend native
+node cli/bin/ink-os.mjs ink run APP_ID total --backend javascript
+```
+
+The default `auto` backend uses a ready native artifact for the exact app/source/compiler/runtime/host combination, otherwise JavaScript. Both backends share checkpoints and exact JSON values, including float-bit wrappers and full-width integers. Cached native artifacts run without the Rust toolchain; `native status` distinguishes build availability from ready artifacts. Set `INK_OS_NATIVE=0` to disable native execution, or `INK_NATIVE_CARGO` and `INK_NATIVE_RUSTC` to select a host toolchain.
+
+Native build jobs persist privately and drain during a normal host shutdown. `native jobs APP_ID` and `native get APP_ID JOB_ID` inspect them. A CLI `--timeout` ends observation without cancelling a build. The SDK exposes `native.status()` and `apps.native.build/jobs/get`; browser clients use `client.ink.native`. A build whose host crashed waits for its recorded compiler process to exit before becoming recoverable.
+
+Current Ink app builds accept one source file. Persistent checkpoints survive restarts and duplicate independently with the app. A changed source identity requires an explicit migration; execution rejects incompatible saved state instead of silently resetting it. Module linking, migration tooling, host I/O bindings and managed native toolchain installation are still being integrated.
 
 Development: `npm run dev`. Validation: `npm test`, `npm run check`, `npm run audit`.

@@ -1,5 +1,8 @@
 import{Workflows}from './workflows.mjs';
 import { Projects } from './projects.mjs';
+import { NativeInk } from './native-ink.mjs';
+import { NativeJobs } from './native-jobs.mjs';
+import { drainHost } from './shutdown.mjs';
 import{DesktopActions}from './desktop-actions.mjs';
 import{errorStatus}from './error-status.mjs';
 import{Schedules}from './schedules.mjs';
@@ -45,6 +48,8 @@ platform.projects = await new Projects(data).open();
 platform.calls=new CallRooms({clients,app:id=>platform.app(id),...(process.env.INK_OS_RTC_ICE_SERVERS?{iceServers:JSON.parse(process.env.INK_OS_RTC_ICE_SERVERS)}:{})});
 await reconcileFileDefaults(platform);
 platform.code=code;platform.computer=new Computer(platform);platform.collaboration=new Collaboration({directory:data,world,storage});await platform.collaboration.recover();platform.versions=new Versions({world,collaboration:platform.collaboration,storage,bundle:key=>platform.bundle(key)});
+platform.nativeJobs=await new NativeJobs(data,{native:new NativeInk(join(data,'native'),{cargo:process.env.INK_NATIVE_CARGO||'cargo',rustc:process.env.INK_NATIVE_RUSTC||'rustc',offline:process.env.INK_NATIVE_OFFLINE==='1'}),enabled:process.env.INK_OS_NATIVE!=='0',source:async(appId,releaseId)=>{platform.app(appId);const release=world.get(releaseId);if(release?.kind!=='release'||JSON.parse(release.body).appId!==appId)throw Object.assign(Error('Native source release not found.'),{status:404});const bundle=await platform.bundle(releaseId);if(!bundle.ink)throw Object.assign(Error('This release has no Ink program.'),{status:400});return Buffer.from(bundle.files.find(file=>file.path===bundle.ink.source).base64,'base64').toString('utf8');}}).open();
+code.nativeJobs=platform.nativeJobs;
 if(production&&!platform.adminToken)throw Error('INK_OS_ADMIN_TOKEN is required');
 platform.schedules=await new Schedules({directory:data,platform}).open();
 platform.workflows=await new Workflows({directory:data,platform}).open();
@@ -69,7 +74,8 @@ async function api(req, res, url) {
   if (path === '/api/events') {
     const key=url.searchParams.get('client')||id(),principal=platform.principal(req),accountId=principal?.accountId||'owner',previous=clients.get(key);
     if(previous&&previous.accountId!==accountId)return send(res,403,{error:'This connection belongs to another account'});
-    res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache',Connection:'keep-alive'});
+    res.setHeader('Content-Type','text/event-stream');
+    res.writeHead(200,{'Cache-Control':'no-cache',Connection:'keep-alive'});
     const sameAccount=[...clients.values()].find(peer=>peer.accountId===accountId),name=accountId!=='owner'?principal?.accountName||'Guest':url.searchParams.get('name')||'Owner';
     const client={id:key,res,request:req,accountId,name:name.slice(0,60),color:sameAccount?.color||presenceColor(accountId,[...clients.values()]),view:'home',cursor:null,presenceLease:url.searchParams.get('presence')==='1',lastSeen:Date.now()};
     clients.set(key,client);previous?.res.end();platform.calls.attach(key);broadcastPresence();
@@ -157,16 +163,20 @@ async function api(req, res, url) {
 }
 
 const platformAPI=platformRouter(platform,{send,body});
+const requests=new Set(),responses=new Set();let draining=false,sealed=false,shutdownTask;
 const server = http.createServer(async (req, res) => {
- const url=new URL(req.url,origin);
+ let finish;const task=new Promise(resolve=>finish=resolve);requests.add(task);responses.add(res);res.once('close',()=>responses.delete(res));
  try{
+  const url=new URL(req.url,origin);
+  if(sealed){res.setHeader('Connection','close');return send(res,503,{error:'This host is stopping.'});}
   if(platform.provider?.route?.(req,res))return;
   if(req.method==='GET'&&url.pathname==='/ink.svg'){res.setHeader('Content-Type','image/svg+xml');res.setHeader('Cache-Control','public, max-age=3600');return res.end(await readFile(join(root,production?'dist':'public','ink.svg')));}
-  if(url.pathname==='/api/health')return send(res,200,{ok:true,engine:'Ink',version:world.version});
+  if(url.pathname==='/api/health')return send(res,200,{ok:true,engine:'Ink',version:world.version,instanceId:process.env.INK_OS_INSTANCE_ID,draining});
   if(url.pathname==='/login'&&req.method==='GET'){res.setHeader('Content-Type','text/html');res.setHeader('Cache-Control','private, no-store');return res.end(loginPage(url.searchParams.get('next')));}
   if(url.pathname==='/login'&&req.method==='POST'){const input=await body(req);const principal=platform.principal({headers:{authorization:'Bearer '+input.token}});if(!principal?.owner)return send(res,401,{error:'Account key not accepted'});if(principal.keyId&&!principal.scopes.includes('computer'))return send(res,403,{error:'This key does not grant computer access'});res.setHeader('Set-Cookie',`ink_os_session=${sign({owner:true,...(principal.keyId?{keyId:principal.keyId}:{}),exp:Date.now()+7*86400000},platform.adminToken)}; Path=/; HttpOnly; ${origin.startsWith('https:')?'Secure; ':''}SameSite=Lax`);return send(res,200,{ok:true});}
   if(await edgeGatewayRoute(platform,req,res,url,{body,send}))return;
   const principal=platform.principal(req)||(!production?{owner:true,admin:true,accountId:'owner',namespace:'os'}:null);
+  if(draining&&principal?.owner&&!['GET','HEAD'].includes(req.method))return send(res,503,{error:'This host is finishing its background jobs before stopping.'});
   if(req.method==='GET'&&/^\/api\/modules\/(documents|text-worker)\.mjs$/.test(url.pathname)){if(!principal?.owner&&!platform.assetAccess(url.searchParams.get('access')))return send(res,401,{error:'App read grant required'});return serveModule(req,res,url,join(root,production?'dist':'public'));}
   if(req.method==='GET'&&url.pathname==='/api/blob'&&platform.assetAccess(url.searchParams.get('access')))return await api(req,res,url);
   if(['GET','HEAD'].includes(req.method)&&/^\/api\/v1\/files\/[a-f0-9]{32}\/content$/.test(url.pathname)&&platform.assetAccess(url.searchParams.get('access')))return await fileContent(platform,req,res,url);
@@ -174,7 +184,9 @@ const server = http.createServer(async (req, res) => {
   if(production&&(!principal?.owner||(principal.keyId&&!principal.scopes.includes('computer')))){if(url.pathname.startsWith('/api/'))return send(res,401,{error:'Owner access required'});res.setHeader('Content-Type','text/html');res.setHeader('Cache-Control','private, no-store');return res.end(loginPage(url.pathname+url.search));}
   if(url.pathname.startsWith('/api/'))return await api(req,res,url);
   return serve(req,res);
- }catch(error){if(!res.headersSent)send(res,errorStatus(error),{error:error.message,current:error.current?world.publicObject(error.current):undefined});else res.end();}
+ }catch(error){if(!res.headersSent)send(res,errorStatus(error),{error:error.message,current:error.current?world.publicObject(error.current):undefined});else res.end();}finally{requests.delete(task);finish();}
 });
-platform.collaboration.attach(server,req=>platform.principal(req)||(!production?{owner:true,admin:true,accountId:'owner',namespace:'os'}:null));
+const sockets=platform.collaboration.attach(server,req=>sealed?null:platform.principal(req)||(!production?{owner:true,admin:true,accountId:'owner',namespace:'os'}:null));
+const shutdown=()=>{if(shutdownTask)return shutdownTask;draining=true;console.log('Ink OS is finishing background jobs before stopping.');shutdownTask=drainHost({server,platform,world,requests,responses,sockets,vite,stopAdmission:()=>{sealed=true;}}).then(()=>{console.log('Ink OS stopped cleanly.');process.exitCode=0;}).catch(error=>{console.error('Ink OS shutdown:',error.message);process.exitCode=1;});return shutdownTask;};
+process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);
 server.listen(port, process.env.INK_OS_BIND||'127.0.0.1',()=>{platform.schedules.start();platform.workflows.start();console.log(`Ink OS: ${origin}; engine=Ink; production=${production}`);});

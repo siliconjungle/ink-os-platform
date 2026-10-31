@@ -46,8 +46,10 @@ export class Code {
     return this.world.put({ id: stateObjectId(namespace, key), namespace, kind: 'state', title: key, body: JSON.stringify(value) }, { writer: namespace, expected, actor: 'Ink program', action: 'saved app state', writeAccess: principal?.writeAccess });
   }
   async execute(input) {
-    if (input.backend && !['javascript', 'auto'].includes(input.backend)) throw Object.assign(Error('Select native execution through the native build service.'), { status: 503 });
+    if (input.backend && !['javascript', 'auto', 'native'].includes(input.backend)) throw Object.assign(Error('Choose javascript, auto or native execution.'), { status: 400 });
     const started = performance.now(), compiled = await this.compile(input.source);
+    const nativeArtifact = input.backend !== 'javascript' && input.namespace && this.nativeJobs ? await this.nativeJobs.readyFor(input.namespace, input.source, compiled.artifact) : null;
+    if (input.backend === 'native' && !nativeArtifact) throw Object.assign(Error('Build the native target for this app before requesting native execution.'), { status: 409 });
     const selected = input.entry ? compiled.entries.find(fn => fn.name === input.entry) : compiled.entries[0];
     if (!selected) throw Error('Select an exported function, query, or change.');
     if (input.input === undefined && selected.params.length !== (input.args || []).length) return { entries: compiled.entries, needsArguments: true, selected: selected.name, digest: compiled.digest };
@@ -60,12 +62,15 @@ export class Code {
       else { try { saved.value = JSON.parse(await readFile(path, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
       if (saved.value && saved.value.digest !== compiled.digest) throw Object.assign(Error('Ink state belongs to a different source revision. Migrate or explicitly reset it before running this revision.'), { status: 409 });
     }
-    const result = await isolatedWorker(new URL('./ink-run-worker.mjs', import.meta.url), { artifact: compiled.artifact, selected, input: prepared.input, snapshot: saved.value?.snapshot });
+    const result = nativeArtifact
+      ? await this.nativeJobs.native.run(nativeArtifact, { namespace: input.namespace, entry: selected.name, input: prepared.input, snapshot: saved.value?.snapshot })
+      : await isolatedWorker(new URL('./ink-run-worker.mjs', import.meta.url), { artifact: compiled.artifact, selected, input: prepared.input, snapshot: saved.value?.snapshot });
+    if (nativeArtifact && result.sourceIdentity !== compiled.artifact.manifest.core_sha256) throw Error('Native artifact source identity mismatch.');
     if (result.committed) {
       const value = { digest: compiled.digest, snapshot: result.snapshot };
       if (input.namespace && this.world) await this.saveCheckpoint(input.namespace, stateKey, value, saved.revision, input.principal);
       else { await mkdir(this.directory, { recursive: true }); await writeFile(path + '.next', JSON.stringify(value), { mode: 0o600, flush: true }); await rename(path + '.next', path); }
     }
-    return { output: result.output, wire: result.wire, entries: compiled.entries, selected: selected.name, digest: compiled.digest, elapsed: performance.now() - started, backend: 'javascript', sourceHash: compiled.artifact.manifest.core_sha256 };
+    return { output: result.output, wire: result.wire, entries: compiled.entries, selected: selected.name, digest: compiled.digest, elapsed: performance.now() - started, backend: nativeArtifact ? 'native' : 'javascript', sourceHash: compiled.artifact.manifest.core_sha256 };
   }
 }

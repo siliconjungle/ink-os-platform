@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile, chmod } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { resolve, join } from 'node:path';
 
-export async function initializeInstance({ directory = '.data', port = 4318 } = {}) {
+export async function initializeInstance({ directory = '.data', port = 4318, hostProcess = false } = {}) {
   directory = resolve(directory);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const path = join(directory, 'instance.json');
@@ -26,6 +26,6 @@ export async function initializeInstance({ directory = '.data', port = 4318 } = 
   }
   await chmod(path, 0o600);
   const clientPath = join(directory, 'client.json');
-  await writeFile(clientPath, JSON.stringify({ url: process.env.INK_OS_ORIGIN || `http://127.0.0.1:${port}`, token: process.env.INK_OS_ADMIN_TOKEN || settings.adminToken }), { mode: 0o600, flush: true });
+  await writeFile(clientPath, JSON.stringify({ url: process.env.INK_OS_ORIGIN || `http://127.0.0.1:${port}`, token: process.env.INK_OS_ADMIN_TOKEN || settings.adminToken, instanceId: settings.id, ...(hostProcess ? { hostPid: process.pid } : {}) }), { mode: 0o600, flush: true });
   return { ...settings, directory, clientPath };
 }
