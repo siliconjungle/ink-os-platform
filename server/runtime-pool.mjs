@@ -5,7 +5,7 @@ const identity=()=>randomBytes(16).toString('hex');
 export class RuntimePool{
  constructor({directory,provider,runtime,environment,origin,maxModuleSlots=100,maxOCISlots=100,maxLeases=100,maxMachines=100,accountLimit=100,idleMs=120000,now=Date.now}){Object.assign(this,{directory,provider,runtime,environment,origin,maxModuleSlots,maxOCISlots,maxLeases,maxMachines,accountLimit,idleMs,now});this.path=join(directory,'runtime-pool.json');this.slots=[];this.tail=Promise.resolve();this.pending=new Map();this.requests=new Map();this.verified=new Map();this.timer=null;}
  async open({sweep=true}={}){await mkdir(this.directory,{recursive:true});try{const data=JSON.parse(await readFile(this.path,'utf8'));if(data.version!==1||!Array.isArray(data.slots))throw Error('Invalid runtime pool state');this.slots=data.slots;for(const slot of this.slots)if(['starting','draining'].includes(slot.status))slot.status='uncertain';}catch(error){if(error.code!=='ENOENT')throw error;}if(sweep){this.timer=setInterval(()=>void this.reap().catch(()=>{}),Math.max(1000,Math.min(15000,this.idleMs/2)));this.timer.unref();}return this;}
- close(){clearInterval(this.timer);this.timer=null;}
+ async close(){clearInterval(this.timer);this.timer=null;await Promise.all([...this.pending.values(),this.reaping].filter(Boolean));await this.tail;}
  async save(){const text=JSON.stringify({version:1,slots:this.slots});await writeFile(this.path+'.next',text,{mode:0o600,flush:true});await rename(this.path+'.next',this.path);const handle=await open(this.directory,'r');try{await handle.sync();}finally{await handle.close();}}
  change(run){const task=this.tail.then(async()=>{const result=await run();await this.save();return result;});this.tail=task.catch(()=>{});return task;}
  active(leaseId,appId,releaseId){return this.slots.some(slot=>slot.leaseId===leaseId&&slot.appId===appId&&slot.releaseId===releaseId&&['starting','ready','uncertain'].includes(slot.status));}
@@ -39,6 +39,23 @@ export class RuntimePool{
   finally{await this.change(()=>{const count=this.requests.get(leaseId)-1;if(count)this.requests.set(leaseId,count);else this.requests.delete(leaseId);if(slot.leaseId===leaseId)slot.lastUsedAt=this.now();});}
  }
  reap(){if(this.reaping)return this.reaping;this.reaping=this.reapNow().finally(()=>{this.reaping=null;});return this.reaping;}
+ async retireRelease(appId,releaseId){
+  for(const slot of this.slots.filter(slot=>slot.appId===appId&&slot.releaseId===releaseId)){
+   const leaseId=slot.leaseId;
+   if(this.requests.get(leaseId)||(slot.holds||[]).length)throw failure(409,'Backend cleanup is waiting for active work to finish');
+   if(!await this.provider.poolStopped(slot)){
+    const key=this.runtime.leaseToken(appId,releaseId,leaseId),status=await this.provider.poolStatus(slot,key);
+    if(status.activeRequests||status.resources||status.startPinned&&!slot.allowIdle)throw failure(409,'Backend cleanup is waiting for background work to finish');
+    const claimed=await this.change(()=>{if(this.requests.get(leaseId)||(slot.holds||[]).length||slot.leaseId!==leaseId)return false;slot.status='draining';return true;});
+    if(!claimed)throw failure(409,'Backend cleanup is waiting for active work to finish');
+    const drained=await this.provider.drainPoolSlot(slot,key,{allowIdle:slot.allowIdle});
+    if(!drained.idle){await this.change(()=>{slot.status='ready';});throw failure(409,'Backend cleanup is waiting for active work to finish');}
+    if(!await this.provider.stopPoolSlot(slot)){await this.change(()=>{slot.status='uncertain';});throw failure(409,'Backend cleanup has not confirmed an idle stopped worker');}
+   }
+   await this.provider.removeStopped?.(slot);
+   await this.change(()=>{slot.status='idle';slot.appId=null;slot.releaseId=null;slot.leaseId=null;slot.holds=[];delete slot.deployment;});
+  }
+ }
  async reapNow(){const released=[];for(const slot of [...this.slots]){
    const leaseId=slot.leaseId;if(slot.status==='uncertain'){if(await this.provider.poolStopped(slot)){await this.change(()=>{slot.status='idle';slot.appId=null;slot.releaseId=null;slot.leaseId=null;slot.holds=[];});}continue;}
    if(slot.status!=='ready'||this.requests.get(leaseId)||this.now()-slot.lastUsedAt<this.idleMs)continue;

@@ -43,3 +43,16 @@ jobs:
           docker exec ink-os-check node -e 'const fs=require("fs");(async()=>{const c=JSON.parse(fs.readFileSync("/data/client.json")),headers={authorization:"Bearer "+c.token,"content-type":"application/json"};const apps=await(await fetch(c.url+"/api/v1/apps",{headers})).json();if(apps.length!==1)throw Error("Expected the explicitly installed app");const r=await fetch(c.url+"/api/v1/commands/run",{method:"POST",headers,body:JSON.stringify({appId:apps[0].id,id:"ink.add",input:{arg0:"3"}})});const result=await r.json();if(!r.ok||result.data.valueWire!=="3")throw Error(JSON.stringify(result));console.log("Container compiled and ran an Ink app from local Git");})().catch(e=>{console.error(e);process.exit(1)})'
       - if: always()
         run: docker rm -f ink-os-check || true
+  docker-backends:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: docker build --target runtime -t ink-os-runtime:local .
+      - run: docker build -f tests/fixtures/Dockerfile.oci -t ink-os-oci-proof:local .
+      - run: INK_TEST_DOCKER=1 node --test tests/docker-backends.test.mjs

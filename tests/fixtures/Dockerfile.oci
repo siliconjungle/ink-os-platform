@@ -1,0 +1,5 @@
+FROM node:24-bookworm-slim
+WORKDIR /app
+COPY tests/fixtures/oci-backend.mjs ./server.mjs
+USER node
+CMD ["node", "server.mjs"]

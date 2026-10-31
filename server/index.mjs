@@ -29,6 +29,7 @@ import {Platform,sign,verify} from './platform.mjs';
 import {platformRouter,loginPage} from './platform-router.mjs';
 import {FlyProvider} from '../infra/fly-provider.mjs';
 import { LocalProvider } from '../infra/local-provider.mjs';
+import { DockerCompute } from '../infra/docker-compute.mjs';
 import {PooledProvider} from '../infra/pooled-provider.mjs';
 import {edgeGatewayRoute} from './edge-gateway.mjs';
 import {staticFiles} from './static.mjs';
@@ -44,7 +45,7 @@ const embeddings={describe:()=>({status:'disabled',model:'',dimensions:0,error:'
 const clients = new Map();
 const vite = process.env.INK_OS_DEV!=='1'?null:await createViteServer({ root, server: { middlewareMode: true, hmr: { host: '127.0.0.1', port: 24678 } }, appType: 'spa' });
 const serve=process.env.INK_OS_DEV!=='1'?staticFiles(join(root,'dist')):(req,res)=>vite.middlewares(req,res,()=>{res.statusCode=404;res.end();});
-const platform=await new Platform({root,directory:data,world,storage,origin,adminToken:process.env.INK_OS_ADMIN_TOKEN||(!production?'local-development-only':undefined),sourceProvider:process.env.INK_OS_GITHUB_TOKEN?new GitHubSources():undefined,provider:process.env.FLY_API_TOKEN?(process.env.INK_OS_HOSTING==='pool'?new PooledProvider({fly:new FlyProvider()}):new FlyProvider()):new LocalProvider()}).open();
+const platform=await new Platform({root,directory:data,world,storage,origin,adminToken:process.env.INK_OS_ADMIN_TOKEN||(!production?'local-development-only':undefined),sourceProvider:process.env.INK_OS_GITHUB_TOKEN?new GitHubSources():undefined,provider:process.env.FLY_API_TOKEN?(process.env.INK_OS_HOSTING==='pool'?new PooledProvider({fly:new FlyProvider()}):new FlyProvider()):new LocalProvider({compute:process.env.INK_OS_BACKENDS==='docker'?new DockerCompute():undefined})}).open();
 platform.projects = await new Projects(data).open();
 platform.calls=new CallRooms({clients,app:id=>platform.app(id),...(process.env.INK_OS_RTC_ICE_SERVERS?{iceServers:JSON.parse(process.env.INK_OS_RTC_ICE_SERVERS)}:{})});
 await reconcileFileDefaults(platform);

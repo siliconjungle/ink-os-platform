@@ -5,7 +5,15 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:24-bookworm-slim
+FROM node:24-bookworm-slim AS runtime
+WORKDIR /app
+COPY app-runtime ./app-runtime
+USER node
+ENV PORT=8080 INK_OS_POOL=1
+EXPOSE 8080
+CMD ["node", "app-runtime/index.mjs"]
+
+FROM node:24-bookworm-slim AS platform
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package*.json ./
