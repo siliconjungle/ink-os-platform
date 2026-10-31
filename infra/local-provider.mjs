@@ -1,3 +1,4 @@
+import{localAdapter}from '../server/local-adapter.mjs';
 import http from 'node:http';
 import { extname, join } from 'node:path';
 import { constants } from 'node:fs';
@@ -17,7 +18,7 @@ export class LocalProvider {
   constructor({ originTemplate = process.env.INK_OS_APP_ORIGIN_TEMPLATE, compute } = {}) {
     if (originTemplate && !originTemplate.includes('{release}') && !originTemplate.includes('__RELEASE__')) throw Error('App origin template must contain a release placeholder.');
     this.servers = new Map(); this.originTemplate = originTemplate; this.compute = compute;
-    this.requests = new Set(); this.responses = new Set(); this.admissionGate = null;
+    this.adapterRequests = new Set(); this.requests = new Set(); this.responses = new Set(); this.admissionGate = null;
   }
   bindAdmission(gate) {
     if (typeof gate !== 'function' || this.admissionGate && this.admissionGate !== gate) throw Error('Local app admission already belongs to another host gate.');
@@ -27,7 +28,7 @@ export class LocalProvider {
     return !!this.admissionGate && this.admissionGate() === true && [...this.servers.values()].every(runtime => runtime.trackedAdmission === true);
   }
   async snapshotBackendsInactive() {
-    if (this.compute || this.pool || !this.snapshotAdmissionClosed() || typeof this.platform?.directory !== 'string') return false;
+    if (this.adapterRequests.size || this.compute || this.pool || !this.snapshotAdmissionClosed() || typeof this.platform?.directory !== 'string') return false;
     // Without an executor these app servers cannot start backend work. A
     // private journal from an earlier executor must also have no live lease.
     let file;
@@ -53,6 +54,11 @@ export class LocalProvider {
     platform.runtime.leaseActive = (...args) => this.pool.active(...args);
   }
   async invokeBackend({ appId, releaseId, meta, input }) {
+    if (!this.pool && meta.adapter && meta.backend?.entry && !meta.backend.image) {
+      if(this.admissionGate?.())throw Object.assign(Error('The local host is finishing admitted work'),{status:503});
+      const task=localAdapter(this.platform,{appId,releaseId,input});this.adapterRequests.add(task);
+      try{return await task;}finally{this.adapterRequests.delete(task);}
+    }
     if (!this.pool) throw Object.assign(Error('Enable Docker backends with INK_OS_BACKENDS=docker and a runtime image.'), { status: 503 });
     return this.pool.invoke(appId, releaseId, meta, input);
   }
@@ -150,6 +156,7 @@ export class LocalProvider {
     this.servers.delete(deployment.releaseId);
   }
   async close() {
+    await Promise.allSettled([...this.adapterRequests]);
     await Promise.all([...this.servers.values()].map(({ deployment }) => this.retire(deployment, { preserveCompute: true })));
     await this.pool?.close();
   }

@@ -105,6 +105,15 @@ export async function main(args=process.argv.slice(2)){
  if(command==='projects')return projectCLI({sub,id:value,options,request,print,getTarget:projectTarget});
  if(command==='native')return nativeCLI({sub,appId:value,jobId:positional[3],options,request,print});
  if(command==='workflows')return workflowCLI({sub,id:value,options,request,print});
+ if(command==='adapters'){
+  if(sub==='publish'){const flags=Object.entries(options).flatMap(([name,setting])=>setting===true?['--'+name]:['--'+name,String(setting)]);return main(['deploy',value||'.',...flags,'--adapter']);}
+  if(sub==='default')return print(await request('adapters/default','PUT',{adapterId:value}));
+  if(sub==='enable'||sub==='disable')return print(await request('adapters/'+value+'/activation','PUT',{enabled:sub==='enable'}));
+  if(sub==='run')return print(await request('adapters/run','POST',{sourceId:value,adapterId:options.adapter}));
+  if(sub==='poll')return print(await request('adapter-runs/'+value+'/poll','POST',{}));
+  if(sub&&sub!=='list')throw Error('Use adapters list, publish DIR, default ID, enable ID, disable ID, run SOURCE --adapter ID, or poll RUN');
+  return print(await request('adapters'+(options.source?'?source='+encodeURIComponent(options.source):'')));
+ }
  if(command==='commands')return commandCLI({sub,appId:value,id:positional[3],options,request,print});
  if(command==='login'){await authenticate({login:true});await request('me');const instanceId=await identity;await saveConnection(configPath,{url,token,...(instanceId?{instanceId}:{})});console.log('Authenticated. Account credentials stored with mode 0600.');return;}
  if(command==='keys'){const account=options.account?'?account='+encodeURIComponent(String(options.account)):'';if(sub==='create')return print(await request('keys'+account,'POST',{name:value||'Local agent',...(options.scopes?{scopes:String(options.scopes).split(',')}:{}),expiresInDays:Number(options.days||90)}));if(sub==='rotate'||sub==='revoke'){if(!/^[a-f0-9]{24}$/.test(value||''))throw Error('Provide an API key ID');return print(await request('keys/'+value+(sub==='rotate'?'/rotate':'')+account,sub==='rotate'?'POST':'DELETE',sub==='rotate'?{}:undefined));}return print(await request('keys'+account));}
@@ -151,7 +160,7 @@ export async function main(args=process.argv.slice(2)){
  if(command==='ink'&&['preview','preview-run','preview-status','preview-close'].includes(sub))return print(await previewInkCLI(sub,value,positional[3],options,request,await projectTarget()));
  if(command==='ink'){if(!value)throw Error('Provide an app ID');if(sub==='describe')return print(await request('apps/'+value+'/ink'));if(sub==='checkpoint')return print(await request('apps/'+value+'/ink/checkpoint'));if(sub==='migrate'){if(!options.file)throw Error('Provide --file with explicit migration releases, entries and revisions.');return print(await request('apps/'+value+'/ink/migrate','POST',JSON.parse(await readFile(resolve(String(options.file)),'utf8'))));}if(sub==='run'){const input=options['input-file']?await readFile(resolve(options['input-file']),'utf8'):options.input||'[]';return print(await request('apps/'+value+'/ink/run','POST',{entry:positional[3]||options.entry,input,...(options.backend?{backend:options.backend}:{})}));}throw Error('Use ink describe APP_ID, ink checkpoint APP_ID, ink migrate APP_ID --file migration.json, or ink run APP_ID ENTRY --input JSON_ARRAY');}
  if(command==='deploy'){
-  const directory=resolve(sub||'.'),manifest=JSON.parse(await readFile(join(directory,'ink-app.json'),'utf8'));if(manifest.language==='ink')return print(await deployInk(directory,options,request,await projectTarget()));
+  const directory=resolve(sub||'.'),manifest=JSON.parse(await readFile(join(directory,options.adapter?'ink-adapter.json':'ink-app.json'),'utf8'));if(manifest.language==='ink')return print(await deployInk(directory,options,request,await projectTarget()));
   const paths=await boundedReleasePaths(manifest,directory),repository=options.repository||manifest.repository,creationDesktop=await desktopFromManifest(manifest,directory,options.icon);
   const runtimeImage=options['runtime-image']??process.env.INK_OS_APP_RUNTIME_IMAGE;
   deploymentBackend(manifest.backend,{runtimeImage});
@@ -165,7 +174,7 @@ export async function main(args=process.argv.slice(2)){
   if(options.project&&installed&&installed.projectId!==options.project)throw Error('Select the application’s existing source project or deploy a new app');
   if(projectId||!repository){
    if(installed?.repository&&!installed.projectId)throw Error('This app uses repository source; keep that source binding or create a new project app');
-   const snapshot=await committedSource(directory);
+   const snapshot=await committedSource(directory,undefined,options.adapter?'ink-adapter.json':'ink-app.json');
    if(options.commit&&options.commit!==snapshot.commit)throw Error('The selected commit must match the clean source checkout before snapshot deployment');
    const settingsFile=snapshot.files.find(file=>file.path==='ink-project.json'),settings=settingsFile&&JSON.parse(Buffer.from(settingsFile.base64,'base64').toString('utf8'));
    const base=await prepareProjectSnapshot({directory,snapshot,projectId,request,target:await projectTarget()});
@@ -176,13 +185,13 @@ export async function main(args=process.argv.slice(2)){
    const revision=options.commit||manifest.sourceCommit||gitSync(['-C',directory,'rev-parse','HEAD']).stdout?.trim();if(!/^[a-f0-9]{40}$/.test(revision||''))throw Error('Deploy a committed application source tree');
    source={repository,commit:revision};const inGit=gitSync(['-C',directory,'rev-parse','--is-inside-work-tree']);if(inGit.status===0){const dirty=gitSync(['-C',directory,'status','--porcelain','--','.']);if(dirty.status!==0||dirty.stdout.trim())throw Error('Commit application source changes before deployment so the release matches its source revision');}
   }
-  if(!app)app=await request('apps','POST',{slug:manifest.slug,title:manifest.title,...(source.projectId?{projectId:source.projectId}:{repository}),sourceCommit:source.commit,desktop:creationDesktop,commands:manifest.commands,capabilities:manifest.capabilities});
+  if(!app)app=await request('apps','POST',{slug:manifest.slug,title:manifest.title,...(source.projectId?{projectId:source.projectId}:{repository}),sourceCommit:source.commit,adapter:manifest.adapter,desktop:creationDesktop,commands:manifest.commands,capabilities:manifest.capabilities});
 
   if(options['env-file']){const source=await readFile(resolve(String(options['env-file'])),'utf8');if(Buffer.byteLength(source)>256*1024)throw Error('Environment input exceeds 256 KiB');await request('apps/'+app.id+'/env','PUT',{values:parseEnv(source)});}
   const retained=new Map();try{for(const part of await request('apps/'+app.id+'/artifacts'))if(part.id&&/^[a-f0-9]{64}$/.test(part.sha256))retained.set(part.sha256,part);}catch{}
-  const desktop=creationDesktop;const artifacts=await artifactManifest(paths.assetDirectory,{...await commandAssets(manifest,directory),upload:async(digest,bytes)=>{await authenticate();try{return retained.get(digest)||await uploadArtifact(new URL('/api/v1/apps/'+app.id+'/artifacts/'+digest,url),bytes,{token,continuation,onRetry:({attempt,error})=>console.error('Retrying artifact upload ('+attempt+'/7; '+(error.cause?.code||error.status||error.name)+')')});}catch(error){error.message=errorMessage(error.message);throw error;}},onProgress:progress=>console.error('Prepared '+(progress.bytes/1024/1024).toFixed(1)+' MiB')});const files=[{path:'ink-assets.json',base64:Buffer.from(JSON.stringify(artifacts)).toString('base64')}];if(paths.backendFile)files.push({path:manifest.backend.entry,base64:(await readFile(paths.backendFile)).toString('base64')});const release=await request('apps/'+app.id+'/releases','POST',{files,entry:manifest.entry||'index.html',backend,desktop,commands:manifest.commands,capabilities:manifest.capabilities,source});
+  const desktop=creationDesktop;const artifacts=await artifactManifest(paths.assetDirectory,{...await commandAssets(manifest,directory),upload:async(digest,bytes)=>{await authenticate();try{return retained.get(digest)||await uploadArtifact(new URL('/api/v1/apps/'+app.id+'/artifacts/'+digest,url),bytes,{token,continuation,onRetry:({attempt,error})=>console.error('Retrying artifact upload ('+attempt+'/7; '+(error.cause?.code||error.status||error.name)+')')});}catch(error){error.message=errorMessage(error.message);throw error;}},onProgress:progress=>console.error('Prepared '+(progress.bytes/1024/1024).toFixed(1)+' MiB')});const files=[{path:'ink-assets.json',base64:Buffer.from(JSON.stringify(artifacts)).toString('base64')}];if(paths.backendFile)files.push({path:manifest.backend.entry,base64:(await readFile(paths.backendFile)).toString('base64')});const release=await request('apps/'+app.id+'/releases','POST',{files,entry:manifest.entry||'index.html',backend,adapter:manifest.adapter,desktop,commands:manifest.commands,capabilities:manifest.capabilities,source});
   if(options['preview-only'])return print({appId:app.id,releaseId:release.id,status:'ready'});
-  const result=await request(`apps/${app.id}/releases/${release.id}/publish`,'POST',{});return print({appId:app.id,releaseId:release.id,url:JSON.parse(result.body).url});
+  const result=await request(`apps/${app.id}/releases/${release.id}/publish`,'POST',{});if(manifest.adapter){const state=await request('adapters/'+app.id+'/activation','PUT',{enabled:true});return print({adapterId:app.id,releaseId:release.id,configured:state.adapters.find(a=>a.id===app.id)?.configured});}return print({appId:app.id,releaseId:release.id,url:JSON.parse(result.body).url});
  }
  if(command==='releases')return print(await request('apps/'+sub+'/releases'));
  if(command==='publish'||command==='rollback')return print(await request(`apps/${sub}/releases/${value}/publish`,'POST',{}));

@@ -45,6 +45,8 @@ export class APIKeys{
 export function requireScope(principal,scope){if(!principal)fail(401,'Authentication required');if(principal.keyId&&!principal.scopes.includes(scope))fail(403,'API key requires '+scope);}
 export function isAdmin(principal){return principal?.owner&&principal.accountId==='owner'&&(!principal.keyId||principal.scopes.includes('accounts:manage'));}
 export function routeScope(path,method){
+ if(path==='/adapters/run'||path.startsWith('/adapter-runs/'))return 'apps:invoke';
+ if(path.startsWith('/adapters')&&method!=='GET')return 'apps:deploy';
  if(path.startsWith('/workflows/'))return /\/(list|get|runs)$/.test(path)?'world:read':/\/(save|archive)$/.test(path)?'world:write':'apps:invoke';
  if(path.startsWith('/commands'))return path==='/commands/query'?'apps:read':'apps:invoke';
  if(path.startsWith('/desktop/'))return'computer';

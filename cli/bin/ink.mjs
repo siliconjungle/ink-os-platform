@@ -7,13 +7,13 @@ import { sourceFiles } from '../../shared/source-files.mjs';
 import { inkModuleGraph } from '../../shared/ink-app.mjs';
 import{prepareProjectSnapshot}from'./project-checkout.mjs';
 
-async function manifestFrom(files) {
-  const file = files.find(file => file.path === 'ink-app.json');
-  if (!file) throw Error('The application source needs ink-app.json.');
+async function manifestFrom(files, manifestName='ink-app.json') {
+  const file = files.find(file => file.path === manifestName);
+  if (!file) throw Error('The source needs '+manifestName+'.');
   return JSON.parse(Buffer.from(file.base64, 'base64').toString('utf8'));
 }
 
-export async function committedSource(directory, revision) {
+export async function committedSource(directory, revision, manifestName='ink-app.json') {
   directory = await realpath(directory);
   const projects = new Projects(directory);
   const root = await projects.git(directory, ['rev-parse', '--show-toplevel']);
@@ -23,7 +23,7 @@ export async function committedSource(directory, revision) {
   projects.records.local = { directory };
   const files = await projects.files('local', commit);
   const tree = await projects.git(directory, ['rev-parse', commit + '^{tree}']);
-  return { files, commit, tree, manifest: await manifestFrom(files) };
+  return { files, commit, tree, manifest: await manifestFrom(files,manifestName) };
 }
 
 export async function initInk(directory, options = {}) {

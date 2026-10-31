@@ -1,0 +1,55 @@
+{
+  "format": "ink-os-adapter-validation-v1",
+  "browser": {
+    "checks": {
+      "realReplicateTranscription": true,
+      "sourceBytesUnchanged": true,
+      "sourceSha256": "918bcb85ca79d1579fe239da882cbf905f873a5852d2b6d27bd30ef3a52e67f6",
+      "sourceRevisionPreserved": true,
+      "linkedOutputDifferentIdentity": true,
+      "provenancePreservedAfterEdit": true,
+      "editedResultReopened": true,
+      "singleTransformationAcrossReopens": true
+    },
+    "sourceId": "9a29ad3ba5eb72de99c369fc3db407ec",
+    "outputId": "ff171fef6b63dd6c7af59ef3fc39c34a",
+    "runId": "9faf92f08545f1f9fc3fd9695f371bac",
+    "adapterId": "594d3df41e3f59bb992ae81f63df7021",
+    "releaseId": "9768346a528bb7d07cd07746a5c6430a",
+    "configurationVersion": "9846e4c3cfd6441a7872569137b26994ea65a33c6c5f75f9e788860c9b3f517f"
+  },
+  "native": {
+    "nativeElectronGUI": true,
+    "realProviderTranscription": true,
+    "sourceRevisionPreserved": true,
+    "separateLinkedResult": true,
+    "provenance": true,
+    "localRunnerWithoutDocker": true
+  },
+  "tests": {
+    "webHost": {
+      "passed": 457
+    },
+    "portableBroad": {
+      "tests": 343,
+      "passed": 335,
+      "cancelledByTimeout": 3,
+      "skipped": 5,
+      "allThreeTimeoutsPassedOnFocusedRerun": true
+    },
+    "portableAdapterChecks": {
+      "passed": 6
+    },
+    "desktopLifecycleConnections": {
+      "passed": 22
+    },
+    "providerPackage": {
+      "passed": 2
+    }
+  },
+  "limits": [
+    "Cloud provider execution follows the existing module runtime; no production deployment or packaged installer update is claimed.",
+    "Broad-suite parallel timeouts were rechecked successfully in focused runs."
+  ],
+  "fixture": "tests/fixtures/adapters-speech.wav"
+}

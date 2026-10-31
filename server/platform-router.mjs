@@ -1,3 +1,4 @@
+import{adapterSettings,adaptersFor,activateAdapter,setAdapterDefault,startAdapter,pollAdapter}from './adapters.mjs';
 import { inkRoute } from './ink-router.mjs';
 import{workflowRoute}from './workflow-router.mjs';
 import { namespaceMigrationRoute } from './namespace-migration-router.mjs';
@@ -86,6 +87,13 @@ export function platformRouter(platform,{send,body}){return async(req,res,url,pr
  }
  const asApp=id=>{platform.app(id);if(!principal.owner&&principal.appId!==id)error(403,'Wrong app identity');return principal.owner?{owner:false,appId:id,namespace:id}:{...principal,owner:false,appId:id,namespace:id};};
  const sync=path.match(/^\/sync\/(os|[a-f0-9]{32})\/([^/]+)$/);if(sync){const namespace=sync[1],key=decodeURIComponent(sync[2]),kind=url.searchParams.get('kind')||'state';if(method==='GET')return send(res,200,await platform.collaboration.snapshot(await platform.collaboration.openFor(principal,namespace,key,kind,{create:!!principal.owner||principal.namespace===namespace})));if(method==='POST')return send(res,200,await platform.collaboration.submit(principal,namespace,key,kind,(await body(req)).updates));}
+ if(path==='/adapters'&&method==='GET'){platform.owner(principal);return send(res,200,url.searchParams.has('source')?adaptersFor(platform,url.searchParams.get('source')):adapterSettings(platform));}
+ if(path==='/adapters/default'&&method==='PUT'){platform.owner(principal);return send(res,200,await setAdapterDefault(platform,(await body(req)).adapterId));}
+ if(path==='/adapters/run'&&method==='POST'){platform.owner(principal);return send(res,202,await startAdapter(platform,await body(req),principal));}
+ const adapterMatch=path.match(/^\/adapters\/([a-f0-9]{32})\/activation$/);
+ if(adapterMatch&&method==='PUT'){platform.owner(principal);const input=await body(req);if(typeof input.enabled!=='boolean')error(400,'Choose whether to enable the adapter');return send(res,200,await activateAdapter(platform,adapterMatch[1],input.enabled));}
+ const adapterRun=path.match(/^\/adapter-runs\/([a-f0-9]{32})\/poll$/);
+ if(adapterRun&&method==='POST'){platform.owner(principal);return send(res,200,await pollAdapter(platform,adapterRun[1]));}
  if(path==='/file-defaults'){platform.owner(principal);if(method==='GET')return send(res,200,fileDefaultSettings(platform));if(method==='PUT')return send(res,200,{defaults:await setFileDefault(platform,await body(req))});}
  if(path==='/file-defaults/reconcile'&&method==='POST'){platform.owner(principal);return send(res,200,await reconcileFileDefaults(platform));}
  if(path==='/file-defaults/resolve'&&method==='POST'){platform.owner(principal);return send(res,200,await resolveFileDefault(platform,(await body(req)).fileId));}

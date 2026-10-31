@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp,rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomBytes } from 'node:crypto';
+import { Platform } from '../server/platform.mjs';
+import { World } from '../server/world.mjs';
+import { Storage } from '../server/storage.mjs';
+import { LocalProvider } from '../infra/local-provider.mjs';
+import { uploadFiles } from '../server/files.mjs';
+import { installedApps } from '../shared/app-desktop.mjs';
+import { activateAdapter,adaptersFor,startAdapter } from '../server/adapters.mjs';
+
+test('published adapters execute on a real local provider without Docker or host credentials/filesystem access',async t=>{
+  const directory=await mkdtemp(join(tmpdir(),'ink-local-adapter-'));
+  const provider=new LocalProvider();
+  t.after(async()=>{await provider.close();await rm(directory,{recursive:true,force:true});});
+  const world=await new World(directory).open(),storage=await new Storage(directory,{env:{}}).open();
+  const platform=await new Platform({directory,world,storage,provider,origin:'http://127.0.0.1:4999',environmentKey:randomBytes(32).toString('base64')}).open();
+  const adapter={operation:'example',name:'Local module',input:{fileTypes:['audio/*']},output:{label:'Transcript',mime:'text/plain',extension:'.txt'}};
+  const app=await platform.createApp({slug:'local-adapter-proof',title:'Local proof',adapter});
+  const source=`import{readFile}from'node:fs/promises';export async function fetch(request){if(new URL(request.url).pathname==='/adapter/health')return Response.json({configured:true});const input=await request.json();let denied=false;try{await readFile('/etc/hosts')}catch(e){denied=e.code==='ERR_ACCESS_DENIED'}return Response.json({status:'completed',output:{text:JSON.stringify({source:input.source.title,denied,admin:process.env.INK_OS_ADMIN_TOKEN||null,configured:process.env.EXAMPLE_SETTING})}});}`;
+  const release=await platform.createRelease(app.id,{adapter,backend:{entry:'server.mjs'},files:[{path:'index.html',base64:Buffer.from('<p>Adapter</p>').toString('base64')},{path:'server.mjs',base64:Buffer.from(source).toString('base64')}]});
+  await platform.publish(app.id,release.id);
+  assert.equal(installedApps(world.all()).length,0);
+  assert.equal(JSON.parse(platform.app(app.id).body).adapter.name,'Local module');
+  await platform.updateEnvironment(app.id,{EXAMPLE_SETTING:'package value'});
+  await activateAdapter(platform,app.id);
+  const file=(await uploadFiles(platform,{files:[{name:'speech.wav',mime:'audio/wav',base64:'YXVkaW8='}]})).objects[0];
+  assert.equal(adaptersFor(platform,file.id).adapters.length,1);
+  const run=await startAdapter(platform,{sourceId:file.id,adapterId:app.id},{owner:true});
+  assert.equal(run.status,'completed',run.error);
+  const output=JSON.parse((await storage.get(run.object.location)).toString());
+  assert.deepEqual(output,{source:'speech.wav',denied:true,admin:null,configured:'package value'});
+  assert.equal(provider.adapterRequests.size,0);
+  await assert.rejects(platform.createRelease(app.id,{desktop:{entry:'wrong'},files:[{path:'index.html',base64:'eA=='}]}),e=>e.status===400);
+});

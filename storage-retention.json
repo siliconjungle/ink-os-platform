@@ -105,7 +105,20 @@
     ".local/history-compiler-tests.log": "Required full platform regression with the new compiler artifact.",
     "evidence/populated-portability.json": "Sanitized actual populated frontends, live managed source authoring and authenticated local recovery acceptance.",
     "default-apps": "Selected default app bundles and exact public source/checksum pins; required offline first-start reproduction inputs.",
-    "evidence/default-apps.json": "Selected default app installation, recovery, isolated-origin and hosted verification proof."
+    "evidence/default-apps.json": "Selected default app installation, recovery, isolated-origin and hosted verification proof.",
+    "shared/adapters.mjs": "Provider-free adapter manifests, type/shape matching and defaults.",
+    "shared/adapters.d.mts": "Shared adapter type declarations.",
+    "server/adapters.mjs": "Durable transformation orchestration, provenance and linked-result reuse.",
+    "src/native/adapters.ts": "Shared browser/desktop adapter settings and execution UI.",
+    "tests/adapters.test.mjs": "Adapter matching, defaults, cache, provenance and failure proofs.",
+    "docs/adapters.md": "Publication and provider protocol reproduction contract.",
+    "server/local-adapter.mjs": "Local module execution without Docker, with scoped credentials and bounded processes.",
+    "server/local-adapter-worker.mjs": "Restricted adapter invocation worker.",
+    "tests/local-adapters.test.mjs": "Actual local provider, permission and environment proof.",
+    "tests/fixtures/adapters-speech.wav": "Selected synthetic speech input for the real provider proof.",
+    "evidence/adapters-validation.json": "Sanitized selected browser/native/provider validation and test outcomes.",
+    "evidence/adapters-browser.png": "Selected browser transcript reuse proof.",
+    ".local/adapters-proof-data": "Active isolated validation host state, encrypted package environment and durable transformations; retain while host is live."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",
@@ -115,6 +128,18 @@
     ".local/ink-app-browser/source": "Completed generated starter checkout; exact initializer/template source and lifecycle tests are retained.",
     ".local/native-runtime-lock": "Completed dependency-lock preparation workspace; server/native-runtime.lock and the exact native Cargo manifest are retained.",
     ".local/managed-native-proof": "Completed failed first macOS toolchain extraction diagnostic; corrected installer and exact CI runs preserve reproduction, with no selected successful proof depending on this output.",
-    ".local/continuation-docker-ci.log": "Completed failed pre-fix Docker job diagnostic; exact old commit, job ID and revised recovery test retain reproduction without storing full provider logs."
+    ".local/continuation-docker-ci.log": "Completed failed pre-fix Docker job diagnostic; exact old commit, job ID and revised recovery test retain reproduction without storing full provider logs.",
+    ".local/adapters-final-build.txt": "Completed build log; selected proof summary and exact source retained.",
+    ".local/adapters-final-focused.txt": "Completed focused test log; selected validation summary and reproduction tests retained.",
+    ".local/adapters-full-tests.txt": "Completed broad test log; selected outcome, timeout reruns and tests retained.",
+    ".local/adapters-transcribe.env": "Completed credential transport copy; encrypted per-package environment remains in each owned validation host.",
+    ".local/adapters-native-source": "Completed minimal duplicate source checkout; canonical adapter Git history and imported immutable source project are retained.",
+    ".local/adapters-speech.aiff": "Completed synthetic speech generation intermediate; selected WAV fixture retained.",
+    ".local/adapters-speech.wav": "Completed duplicate of selected tests/fixtures/adapters-speech.wav.",
+    ".local/adapters-timeout-rechecks.txt": "Completed successful isolated timeout rechecks; selected summary retained.",
+    ".local/adapters-focused-tests.txt": "Completed focused checks including the lifecycle timeout rerun; selected summary retained.",
+    ".local/adapters-build.txt": "Completed intermediate build log.",
+    ".local/adapters-proof-server.txt": "Owned validation host log; retire only after that host exits.",
+    ".local/adapters-source-audit.txt": "Completed source audit log; source and selected verification receipt retained."
   }
 }

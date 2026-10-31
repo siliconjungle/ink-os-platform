@@ -14,6 +14,7 @@ async function storeFile(platform,file,bytes,namespace,writeAccess){
 export async function fileContent(platform,req,res,url){
  const id=url.pathname.split('/')[4],object=platform.world.get(id);
  if(!object||!desktopFile(object))throw Object.assign(Error('File not found'),{status:404});
+ if(url.searchParams.has('revision')&&String(object.revision)!==url.searchParams.get('revision'))throw Object.assign(Error('The source file changed; reopen it to adapt the current revision'),{status:409});
  const info=fileInfo(object),bytes=object.location?await platform.storage.get(object.location):Buffer.from(object.body||'');
  // Isolated apps fetch bytes using an existing asset read grant. Wildcard CORS
  // deliberately does not allow credentialed cross-origin cookie requests.
@@ -30,7 +31,7 @@ export async function saveText(platform,id,input,principal){
  if(typeof input.text!=='string'||Buffer.byteLength(input.text)>24*1024*1024)throw Object.assign(Error('Text exceeds 24 MiB'),{status:413});
  if(!Number.isInteger(input.expected)||input.expected<1)throw Object.assign(Error('Provide the file revision before saving'),{status:400});
  const info=fileInfo(object),bytes=Buffer.from(input.text),blob=await platform.storage.put(bytes,info.mime,{retain:true});
- platform.world.storage=platform.storage;try{return await platform.world.update(id,{location:blob.location,body:JSON.stringify({mime:info.mime.includes('*')?'text/plain':info.mime,originalName:info.name,bytes:bytes.length})},{writer:object.namespace,expected:input.expected,actor:'Text editor',action:'saved file',writeAccess:principal.writeAccess});}finally{blob.release?.();}
+ platform.world.storage=platform.storage;try{return await platform.world.update(id,{location:blob.location,body:JSON.stringify({...(()=>{try{return JSON.parse(object.body);}catch{return{};}})(),mime:info.mime.includes('*')?'text/plain':info.mime,originalName:info.name,bytes:bytes.length})},{writer:object.namespace,expected:input.expected,actor:'Text editor',action:'saved file',writeAccess:principal.writeAccess});}finally{blob.release?.();}
 }
 
 export async function uploadBinary(platform,req,url,principal){
