@@ -57,7 +57,7 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
     return { app, release };
   }
   const invoke = (app, path, method = 'GET') => sdk.request('apps/' + app.id + '/invoke', { method: 'POST', body: { path, method } });
-  const runtimes = () => sdk.request('runtimes');
+  const runtimes = () => sdk.runtimes.list();
   const first = await install('module-first', { entry: 'server/main.mjs', idleSafe: true });
   await sdk.apps.env.set(first.app.id, { SAMPLE_SETTING: 'first-app-only' });
   const cli = JSON.parse((await execute(process.execPath, ['cli/bin/ink-os.mjs', 'invoke', first.app.id, '/count', '--method', 'POST'], { env })).stdout);
@@ -78,7 +78,7 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
   const resumed = (await runtimes()).slots.find(slot => slot.slotId === initial.slotId);
   assert.equal(resumed.leaseId, initial.leaseId);
   let completed = false;
-  for (let attempt = 0; attempt < 60; attempt++) { if ((await invoke(first.app, '/done')).body.value?.done) { completed = true; break; } await new Promise(resolve => setTimeout(resolve, 100)); }
+  for (let attempt = 0; attempt < 60; attempt++) { const result = (await invoke(first.app, '/done')).body; assert.equal(result.backgroundError, undefined, JSON.stringify(result.backgroundError)); if (result.value?.done) { completed = true; break; } await new Promise(resolve => setTimeout(resolve, 100)); }
   assert.equal(completed, true);
   const launch = await sdk.request('apps/' + first.app.id + '/launch', { method: 'POST', body: {} });
   const appHost = new URL(launch.origin).host;
@@ -89,7 +89,7 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
   const backend = await fetch(url + '/backend/count', { headers: { Host: appHost, Cookie: cookie } });
   assert.equal((await backend.json()).value.count, 1);
   await new Promise(resolve => setTimeout(resolve, 2400));
-  await sdk.request('runtimes/reap', { method: 'POST', body: {} });
+  await sdk.runtimes.reap();
   assert.equal((await runtimes()).slots.find(slot => slot.slotId === initial.slotId).status, 'idle');
   const second = await install('module-second', { entry: 'server/main.mjs', idleSafe: true });
   assert.deepEqual((await invoke(second.app, '/inspect')).body, { setting: null, hostSecret: null, marker: false });
@@ -104,6 +104,6 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
   await sdk.apps.env.set(oci.app.id, { SAMPLE_SETTING: 'oci-only' });
   assert.deepEqual((await invoke(oci.app, '/example')).body, { kind: 'oci', setting: 'oci-only', hostSecret: null, path: '/example' });
   await new Promise(resolve => setTimeout(resolve, 2400));
-  await sdk.request('runtimes/reap', { method: 'POST', body: {} });
+  await sdk.runtimes.reap();
   assert.ok((await runtimes()).slots.every(slot => slot.status === 'idle'));
 });
