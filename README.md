@@ -176,6 +176,8 @@ Owner API routes are `POST /api/v1/ink/previews`, `GET|DELETE /api/v1/ink/previe
 
 Development: `npm run dev`. Validation: `npm test`, `npm run check`, `npm run audit`.
 
+The computer API can use the optional [browser service](computer-runtime/README.md). Its source, dependency lock and Dockerfile are included for self-hosting; it runs separately from the platform and is configured through deployment secrets.
+
 Administrators can import selected namespaces from a complete immutable OS Version export while the destination apps are registered and unpublished:
 
 ```sh
