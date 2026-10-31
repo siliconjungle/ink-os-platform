@@ -156,3 +156,48 @@ test('World persistence failure before its decision restores both the logical st
   await assert.rejects(f.target.migrations.apply(f.request));assert.equal(f.target.world.get(objectId),null);assert.equal(f.target.world.restorations['namespace:'+operation],undefined);
   assert.equal((await f.target.migrations.apply(f.request)).format,'ink-os-namespace-receipt-v1');
 });
+
+async function addDesktopDraftClosure(f) {
+ const referenceNamespace='f'.repeat(32),desktopId='1'.repeat(32),referenceId='2'.repeat(32),archivedId='3'.repeat(32);
+ for(const [id,namespace,body] of [[desktopId,'os','Desktop note draft'],[referenceId,referenceNamespace,'Retained inactive-app note'],[archivedId,appId,'Archived seed draft']]){
+  await f.source.world.put({id,namespace,kind:'note',title:'Desktop source',body},{writer:namespace});
+  await f.source.collaboration.document(appId,'draft:'+id,'text',{seedFile:id});
+ }
+ await f.source.world.update(archivedId,{archived:true},{writer:appId});
+ const versions=new Versions({world:f.source.world,collaboration:f.source.collaboration,storage:f.source.storage}),version=await versions.create({label:'Draft reference closure'}),manifest=await versions.read(version.id);
+ const request={...f.request,sourceVersion:manifest,sourceVersionCut:{id:manifest.id,manifestDigest:hash(JSON.stringify(manifest)),worldVersion:manifest.world.version,core:manifest.world.core,capturedAt:manifest.capturedAt},referenceNamespaces:[referenceNamespace],recordIds:[...f.request.recordIds,desktopId,referenceId,archivedId],documentIds:manifest.documents.filter(d=>d.metadata.namespace===appId||d.metadata.namespace==='os'&&d.metadata.key==='desktop').map(d=>d.metadata.id)};
+ delete request.expected;
+ return{request,referenceNamespace,desktopId,referenceId,archivedId};
+}
+
+test('desktop and inactive-app note draft seeds retain exact causal bytes and original namespaces across import and restart',async t=>{
+ const f=await setup(t),closure=await addDesktopDraftClosure(f),{request,referenceNamespace,desktopId,referenceId,archivedId}=closure;
+ request.expected=(await f.target.migrations.plan(request)).expected;const receipt=await f.target.migrations.apply(request);
+ assert.deepEqual(receipt.scope.referenceNamespaces,[referenceNamespace]);assert.equal(f.target.world.get(referenceNamespace),null);
+ for(const id of [desktopId,referenceId,archivedId]){
+  const source=request.sourceVersion.documents.find(d=>d.metadata.seedFile===id),target=await f.target.collaboration.documents.get(source.metadata.id),snapshot=await f.target.collaboration.snapshot(target);
+  assert.equal(snapshot.bytes,source.snapshot.bytes);assert.deepEqual(snapshot.versions,source.snapshot.versions);assert.equal(snapshot.text,source.snapshot.text);
+  assert.equal(target.seedFile,id);assert.equal(target.seedRevision,f.target.world.get(id).revision);
+ }
+ assert.equal(f.target.world.get(referenceId).namespace,referenceNamespace);assert.equal(f.target.world.get(archivedId).archived,true);
+ await assert.rejects(f.target.collaboration.document(appId,'draft:'+archivedId,'text'),{status:404});
+ assert.equal(await (await f.target.collaboration.document(appId,'draft:'+desktopId,'text')).replica.view(),'Desktop note draft');
+ await f.target.collaboration.close();const reopened=await host(f.target.directory,{existing:true});f.owners.splice(f.owners.indexOf(f.target),1,reopened);
+ assert.equal(await (await reopened.collaboration.document(appId,'draft:'+referenceId,'text')).replica.view(),'Retained inactive-app note');
+ assert.equal((await reopened.migrations.apply(request)).replayed,true);
+ await reopened.world.update(desktopId,{tags:['app-source']},{writer:'os'});
+ await assert.rejects(reopened.collaboration.document(appId,'draft:'+desktopId,'text'),{status:404});
+});
+
+test('reference-only imports reject unselected, protected, unrelated or registered-app records without changing the target',async t=>{
+ const f=await setup(t),{request,referenceNamespace,referenceId}=await addDesktopDraftClosure(f),before=f.target.world.version;
+ await assert.rejects(f.target.migrations.plan({...request,referenceNamespaces:[]}),{status:400});
+ await assert.rejects(f.target.migrations.plan({...request,recordIds:request.recordIds.filter(id=>id!==referenceId)}),{status:400});
+ const unrelated=structuredClone(request);unrelated.sourceVersion.world.objects.push({id:'4'.repeat(32),namespace:referenceNamespace,kind:'note',title:'Unrelated',body:'not a selected seed',tags:[],spaces:[],created:1});unrelated.sourceVersionCut.manifestDigest=hash(JSON.stringify(unrelated.sourceVersion));unrelated.recordIds.push('4'.repeat(32));
+ await assert.rejects(f.target.migrations.plan(unrelated),{status:400});
+ const protectedSource=structuredClone(request);protectedSource.sourceVersion.world.objects.find(o=>o.id===referenceId).tags=['app-source'];protectedSource.sourceVersionCut.manifestDigest=hash(JSON.stringify(protectedSource.sourceVersion));
+ await assert.rejects(f.target.migrations.plan(protectedSource),{status:400});
+ assert.equal(f.target.world.version,before);assert.equal(f.target.world.get(referenceId),null);
+ await f.target.world.put({id:referenceNamespace,namespace:'os',kind:'app',title:'Foreign app',body:JSON.stringify({slug:'foreign-app',releaseId:'5'.repeat(32)})},{writer:'os'});
+ await assert.rejects(f.target.migrations.plan(request),{status:409});assert.equal(f.target.world.get(referenceId),null);
+});
