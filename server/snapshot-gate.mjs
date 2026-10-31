@@ -63,15 +63,16 @@ export class SnapshotGate {
 /** Encrypted local-tree capture with a real bound host gate. Remote asset and
  * external-project coverage is deliberately reported separately by the archive.
  */
-export function createLiveBackup({ gate, directory = gate?.directory, archive, password, limits, signal, timeoutMs, world, storage, remoteAssets = false, assetLimits } = {}) {
+export function createLiveBackup({ gate, directory = gate?.directory, archive, password, limits, signal, timeoutMs, world, storage, remoteAssets = false, assetLimits, excludeBackupDirectory = false } = {}) {
   if (!(gate instanceof SnapshotGate) || !directory || resolve(directory) !== gate.directory) throw Error('Bind this backup to the same instance as its snapshot gate.');
   if ((typeof password !== 'string' && !Buffer.isBuffer(password)) || Buffer.byteLength(password) < 12 || Buffer.byteLength(password) > 4096) throw Error('Backup password must contain 12–4096 bytes');
   if (typeof remoteAssets !== 'boolean' || remoteAssets && (!world || !storage || resolve(world.directory) !== gate.directory || resolve(storage.directory) !== gate.directory)) throw Error('Remote asset capture requires the same instance World and current storage.');
-  return createBackup({ directory, archive, password, limits, acquireSnapshot: async () => {
+  if (typeof excludeBackupDirectory !== 'boolean') throw Error('Choose whether this host owns an excluded backup directory.');
+  return createBackup({ directory, archive, password, limits, signal, acquireSnapshot: async () => {
     const snapshot = await gate.acquireSnapshot({ signal, timeoutMs });
     try {
       const closure = remoteAssets ? backupAssetClosure({ world, storage, directory, limits: assetLimits }) : null;
-      return closure ? { ...snapshot, ...closure, coverage: { ...snapshot.coverage, ...closure.coverage } } : snapshot;
+      return { ...snapshot, ...(closure || {}), excludeBackupDirectory, coverage: { ...snapshot.coverage, ...closure?.coverage } };
     } catch (error) { await snapshot.release(); throw error; }
   } });
 }

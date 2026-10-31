@@ -90,7 +90,7 @@ async function sourceManifest(source, originalDirectory, limits) {
  * Entire trees (including .git and identity/envelope keys) are private data.
  * No external symlinks, external project paths or remote blobs are followed.
  */
-export async function createBackup({ directory, archive, password, offline = false, acquireSnapshot, limits: overrides } = {}) {
+export async function createBackup({ directory, archive, password, offline = false, acquireSnapshot, limits: overrides, signal } = {}) {
   const limits = limitsFor(overrides);
   if (!archive || !directory) throw Error('Provide source directory and archive path');
   if (typeof offline !== 'boolean') throw Error('offline must be a boolean assertion');
@@ -102,17 +102,23 @@ export async function createBackup({ directory, archive, password, offline = fal
     snapshot = acquireSnapshot ? await acquireSnapshot() : { directory, consistency: 'offline', release: async () => {} };
     if (!snapshot || typeof snapshot.release !== 'function' || !snapshot.directory || !['offline', 'quiesced', 'snapshot'].includes(snapshot.consistency) || acquireSnapshot && snapshot.consistency === 'offline') throw Error('Invalid backup snapshot contract');
     const source = resolve(snapshot.directory);
-    await noSymlinkAncestors(source); await noSymlinkAncestors(parent); outside(source, destination); outside(resolve(directory), destination);
+    await noSymlinkAncestors(source); await noSymlinkAncestors(parent);
+    const excluded = snapshot.excludeBackupDirectory === true ? 'backups' : null;
+    const backupPath = relative(join(source, 'backups'), destination);
+    const insideExcluded = excluded && backupPath && !backupPath.startsWith('..' + sep) && backupPath !== '..' && !parse(backupPath).root && source === resolve(directory);
+    if (!insideExcluded) { outside(source, destination); outside(resolve(directory), destination); }
     if (!(await lstat(source)).isDirectory()) throw Error('Backup source must be a directory');
     try { await lstat(destination); throw Error('Backup archive already exists'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     const header = Buffer.concat([MAGIC, randomBytes(16), randomBytes(12)]);
     key = await keyFor(password, header.subarray(8, 24));
     const cipher = createCipheriv('aes-256-gcm', key, header.subarray(24)); cipher.setAAD(header);
     temp = join(parent, '.' + basename(destination) + '.' + randomBytes(12).toString('hex') + '.partial');
-    output = await open(temp, 'wx', 0o600); await writeAll(output, header);
+    const archiveDigest = createHash('sha256');
+    const writeEncrypted = async bytes => { archiveDigest.update(bytes); await writeAll(output, bytes); };
+    output = await open(temp, 'wx', 0o600); await writeEncrypted(header);
     let encryptedBytes = HEADER_BYTES;
-    const emit = async bytes => { const encrypted = cipher.update(bytes); encryptedBytes += encrypted.length; if (encryptedBytes + 16 > limits.maxArchiveBytes) throw Error('Backup archive exceeds limit'); await writeAll(output, encrypted); };
-    const metadata = { source: await sourceManifest(source, snapshot.sourceRoot || directory, limits), format: 'ink-os-private-backup-v1', createdAt: new Date().toISOString(), consistency: snapshot.consistency, coverage: { remoteAssets: false, externalProjects: false, externalSecrets: false, ...snapshot.coverage, localTree: true }, ...(snapshot.assets ? { assets: snapshot.assets } : {}) };
+    const emit = async bytes => { signal?.throwIfAborted(); const encrypted = cipher.update(bytes); encryptedBytes += encrypted.length; if (encryptedBytes + 16 > limits.maxArchiveBytes) throw Error('Backup archive exceeds limit'); await writeEncrypted(encrypted); };
+    const metadata = { source: await sourceManifest(source, snapshot.sourceRoot || directory, limits), format: 'ink-os-private-backup-v1', createdAt: new Date().toISOString(), consistency: snapshot.consistency, coverage: { remoteAssets: false, externalProjects: false, externalSecrets: false, ...snapshot.coverage, localTree: true, ...(excluded ? { excludedBackupArchives: true } : {}) }, ...(snapshot.assets ? { assets: snapshot.assets } : {}) };
     await emit(recordBytes({ type: 'metadata', ...metadata }));
     let files = 0, directories = 0, bytes = 0;
     const names = new Set(), parents = new Set();
@@ -129,7 +135,7 @@ export async function createBackup({ directory, archive, password, offline = fal
         parents.add(path);
         directories++; await emit(recordBytes({ type: 'directory', path, mode }));
         const entries = await opendir(local);
-        for await (const entry of entries) await visit(join(local, entry.name), path ? path + '/' + entry.name : entry.name);
+        for await (const entry of entries) { if (!path && entry.name === excluded) continue; await visit(join(local, entry.name), path ? path + '/' + entry.name : entry.name); }
       } else {
         const size = Number(stat.size);
         if (!Number.isSafeInteger(size) || size > limits.maxFileBytes || bytes + size > limits.maxBytes) throw Error('Backup file or total byte limit exceeded');
@@ -168,10 +174,10 @@ export async function createBackup({ directory, archive, password, offline = fal
     }
     await emit(recordBytes({ type: 'end', files, directories, bytes }));
     released = true; await snapshot.release();
-    await writeAll(output, cipher.final()); await writeAll(output, cipher.getAuthTag()); await output.sync(); await output.close(); output = undefined;
+    signal?.throwIfAborted(); await writeEncrypted(cipher.final()); await writeEncrypted(cipher.getAuthTag()); await output.sync(); await output.close(); output = undefined;
     // Hard-link publication is atomic and cannot clobber an existing archive.
     await link(temp, destination); await unlink(temp); temp = undefined; await syncDirectory(parent);
-    return { ...metadata, files, directories, bytes, archiveBytes: encryptedBytes + 16 };
+    return { ...metadata, files, directories, bytes, archiveBytes: encryptedBytes + 16, archiveSha256: archiveDigest.digest('hex') };
   } finally {
     key?.fill(0);
     if (output) await output.close().catch(() => {});

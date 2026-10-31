@@ -80,7 +80,16 @@
     ".local/continuation-audit.log": "Completed successful source audit for selected continuation source.",
     "app-runtime/sdk-server.mjs": "Stable runtime SDK entry delegates to the canonical server SDK, preventing protocol drift in application workers.",
     "tests/fixtures/module-backend.mjs": "Required real Docker held-worker restart and account-key continuation during graceful shutdown proof fixture.",
-    ".local/runtime-sdk-tests.log": "Required focused continuation, shutdown and runtime-source regression log for canonical runtime SDK change."
+    ".local/runtime-sdk-tests.log": "Required focused continuation, shutdown and runtime-source regression log for canonical runtime SDK change.",
+    "server/backups.mjs": "Durable bounded administrator backup jobs with transient passwords, explicit cancellation/restart and no incomplete publication.",
+    "server/backup-router.mjs": "Administrator-only job controls and bounded encrypted HTTP download/range streaming.",
+    "cli/bin/backup-online.mjs": "Asynchronous job lifecycle and integrity-checked exclusive local archive download.",
+    "sdk/src/backups.js": "Shared programmatic job controls and receipt-bound streaming download verifier.",
+    "tests/backup-api.test.mjs": "Actual spawned host, CLI/SDK encryption/recovery/restart/auth/range/corrupt-download and durable interrupted-job proof inputs.",
+    ".local/backup-api-focused.log": "Selected required focused backup API/CLI/recovery/archive/gate regression log.",
+    ".local/backup-api-tests.log": "Completed319-test serial regression:314 passed,5 environment gates,0 failures. Selected proof retains exact source/log digest.",
+    "evidence/backup-api.json": "Selected actual owned host CLI/API/SDK encrypted capture/download/recovery/restart/shutdown proof with exact inputs and full regression digest; production/provider-rebinding limits explicit.",
+    ".local/backup-api-shutdown.log": "Completed actual slow remote-reader/SIGTERM and private job protocol tests; selected proof scope is also covered by the full regression."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",

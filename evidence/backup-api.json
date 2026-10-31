@@ -1,0 +1,92 @@
+{
+  "format": "ink-os-backup-api-proof-v1",
+  "status": "passed",
+  "baseCommit": "f37b254fc6e16f0846a3c67c9d16680b786df23c",
+  "inputs": [
+    {
+      "sha256": "4d6983a80335c60c68649632ecba9c06b774d26f2772a5b9a23168407e8e639e",
+      "path": "server/backups.mjs"
+    },
+    {
+      "sha256": "99771c178d69ae9209198eb3ff762649816b5c24933c553a8d376aa09223db45",
+      "path": "server/backup-router.mjs"
+    },
+    {
+      "sha256": "a254e78ce3d7126bdef46074482d6f005b3684ecef0486240831152baba5b102",
+      "path": "server/backup-store.mjs"
+    },
+    {
+      "sha256": "00eaf67a57a34e2d263dea0083132ba0b3c29d5f2e8a36729e6ad52bc2db1a4a",
+      "path": "server/snapshot-gate.mjs"
+    },
+    {
+      "sha256": "7c41418d34d2ff113be1f444a6a9a4e4ab28300f6c0fec050bc8efa41bbd24f6",
+      "path": "server/index.mjs"
+    },
+    {
+      "sha256": "aebc6266cf12b8cc5c7a01c26ea3624e515972af8f3da0a34eee32ee9f2f59de",
+      "path": "sdk/src/backups.js"
+    },
+    {
+      "sha256": "fc74426154a731e60430b152f663cb5d759b9c7d8573c8dd510073d535e1fc14",
+      "path": "sdk/src/server.js"
+    },
+    {
+      "sha256": "5040f15ca1a9e03830bc0f34ff4e4a1cc888d2306efa08f535638593518fb492",
+      "path": "cli/bin/backup-online.mjs"
+    },
+    {
+      "sha256": "18f6bb800ee514ac13f6fb9ebcf29e1558b3ed463bc1f42863d01f0e963a9cf3",
+      "path": "cli/bin/backup.mjs"
+    },
+    {
+      "sha256": "268437e6c4ab6f058627574166ca8325b8b0e06f94ce6e55d2dce3aabb2500e9",
+      "path": "cli/bin/ink-os.mjs"
+    },
+    {
+      "sha256": "dda505f6192632936feb35725fd2ba9544215e898a11d523e573e99414c648aa",
+      "path": "tests/backup-api.test.mjs"
+    },
+    {
+      "sha256": "487652c175865b7da4e38f1d70a0a1924715a52859f360f40b473f5b6d0f70e8",
+      "path": "tests/docker-backends.test.mjs"
+    },
+    {
+      "sha256": "47d07dc4794782c211ed8f29e0963b8cf663ef0f9a11b5dcb14180b21d5c5a03",
+      "path": "tests/fixtures/module-backend.mjs"
+    },
+    {
+      "sha256": "9dcff9ae6d5caa979943614d65e987b47cc9ec6bd5fed2158babf5b0fa39544b",
+      "path": "app-runtime/sdk-server.mjs"
+    },
+    {
+      "sha256": "efee348c69ecc097eb0b263e8c7776be7368293b3b74e5ca2c5295903888f6b0",
+      "path": "Dockerfile"
+    }
+  ],
+  "verification": {
+    "command": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "tests": 319,
+    "passed": 314,
+    "failed": 0,
+    "skipped": 5,
+    "logSha256": "71cbb6a29a99ed79d1909f1a1f34068b882abcfb4e6e2516dde04140b6adac0e",
+    "typecheck": "passed",
+    "sourceAudit": "passed"
+  },
+  "observed": [
+    "An actual owned host accepted an asynchronous administrator CLI backup, committed a job ID and captured encrypted local data with remote-content coverage.",
+    "CLI and SDK streamed receipt-bound ciphertext. Full digest/length, HTTP range/HEAD, no-clobber output and corrupt-download temporary cleanup passed.",
+    "Stopped-instance recovery authenticated the archive and preserved local bytes; host restart retained the ready job and original note. Recovery refused the source host while it was live.",
+    "Unauthenticated, limited account-key and service-key access to private backup controls was refused. Job journals contained neither password nor owner key nor source directory.",
+    "Repeated operation IDs observed the same committed archive; changed request intent refused. Cancellation wiped the active password buffer and never published readiness. Interrupted journal recovery refused download.",
+    "A delayed owned remote HTTP content reader remained active during SIGTERM. The host waited, refused replacement backup admission and exited only after encrypted publication and a durable ready receipt.",
+    "Previous encrypted backup artifacts and their job journal were excluded from snapshot coverage, preventing recursive archive capture."
+  ],
+  "limits": [
+    "Remote storage tests use owned loopback R2/S3 protocol fixtures, not the personal hosted bucket.",
+    "The new backup operation has not yet completed real Docker or hosted acceptance; the amended real Docker test is awaiting publication/CI.",
+    "Raw archive and same-provider stopped recovery are proven. Explicit storage/runtime provider rebinding remains unfinished.",
+    "Personal hosted and desktop releases have not yet been upgraded to these new backup endpoints."
+  ]
+}

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import{onlineBackupCLI}from './backup-online.mjs';
 import { projectCLI } from './projects.mjs';
 import{continuationFromEnvironment,continuationHeaders,redactConnectionSecrets}from '../../shared/continuation.mjs';
 import{appInteractionCLI,APP_INTERACTIONS}from'./app-api.mjs';
@@ -82,7 +83,7 @@ export function deploymentBackend(input,{runtimeImage,installedBackend}={}){
 export async function main(args=process.argv.slice(2)){
  const options={};const positional=[];for(let i=0;i<args.length;i++){if(args[i].startsWith('--')){const option=args[i].slice(2),equals=option.indexOf('=');if(equals!==-1)options[option.slice(0,equals)]=option.slice(equals+1);else options[option]=args[i+1]&&!args[i+1].startsWith('--')?args[++i]:true;}else positional.push(args[i]);}
  const [command='help',sub,value]=positional;
- if(command==='backup')return backupCLI({sub,options});
+ if(command==='backup'&&(options.offline!==undefined||sub==='restore'))return backupCLI({sub,options});
  const continuation=continuationFromEnvironment(process.env);
  const configPath=process.env.INK_OS_CONFIG||join(homedir(),'.config/ink-os/config.json');let config={};try{config=JSON.parse(await readFile(configPath,'utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
  let url,token,connection,identity;const explicitToken=process.env.INK_OS_TOKEN;
@@ -98,6 +99,7 @@ export async function main(args=process.argv.slice(2)){
  const authenticatedHeaders=target=>({Authorization:'Bearer '+token,...continuationHeaders(target,continuation)});
  async function request(path,method='GET',body){await authenticate();const target=new URL('/api/v1/'+path,url),response=await fetch(target,{method,redirect:'error',headers:{...authenticatedHeaders(target),'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const result=await response.json().catch(()=>{throw Error('Ink OS API response must be JSON');});if(!response.ok)throw Object.assign(Error(errorMessage(result?.error||response.statusText)),{status:response.status,current:result?.current});return result;}
  const print=value=>console.log(JSON.stringify(value,null,2));
+ if(command==='backup')return onlineBackupCLI({sub,id:value,options,request,print,download:async(path,{signal}={})=>{await authenticate();const target=new URL('/api/v1/'+path,url);return fetch(target,{signal,redirect:'error',headers:authenticatedHeaders(target)});}});
  if(command==='maintenance')return maintenanceCLI({sub,id:value,options,request,print});
  if(command==='migrations')return migrationCLI({sub,action:value,operation:positional[3],options,request,print});
  if(command==='projects')return projectCLI({sub,id:value,options,request,print,getTarget:projectTarget});

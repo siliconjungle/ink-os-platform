@@ -113,6 +113,14 @@ test('real Docker backends preserve held work across restart, isolate tenants, r
   const accountKey = await sdk.account.keys.create({ name: 'Docker continuation proof', scopes: ['world:read', 'world:write'], expiresInDays: 1 });
   await sdk.apps.env.set(second.app.id, { PROOF_ACCOUNT_TOKEN: accountKey.token });
   assert.equal((await invoke(second.app, '/account-work', 'POST')).body.started, true);
+  const backupOperation = 'a'.repeat(32), backupJob = await sdk.backups.create({ operation: backupOperation, password: 'Disposable Docker backup proof password', timeoutMs: 30000 });
+  assert.ok(['queued', 'running'].includes(backupJob.status));
+  let saved;
+  for (let attempt = 0; attempt < 300; attempt++) { saved = await sdk.backups.get(backupOperation); if (!['queued', 'running'].includes(saved.status)) break; await new Promise(resolve => setTimeout(resolve, 100)); }
+  assert.equal(saved.status, 'ready', JSON.stringify(saved));
+  const encrypted = await sdk.backups.download(backupOperation); let captured = 0; for await (const chunk of encrypted.chunks) captured += chunk.length; assert.equal(captured, saved.bytes);
+  await sdk.backups.delete(backupOperation);
+  assert.equal((await invoke(second.app, '/account-work', 'POST')).body.started, true);
   const held = (await runtimes()).slots.find(slot => slot.appId === second.app.id);
   assert.equal(held.holds.length, 1);
   const deployment = JSON.parse(await readFile(join(directory, 'runtime-pool.json'))).slots.find(slot => slot.id === held.slotId).deployment;

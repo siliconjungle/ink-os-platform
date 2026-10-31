@@ -6,6 +6,9 @@ import { NativeJobs } from './native-jobs.mjs';
 import { inkSource } from './ink-apps.mjs';
 import { InkPreviews } from './ink-previews.mjs';
 import { drainHost } from './shutdown.mjs';
+import { SnapshotGate } from './snapshot-gate.mjs';
+import { Backups } from './backups.mjs';
+import { backupRoute, backupControlPath } from './backup-router.mjs';
 import { httpConnections } from './http-connections.mjs';
 import{DesktopActions}from './desktop-actions.mjs';
 import{errorStatus}from './error-status.mjs';
@@ -47,10 +50,10 @@ const port = Number(process.env.PORT || 4318);
 const production=process.env.NODE_ENV==='production';
 const origin=process.env.INK_OS_ORIGIN||`http://127.0.0.1:${port}`;
 const data = process.env.INK_OS_DATA_DIR || join(root, '.data');
-let maintenanceHost,sockets;
+let maintenanceHost,sockets,snapshotGate,backups,stopping=false;
 const requests=new Set(),responses=new Set();
 const maintenanceAdapter=Object.fromEntries(['closeAdmission','resumeAdmission','continueDraining','activity','quiescePool','flush'].map(method=>[method,(...args)=>{if(!maintenanceHost)throw Error('Maintenance host adapter is not initialized');return maintenanceHost[method](...args);} ]));
-const maintenance=await new Maintenance({directory:data,instanceId:process.env.INK_OS_INSTANCE_ID,images:()=>({os:process.env.INK_OS_IMAGE_PIN,runtime:process.env.INK_OS_RUNTIME_IMAGE}),adapter:maintenanceAdapter,admissionAvailable:()=>!draining}).open();
+const maintenance=await new Maintenance({directory:data,instanceId:process.env.INK_OS_INSTANCE_ID,images:()=>({os:process.env.INK_OS_IMAGE_PIN,runtime:process.env.INK_OS_RUNTIME_IMAGE}),adapter:maintenanceAdapter,admissionAvailable:()=>!draining&&!stopping&&!snapshotGate?.closed&&!backups?.busy}).open();
 const world = await new World(data).open();
 const storage = await new Storage(data).open();
 const collaboration = new Collaboration({directory:data,world,storage});
@@ -185,19 +188,22 @@ async function api(req, res, url) {
 
 const platformAPI=platformRouter(platform,{send,body});
 let draining=false,sealed=false,shutdownTask;
-maintenanceHost=createMaintenanceHostAdapter({platform,world,storage,code,requests,responses,sockets:()=>sockets,externalClosed:()=>maintenance.closed||draining});
+maintenanceHost=createMaintenanceHostAdapter({platform,world,storage,code,requests,responses,sockets:()=>sockets,externalClosed:()=>maintenance.closed||draining||snapshotGate?.closed===true});
+snapshotGate=new SnapshotGate({directory:data,adapter:maintenanceHost,otherClosed:()=>maintenance.closed||draining});
+backups=await new Backups({gate:snapshotGate,world,storage,instanceId:process.env.INK_OS_INSTANCE_ID,available:()=>!maintenance.closed&&!draining&&!stopping&&!snapshotGate.closed}).open();
 await maintenance.activate();
 platform.maintenance=maintenance;
 const server = http.createServer(async (req, res) => {
  let finish;const task=new Promise(resolve=>finish=resolve);let tracked=false;
  try{
   const url=new URL(req.url,origin);
-  tracked=url.pathname!=='/api/health'&&!url.pathname.startsWith('/api/v1/maintenance');if(tracked){requests.add(task);responses.add(res);res.once('close',()=>responses.delete(res));}
+  tracked=url.pathname!=='/api/health'&&!url.pathname.startsWith('/api/v1/maintenance')&&!backupControlPath(url.pathname);if(tracked){requests.add(task);responses.add(res);res.once('close',()=>responses.delete(res));}
   if(sealed){res.setHeader('Connection','close');return send(res,503,{error:'This host is stopping.'});}
-  if(url.pathname==='/api/health')return send(res,200,{ok:true,engine:'Ink',version:world.version,instanceId:process.env.INK_OS_INSTANCE_ID,draining:draining||maintenance.closed});
+  if(url.pathname==='/api/health')return send(res,200,{ok:true,engine:'Ink',version:world.version,instanceId:process.env.INK_OS_INSTANCE_ID,draining:draining||maintenance.closed||snapshotGate.closed});
   const principal=platform.principal(req)||(!production?{owner:true,admin:true,accountId:'owner',namespace:'os'}:null);
   if(await maintenanceRoute(maintenance,req,res,url,principal,{send,body}))return;
-  if((maintenance.closed||draining)&&!(platform.canContinueAdmission(principal)&&url.pathname.startsWith('/api/v1/'))){res.setHeader('Retry-After','2');return send(res,503,{error:'This computer is finishing admitted work.'});}
+  if(await backupRoute(backups,req,res,url,principal,{send,body}))return;
+  if((maintenance.closed||draining||snapshotGate.closed)&&!(platform.canContinueAdmission(principal)&&url.pathname.startsWith('/api/v1/'))){res.setHeader('Retry-After','2');return send(res,503,{error:'This computer is finishing admitted work.'});}
   if(platform.provider?.route?.(req,res))return;
   if(req.method==='GET'&&url.pathname==='/ink.svg'){res.setHeader('Content-Type','image/svg+xml');res.setHeader('Cache-Control','public, max-age=3600');return res.end(await readFile(join(root,production?'dist':'public','ink.svg')));}
   if(url.pathname==='/login'&&req.method==='GET'){res.setHeader('Content-Type','text/html');res.setHeader('Cache-Control','private, no-store');return res.end(loginPage(url.searchParams.get('next')));}
@@ -213,7 +219,7 @@ const server = http.createServer(async (req, res) => {
  }catch(error){if(!res.headersSent)send(res,errorStatus(error),{error:error.message,current:error.current?world.publicObject(error.current):undefined});else res.end();}finally{if(tracked)requests.delete(task);finish();}
 });
 const connections=httpConnections(server);
-sockets=platform.collaboration.attach(server,req=>{if(sealed)return null;const principal=platform.principal(req)||(!production?{owner:true,admin:true,accountId:'owner',namespace:'os'}:null);return (maintenance.closed||draining)&&!platform.canContinueAdmission(principal)?null:principal;});
-const shutdown=()=>{if(shutdownTask)return shutdownTask;draining=true;console.log('Ink OS is finishing background jobs before stopping.');shutdownTask=drainHost({server,connections,platform,world,requests,responses,sockets,vite,admission:maintenanceHost,stopAdmission:()=>{sealed=true;}}).then(()=>{console.log('Ink OS stopped cleanly.');process.exitCode=0;}).catch(error=>{console.error('Ink OS shutdown:',error.message);process.exitCode=1;});return shutdownTask;};
+sockets=platform.collaboration.attach(server,req=>{if(sealed)return null;const principal=platform.principal(req)||(!production?{owner:true,admin:true,accountId:'owner',namespace:'os'}:null);return (maintenance.closed||draining||snapshotGate.closed)&&!platform.canContinueAdmission(principal)?null:principal;});
+const shutdown=()=>{if(shutdownTask)return shutdownTask;stopping=true;backups.stopAccepting();console.log('Ink OS is finishing background jobs before stopping.');shutdownTask=(async()=>{await backups.whenIdle();draining=true;await drainHost({server,connections,platform,world,requests,responses,sockets,vite,admission:maintenanceHost,stopAdmission:()=>{sealed=true;}});})().then(()=>{console.log('Ink OS stopped cleanly.');process.exitCode=0;}).catch(error=>{console.error('Ink OS shutdown:',error.message);process.exitCode=1;});return shutdownTask;};
 process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);
 server.listen(port, process.env.INK_OS_BIND||'127.0.0.1',()=>{if(!maintenance.closed){platform.schedules.start();platform.workflows.start();}console.log(`Ink OS: ${origin}; engine=Ink; production=${production}`);});
