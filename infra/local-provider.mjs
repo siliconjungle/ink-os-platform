@@ -1,5 +1,7 @@
 import http from 'node:http';
-import { extname } from 'node:path';
+import { extname, join } from 'node:path';
+import { constants } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { sign, verify } from '../server/platform.mjs';
 import { httpConnections } from '../server/http-connections.mjs';
 import { RuntimePool } from '../server/runtime-pool.mjs';
@@ -23,6 +25,23 @@ export class LocalProvider {
   }
   snapshotAdmissionClosed() {
     return !!this.admissionGate && this.admissionGate() === true && [...this.servers.values()].every(runtime => runtime.trackedAdmission === true);
+  }
+  async snapshotBackendsInactive() {
+    if (this.compute || this.pool || !this.snapshotAdmissionClosed() || typeof this.platform?.directory !== 'string') return false;
+    // Without an executor these app servers cannot start backend work. A
+    // private journal from an earlier executor must also have no live lease.
+    let file;
+    try {
+      file = await open(join(this.platform.directory, 'runtime-pool.json'), constants.O_RDONLY | constants.O_NOFOLLOW);
+      const before = await file.stat({ bigint: true }); if (!before.isFile() || before.size > 16n * 1024n * 1024n) return false;
+      const bytes = Buffer.alloc(Number(before.size) + 1); let size = 0;
+      while (size < bytes.length) { const part = await file.read(bytes, size, bytes.length - size, size); if (!part.bytesRead) break; size += part.bytesRead; }
+      const after = await file.stat({ bigint: true });
+      if (BigInt(size) !== before.size || before.size !== after.size || before.mtimeNs !== after.mtimeNs || before.ctimeNs !== after.ctimeNs) return false;
+      const saved = JSON.parse(bytes.subarray(0, size));
+      return saved.version === 1 && Array.isArray(saved.slots) && saved.slots.every(slot => slot?.status === 'idle' && !slot.appId && !slot.releaseId && !slot.leaseId && (slot.holds === undefined || Array.isArray(slot.holds) && slot.holds.length === 0));
+    } catch (error) { return error.code === 'ENOENT' && !file; }
+    finally { await file?.close(); }
   }
   async attach(platform) {
     this.platform = platform;
@@ -52,7 +71,7 @@ export class LocalProvider {
       this.requests.add(task); this.responses.add(res); res.once('close', () => this.responses.delete(res));
       try {
         if (connections.closing) { res.writeHead(503, { Connection: 'close' }); res.end('This app host is stopping.'); return; }
-        if (this.admissionGate?.()) { res.writeHead(503, { 'Retry-After': '2' }); res.end('This computer is preserving admitted work before a snapshot.'); return; }
+        if (this.admissionGate?.()) { res.writeHead(503, { 'Retry-After': '2' }); res.end('This computer is finishing admitted work.'); return; }
         const url = new URL(req.url, 'http://127.0.0.1');
         res.setHeader('Cache-Control', 'private, no-store');
         res.setHeader('X-Content-Type-Options', 'nosniff');

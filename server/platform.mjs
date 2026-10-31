@@ -9,6 +9,7 @@ import{APP_CAPABILITIES}from'../shared/app-capabilities.mjs';
 import{RuntimeCredentials,withWriteAccess}from './runtime-credentials.mjs';
 import{desktopOverrides}from '../shared/app-icons.mjs';
 import{AppEnvironment,environmentName,environmentValues}from './app-environment.mjs';
+import { CONTINUATION_HEADER } from '../shared/continuation.mjs';
 import{desktopManifest}from '../shared/app-desktop.mjs';
 import{appDataSnapshot,forkData}from './app-data.mjs';import{APIKeys}from './api-keys.mjs';
 import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
@@ -40,7 +41,19 @@ export class Platform {
  runtimeKey(appId,releaseId,meta){return meta.runtimeAuth===2?this.runtime.token(appId,releaseId):this.keys[appId];}
  async serviceToken(appId){this.app(appId);await this.runtime.prepare(appId);return this.runtime.token(appId);}
  async saveKeys(){const task=this.keysTail.then(async()=>{const path=join(this.directory,'platform-keys.json');await writeFile(path+'.next',JSON.stringify(this.keys),{mode:0o600,flush:true});await rename(path+'.next',path);});this.keysTail=task.catch(()=>{});return task;}
- principal(req){const bearer=/^Bearer (.+)$/.exec(req.headers.authorization||'')?.[1];if(bearer&&this.adminToken&&equal(bearer,this.adminToken))return{owner:true,admin:true,accountId:'owner',accountName:'Admin',namespace:'os'};const cookie=/(?:^|; )ink_os_session=([^;]+)/.exec(req.headers.cookie||'')?.[1];if(bearer){const account=this.apiKeys?.authenticate(bearer);if(account)return account;}if(cookie&&this.adminToken){const session=verify(cookie,this.adminToken);if(session?.owner){if(session.keyId)return this.apiKeys?.principal(session.keyId)||null;return{owner:true,admin:true,accountId:'owner',accountName:'Admin',namespace:'os'};}}if(bearer){const cleanup=req.method==='POST'&&/^\/api\/v1\/runtime\/compute\/(release|allow-idle)$/.test(new URL(req.url||'/','http://os').pathname),runtime=this.runtime?.principal(bearer,{allowArchived:cleanup});if(runtime)return runtime;}if(bearer)for(const [appId,key]of Object.entries(this.keys))if(equal(bearer,key)&&!this.world.get(appId)?.archived)return this.runtime.bind({owner:false,appId,namespace:appId,legacyCredential:true});return null;}
+ bindOwnerContinuation(principal,req){
+  if(!principal)return null;
+  const token=req.headers[CONTINUATION_HEADER];if(token===undefined)return principal;
+  const cleanup=req.method==='POST'&&/^\/api\/v1\/runtime\/compute\/(release|allow-idle)$/.test(new URL(req.url||'/','http://os').pathname);
+  const lease=typeof token==='string'?this.runtime?.leasePrincipal(token,{allowArchived:cleanup}):null;
+  if(!lease?.leaseId)return null;
+  return{...principal,leaseId:lease.leaseId,continuationAppId:lease.appId,continuationReleaseId:lease.releaseId,writeAccess:lease.writeAccess};
+ }
+ canContinueAdmission(principal){
+  const pool=this.provider?.pool;if(!principal?.leaseId||!pool||pool.admissionClosed||typeof pool.active!=='function')return false;
+  return pool.active(principal.leaseId,principal.owner?principal.continuationAppId:principal.appId,principal.owner?principal.continuationReleaseId:principal.releaseId);
+ }
+ principal(req){const bearer=/^Bearer (.+)$/.exec(req.headers.authorization||'')?.[1];if(bearer&&this.adminToken&&equal(bearer,this.adminToken))return this.bindOwnerContinuation({owner:true,admin:true,accountId:'owner',accountName:'Admin',namespace:'os'},req);const cookie=/(?:^|; )ink_os_session=([^;]+)/.exec(req.headers.cookie||'')?.[1];if(bearer){const account=this.apiKeys?.authenticate(bearer);if(account)return this.bindOwnerContinuation(account,req);}if(cookie&&this.adminToken){const session=verify(cookie,this.adminToken);if(session?.owner){if(session.keyId)return this.bindOwnerContinuation(this.apiKeys?.principal(session.keyId)||null,req);return this.bindOwnerContinuation({owner:true,admin:true,accountId:'owner',accountName:'Admin',namespace:'os'},req);}}if(bearer){const cleanup=req.method==='POST'&&/^\/api\/v1\/runtime\/compute\/(release|allow-idle)$/.test(new URL(req.url||'/','http://os').pathname),runtime=this.runtime?.principal(bearer,{allowArchived:cleanup});if(runtime)return runtime;}if(bearer)for(const [appId,key]of Object.entries(this.keys))if(equal(bearer,key)&&!this.world.get(appId)?.archived)return this.runtime.bind({owner:false,appId,namespace:appId,legacyCredential:true});return null;}
  assetAccess(token){for(const[appId,key]of Object.entries(this.keys)){const grant=verify(token||'',key);if(grant?.assetRead&&grant.appId===appId&&!this.world.get(appId)?.archived)return true;}return false;}
  owner(principal){if(!principal?.owner)fail(403,'Owner access required');}
  app(appId){const object=this.world.get(appId);if(!object||object.archived||object.kind!=='app'||object.namespace!=='os')fail(404,'Application not found');return object;}

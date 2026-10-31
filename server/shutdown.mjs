@@ -1,19 +1,19 @@
-export async function drainHost({ server, connections, platform, world, requests, responses, sockets, vite, stopAdmission = () => {} }) {
-  platform.schedules.close(); platform.workflows.close();
-  while (requests.size || platform.workflows.active.size || platform.workflows.pumping || platform.schedules.ticking || platform.workflows.runs.some(run => run.status === 'queued') || platform.schedules.active.size) {
-    await platform.workflows.pump();
-    await new Promise(resolve => setTimeout(resolve, 50));
-  }
+import { waitForQuiescence } from './quiescence.mjs';
+
+export async function drainHost({ server, connections, platform, world, requests, responses, sockets, vite, admission, stopAdmission = () => {} }) {
+  if (!admission) throw Error('Host shutdown requires its bound admission and checkpoint adapter.');
+  admission.closeAdmission({ poolClosed: platform.provider?.pool?.admissionClosed === true });
+  await waitForQuiescence({ adapter: admission, pollMs: 50 });
   await platform.publishTail;
   stopAdmission();
   const closed = connections.close();
   for (const response of responses) if (String(response.getHeader('content-type')).startsWith('text/event-stream')) response.end();
   for (const socket of sockets.clients) socket.close(1001, 'Host is stopping');
-  await platform.nativeJobs.close();
+  await platform.nativeJobs?.close();
   await platform.provider?.close?.();
   await platform.collaboration.close();
   await world.persist();
   await closed;
   await vite?.close();
-  clearInterval(platform.calls.timer);
+  clearInterval(platform.calls?.timer);
 }

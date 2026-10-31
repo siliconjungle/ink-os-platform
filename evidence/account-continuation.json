@@ -1,0 +1,106 @@
+{
+  "format": "ink-os-account-continuation-proof-v1",
+  "status": "passed",
+  "inputs": [
+    {
+      "sha256": "184125cecff77dddd18ed81b967262e146922d5d4ff9090a30d59a055d46a19a",
+      "path": "shared/continuation.mjs"
+    },
+    {
+      "sha256": "e49f10451ea852749d3c068e6d1ac7240fb110b2df18802b16fbc22cfb4ceac2",
+      "path": "server/quiescence.mjs"
+    },
+    {
+      "sha256": "207769842440fe2ae71c50f7154be55b9c93ce5dd13b35e087c21021df4f6ddd",
+      "path": "server/platform.mjs"
+    },
+    {
+      "sha256": "34080217c6686b969beded1496635124576b218b1a1ebd4edcf37bdb2eefd65b",
+      "path": "server/index.mjs"
+    },
+    {
+      "sha256": "57cf440fffb68c04490850fb716b33f7b31ec449f92933af8ea91679781f9f5d",
+      "path": "server/shutdown.mjs"
+    },
+    {
+      "sha256": "53bdb3c57ead67f968b44dfa1139435984668a97a8f8f4bab20dadc751c6a5c4",
+      "path": "server/snapshot-gate.mjs"
+    },
+    {
+      "sha256": "8b4daf5baebafedefc7a1e323f114e4d80a7e71f7bdfca9012fbfdab9bb038d9",
+      "path": "server/maintenance.mjs"
+    },
+    {
+      "sha256": "9482cc59204c444bc7570372d8669b79d8f3fee8e94cfab7bea6a27c183af65e",
+      "path": "server/maintenance-host.mjs"
+    },
+    {
+      "sha256": "2f2323869c6404a2697b76a72032820f962578604281b012acdceaba837535f2",
+      "path": "infra/local-provider.mjs"
+    },
+    {
+      "sha256": "20089d9b8a1cc8c3f94d70d9575454d2392be7a8501f1fd2d9ba3f7ff1ba9311",
+      "path": "sdk/src/server.js"
+    },
+    {
+      "sha256": "b60abdb558dbf3c9009e44544aa892c1d1e2dabf2212f169aac0d03537c8b8d3",
+      "path": "cli/bin/ink-os.mjs"
+    },
+    {
+      "sha256": "145191e7b22cbd95756884c50dcc03b749db9413070926a0d52ccf15e197a21b",
+      "path": "cli/bin/artifacts.mjs"
+    },
+    {
+      "sha256": "cf81e801da35072f2685dae7d8eef02a62289fc83bc3a226526989e392c43bd7",
+      "path": "scripts/verify-upgraded-host.mjs"
+    },
+    {
+      "sha256": "0cef74ea354fca02764ecad95c90dc5cd4d5f219ea01d9a6885435707a0cf1d0",
+      "path": "tests/continuation-api.test.mjs"
+    },
+    {
+      "sha256": "a197cb96423ff57dbb5bebf63e70ba0e973c06f594b5dcc31437c78068ce617b",
+      "path": "tests/continuation-client.test.mjs"
+    },
+    {
+      "sha256": "656b90666cc4f9abcc64e9f2a7996f5c8689159faf535eed45c6d51572105e39",
+      "path": "tests/local-provider.test.mjs"
+    },
+    {
+      "sha256": "d76de6a6cdf58090380e02554040c35e13498ee4114c507073b24e35eaf6df64",
+      "path": "tests/maintenance.test.mjs"
+    },
+    {
+      "sha256": "a65367773319a33815f05153302010f222735230f5a9cd064a47d515df5e6d8a",
+      "path": "tests/snapshot-gate.test.mjs"
+    },
+    {
+      "sha256": "b04f93549a6bc741ffb51a676836d736151bc896b4eb4bd696ad98535eddd08e",
+      "path": "tests/upgraded-host-verifier.test.mjs"
+    }
+  ],
+  "verification": {
+    "command": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "tests": 315,
+    "passed": 310,
+    "failed": 0,
+    "skipped": 5,
+    "logSha256": "f7a1c987f1f1ef5105553eb17301864e134638cd3b5b4d04993c773dbd995382",
+    "typecheck": "passed",
+    "sourceAudit": "passed"
+  },
+  "observed": [
+    "Actual authenticated account-key CLI deployed a local Git/project/artifact release while its signed originating compute hold remained active and snapshot admission was closed.",
+    "Account identity, namespace and scope ceiling remained intact; forged, expired, non-lease, revoked and unrelated assignment contexts were refused.",
+    "A queued guarded World write could not outlive its originating lease authority.",
+    "SDK JSON, binary and event transports, CLI downloads and artifact uploads sent context only to its exact origin and refused redirects. Login did not persist context or attach credentials to public health probes.",
+    "Snapshot and shutdown waited for the admitted task and its compute hold. Only subsequently verified idle workers were released through the runtime pool lifecycle.",
+    "Encrypted capture and raw restore preserved the admitted task result and deployed source; unavailable local executors required absent or strictly idle private journals.",
+    "Upgrade verifier source binding includes the exact shared continuation helper in its bounded SDK dependency graph."
+  ],
+  "limits": [
+    "Runtime lifecycle tests use owned generated host instances and a controlled compute provider; this does not establish actual Docker or hosted account-continuation acceptance.",
+    "The personal hosted instance and its embedded Codex tools have not yet been updated to this protocol. No real model task or production worker lifecycle was exercised.",
+    "Durable administrator backup HTTP jobs, streaming downloads and portable storage/runtime recovery remain unfinished."
+  ]
+}

@@ -28,9 +28,9 @@ const directorySync = async path => { const handle = await open(path, 'r'); try 
 /** A durable admission gate. It never stops the host or a worker. The adapter
  * must preserve already-admitted work and prove its own runtime quiescence. */
 export class Maintenance {
-  constructor({ directory, instanceId, images, adapter, bootId = processBootId, fault } = {}) {
-    check(directory && typeof images === 'function' && adapter, 400, 'Provide maintenance storage, image provenance and host adapter');
-    Object.assign(this, { directory, instanceId, images, adapter, bootId, fault, path: join(directory, 'maintenance.json'), operations: [], committedReceipts:new Map(), activeOperation: null, closed: false, ready: false, tail: Promise.resolve(), progressTask: null });
+  constructor({ directory, instanceId, images, adapter, bootId = processBootId, fault, admissionAvailable = () => true } = {}) {
+    check(directory && typeof images === 'function' && adapter && typeof admissionAvailable === 'function', 400, 'Provide maintenance storage, image provenance and host adapter');
+    Object.assign(this, { directory, instanceId, images, adapter, bootId, fault, admissionAvailable, path: join(directory, 'maintenance.json'), operations: [], committedReceipts:new Map(), activeOperation: null, closed: false, ready: false, tail: Promise.resolve(), progressTask: null });
   }
   serial(run) { const task = this.tail.then(run); this.tail = task.catch(() => {}); return task; }
   owner(principal) { check(isAdmin(principal), 403, 'Only the administrator can prepare or release maintenance'); }
@@ -71,6 +71,7 @@ export class Maintenance {
     check(this.ready,503,'Maintenance is unavailable');const previous=this.operations.find(op=>op.request.operationId===request.operationId);
     if(previous){check(equal(previous.request,request),409,'Maintenance operation belongs to different input');if(this.activeOperation===request.operationId)this.kick();return structuredClone(previous.receipt);}
     check(!this.activeOperation,409,'Another maintenance operation is active');check(this.operations.length<256,409,'Maintenance history needs explicit retention review');check(equal(this.currentImages(),request.fromImages),409,'Maintenance source images do not match this host');
+    check(this.admissionAvailable()===true,409,'Another host operation owns admission');
     const receipt={format:'ink-os-maintenance-receipt-v1',instanceId:this.instanceId,operationId:request.operationId,challenge:request.challenge,state:'draining',bootId:this.bootId,admissionClosed:true,durable:true,stopAuthorized:false,fromImages:request.fromImages,targetImages:request.targetImages,activity:emptyActivity(),pool:initialPool(),preparedAt:new Date().toISOString()};
     this.closed=true;this.activeOperation=request.operationId;this.operations.push({request,preparedBootId:this.bootId,receipt});
     try{await this.adapter.closeAdmission({poolClosed:false});await this.persist();}catch(error){this.ready=false;throw error;}

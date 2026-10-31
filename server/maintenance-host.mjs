@@ -17,8 +17,8 @@ const promise=value=>value&&typeof value.then==='function';
 const allZero=activity=>Object.values(activity).every(value=>value===0);
 const unchanged=()=>fail('MAINTENANCE_ACTIVITY_CHANGED','Host activity changed while checkpointing; continue draining admitted work',409);
 
-/** Admission and proof adapter, never a worker shutdown routine. HTTP/WS
- * authentication remains owned by the host and must consult externalClosed. */
+/** Admission and checkpoint proof adapter; worker lifecycle stays owned by the
+ * runtime pool. HTTP/WS authentication must consult externalClosed. */
 export function createMaintenanceHostAdapter({platform,world=platform?.world,storage=platform?.storage,code=platform?.code,requests,responses,sockets,externalClosed}={}){
   check(platform&&world&&typeof world.persist==='function'&&typeof world.transact==='function'&&typeof externalClosed==='function','MAINTENANCE_ADAPTER_CONFIG','Provide live host stores, tracked requests and the external admission gate');
   check(requests instanceof Set||typeof requests==='function','MAINTENANCE_ADAPTER_CONFIG','Provide tracked ordinary HTTP request tasks');
@@ -79,8 +79,9 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
   function releasePool(){const compute=pool();if(!compute)return;if(typeof compute.releaseMaintenance==='function')compute.releaseMaintenance();else check(compute.admissionClosed!==true,'MAINTENANCE_POOL_UNSUPPORTED','This pool cannot release its maintenance gate');}
   function continueDraining(){external(true);releasePool();if(platform.nativeJobs)platform.nativeJobs.accepting=true;}
   function resumeAdmission(){check(externalClosed()===false,'MAINTENANCE_ADMISSION_MISMATCH','External maintenance admission is still closed',409);releasePool();closed=false;if(platform.nativeJobs)platform.nativeJobs.accepting=true;platform.workflows?.start();platform.schedules?.start();}
-  function inventory(request,{snapshot=false}={}){
+  async function inventory(request,{snapshot=false}={}){
     const diagnostics=[],custom=new Set(),apps=new Map(),releases=new Map(),callable=new Set();let incompatible=0;
+    const localBackendsInactive=snapshot&&platform.provider instanceof LocalProvider&&await platform.provider.snapshotBackendsInactive();
     const records=world.all();
     for(const record of records)if(record.kind==='app'&&record.namespace==='os'&&!record.archived){
       let manifest;try{manifest=JSON.parse(record.body);}catch{}
@@ -96,7 +97,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
       if(apps.has(meta.appId))callable.add(record.id);
       if(deployment.legacyBackend||deployment.backendURL||deployment.legacy?.backendURL||deployment.legacy&&!deployment.legacy.parked||deployment.provider==='fly'&&meta.backend||deployment.provider!=='pool'&&deployment.provider!=='local'&&!deployment.parked)diagnostics.push({reason:'unpooled-legacy-deployment'});
       if(deployment.provider==='pool'&&meta.backend&&!pool())diagnostics.push({reason:'pooled-backend-without-pool'});
-      if(deployment.provider==='local'&&meta.backend&&!pool())diagnostics.push({reason:'unpooled-local-backend'});
+      if(deployment.provider==='local'&&meta.backend&&!pool()&&!localBackendsInactive)diagnostics.push({reason:'unpooled-local-backend'});
       if(!['pool','local','fly'].includes(deployment.provider))diagnostics.push({reason:'deployment-provider-unverified'});
     }
     for(const[appId,manifest]of apps){
@@ -115,7 +116,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
     return{diagnostics,customRuntimeImages:[...custom].sort(),incompatibleRuntimeOverrides:incompatible};
   }
   function poolProof(result){if(result.admissionClosed&&['active','held','uncertain','oldRuntimeSlotsRemaining','incompatibleRuntimeOverrides'].every(key=>result[key]===0)&&platform.nativeJobs)platform.nativeJobs.accepting=false;return result;}
-  async function quiescePool(request,{snapshot=false}={}){external(true);await healthy();check(request&&typeof request.retireRuntimeImage==='boolean'&&(snapshot?request.retireRuntimeImage===false:pin(request.fromImages?.runtime)&&pin(request.targetImages?.runtime)&&request.retireRuntimeImage===(request.fromImages.runtime!==request.targetImages.runtime)),'MAINTENANCE_IMAGE_BINDING','Provide the exact source and target runtime pins');const compute=pool(),extra=inventory(request,{snapshot});
+  async function quiescePool(request,{snapshot=false}={}){external(true);await healthy();check(request&&typeof request.retireRuntimeImage==='boolean'&&(snapshot?request.retireRuntimeImage===false:pin(request.fromImages?.runtime)&&pin(request.targetImages?.runtime)&&request.retireRuntimeImage===(request.fromImages.runtime!==request.targetImages.runtime)),'MAINTENANCE_IMAGE_BINDING','Provide the exact source and target runtime pins');const compute=pool(),extra=await inventory(request,{snapshot});
     const base={admissionClosed:false,active:0,held:compute?.slots?.reduce((total,slot)=>total+(slot.holds?.length||0),0)||0,uncertain:extra.diagnostics.length+(extra.incompatibleRuntimeOverrides&&compute?.slots?.length?1:0),oldRuntimeSlotsRemaining:request.retireRuntimeImage?compute?.slots?.filter(slot=>slot.deployment&&(!slot.deployment.runtimeImage||slot.deployment.runtimeImage===request.fromImages.runtime)).length||0:0,retired:[],...extra};
     if(extra.diagnostics.length||extra.incompatibleRuntimeOverrides)return base;
     if(!compute){check(!platform.provider||platform.provider instanceof LocalProvider,'MAINTENANCE_POOL_UNSUPPORTED','Runtime maintenance is unsupported for this provider');return poolProof({...base,admissionClosed:true});}

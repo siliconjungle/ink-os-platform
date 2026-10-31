@@ -17,6 +17,14 @@ async function fixture(t){
 async function seal(host){return host.seal(owner,request.operationId,{challenge:request.challenge,bootId:firstBoot,fromImages,targetImages});}
 async function progress(host){host.get(owner,request.operationId);await host.progressTask;return host.get(owner,request.operationId);}
 
+test('new maintenance checks competing host ownership at the serialized decision, while exact existing requests remain observable',async t=>{
+ const f=await fixture(t),host=await f.host();let release;const blocked=new Promise(resolve=>release=resolve),blocker=host.serial(()=>blocked);
+ const preparing=host.prepare(owner,request);preparing.catch(()=>{});host.admissionAvailable=()=>false;release();await blocker;
+ await assert.rejects(preparing,{status:409});assert.equal(host.closed,false);assert.equal(host.operations.length,0);
+ host.admissionAvailable=()=>true;await host.prepare(owner,request);await host.progressTask;host.admissionAvailable=()=>false;
+ assert.equal((await host.prepare(owner,request)).operationId,request.operationId);assert.equal(host.operations.length,1);
+});
+
 test('busy host and worker continuations preserve open pool admission until both naturally finish',async t=>{
  const f=await fixture(t),host=await f.host();f.state.activity.workflows=1;
  assert.equal((await host.prepare(owner,request)).state,'draining');assert.equal(host.closed,true);await host.progressTask;

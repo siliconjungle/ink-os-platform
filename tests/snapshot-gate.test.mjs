@@ -131,3 +131,9 @@ test('a failed admission resume stays closed and can be retried by its original 
   assert.equal(f.gate.closed, true); await assert.rejects(f.gate.acquireSnapshot(), { status: 409 });
   fail = false; await snapshot.release(); assert.equal(f.gate.closed, false);
 });
+
+test('a competing runtime inspection is observed without reopening or seizing its admission transaction',async()=>{
+  let probes=0,resumes=0;
+  const adapter={closeAdmission:()=>{},resumeAdmission:()=>{resumes++;},continueDraining:()=>assert.fail('A competing inspection does not grant this caller a pool gate'),activity:async()=>idle(),quiesceSnapshot:async()=>{if(++probes===1)throw Object.assign(Error('Other inspection owns the pool'),{status:409});return idlePool();},flush:async()=>{}};
+  const gate=new SnapshotGate({directory:'/unused-fixture',adapter,otherClosed:()=>false,pollMs:1}),snapshot=await gate.acquireSnapshot();assert.equal(probes,2);assert.equal(resumes,0);assert.equal(gate.closed,true);await snapshot.release();assert.equal(resumes,1);
+});

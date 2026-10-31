@@ -60,7 +60,7 @@
     "evidence/ink-authoring.json": "Selected actual rendered unpublished preview interaction and zero-catalog mutation proof bound to exact implementation/style inputs.",
     "evidence/ink-preview.png": "Selected screenshot of actual isolated rendered Ink preview count1 in shared SDK styling.",
     "tests/account-provisioning.test.mjs": "Actual HTTP/restart explicit member identity with no key, later separate issuance, collision and permission rejection proof.",
-    "server/snapshot-gate.mjs": "Bound single-reader live host barrier and encrypted local-tree capture; reusable host activity/checkpoint proof and no worker stop.",
+    "server/snapshot-gate.mjs": "Bound single-reader live host barrier and encrypted capture; complete activity/checkpoint proof preserves admitted work and permits verified idle-worker release.",
     "tests/snapshot-gate.test.mjs": "Actual local app HTTP admission, durable causal state, encrypted archive/restore/Git source and cancellation/failure reproduction inputs.",
     ".local/snapshot-foundation-tests.log": "Completed required serial regression log:292 tests,287 passed,5 explicit environment gates skipped,0 failed; exact source/test hashes retained in selected proof.",
     "evidence/live-snapshot-gate.json": "Selected actual local SDK snapshot admission, encrypted capture/restore and complete regression proof, bound to exact source and raw log digests with explicit unfinished integration limits.",
@@ -68,7 +68,16 @@
     "tests/backup-assets.test.mjs": "Actual R2-style HTTP and signed official S3 client fixture capture/restore, alias deduplication, retired remote exclusion, corruption/missing/bounds and scoped gate-release proof inputs.",
     "tests/backup-extra-files.test.mjs": "Additional streamed archive file integrity, paths, shared limits, parent/mode/collision and original source-root mapping reproduction inputs.",
     ".local/backup-assets-tests.log": "Completed required serial regression:304 tests,299 passed,5 explicit environment gates skipped,0 failures. Selected source/log digest proof retained.",
-    "evidence/backup-assets.json": "Selected real current-store protocol/SDK backup streaming, raw restore and archive integrity/bounds proof, with exact inputs, terminal regression hash and unfinished integration limits."
+    "evidence/backup-assets.json": "Selected real current-store protocol/SDK backup streaming, raw restore and archive integrity/bounds proof, with exact inputs, terminal regression hash and unfinished integration limits.",
+    "shared/continuation.mjs": "Transient exact-origin compute lease context, transport header and credential redaction contract.",
+    "server/quiescence.mjs": "Shared observation/checkpoint loop for acquired snapshots and graceful shutdown, preserving admitted work and transaction ownership.",
+    "tests/continuation-client.test.mjs": "Actual SDK/CLI/binary/event origin fencing, redirect refusal, transient login and error redaction reproduction.",
+    "tests/continuation-api.test.mjs": "Actual account/lease authentication, scoped CLI Git deployment and encrypted snapshot/restoration while held, stale World write fencing and graceful host shutdown fixture proofs.",
+    ".local/continuation-tests.log": "Completed required315-test serial regression:310 passed,5 environment gates skipped,0 failures; exact source/log digests retained in selected proof.",
+    ".local/continuation-verifier-tests.log": "Completed15-test verifier dependency-graph regression after adding the exact shared continuation source to its bounded source proof.",
+    "evidence/account-continuation.json": "Selected exact-source authenticated continuation, scoped CLI deployment, raw backup and shared shutdown acceptance with explicit controlled-provider and unfinished production limits.",
+    ".local/continuation-check.log": "Completed successful TypeScript validation for selected continuation source.",
+    ".local/continuation-audit.log": "Completed successful source audit for selected continuation source."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",

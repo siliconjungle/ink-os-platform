@@ -7,6 +7,9 @@ import { createConnection } from 'node:net';
 import { once } from 'node:events';
 import http from 'node:http';
 import { proofHTTP } from '../scripts/proof-http.mjs';
+import { mkdtemp, writeFile, rm, symlink, unlink, realpath } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 test('local releases use separate origins, require launch grants, and hide server source', async t => {
   const provider = new LocalProvider(); t.after(() => provider.close());
@@ -65,4 +68,17 @@ test('virtual-host gateway preserves release authentication and rejects absolute
     request.on('error', reject); request.end();
   });
   assert.equal(rejected, 400);
+});
+
+test('an unavailable local executor is certified inactive only under closed admission and an absent or idle private journal',async t=>{
+  const directory=await realpath(await mkdtemp(join(tmpdir(),'ink-local-inactive-'))),provider=new LocalProvider();
+  await writeFile(join(directory,'storage-retention.json'),JSON.stringify({keep:{},safe_to_remove:{'runtime-pool.json':'Generated inactive/active/corrupt journal fixture.','outside.json':'Generated symlink target fixture.'}}));
+  t.after(async()=>{await provider.close();await rm(directory,{recursive:true});});
+  await provider.attach({directory});let closed=false;provider.bindAdmission(()=>closed);
+  assert.equal(await provider.snapshotBackendsInactive(),false);closed=true;assert.equal(await provider.snapshotBackendsInactive(),true);
+  const path=join(directory,'runtime-pool.json');
+  await writeFile(path,JSON.stringify({version:1,slots:[{status:'ready',appId:'a'.repeat(32),releaseId:'b'.repeat(32),leaseId:'c'.repeat(32),holds:[]}]}));assert.equal(await provider.snapshotBackendsInactive(),false);
+  await writeFile(path,JSON.stringify({version:1,slots:[{status:'idle',appId:null,releaseId:null,leaseId:null,holds:[]}]}));assert.equal(await provider.snapshotBackendsInactive(),true);
+  await writeFile(path,'broken JSON');assert.equal(await provider.snapshotBackendsInactive(),false);
+  await unlink(path);await writeFile(join(directory,'outside.json'),JSON.stringify({version:1,slots:[]}));await symlink(join(directory,'outside.json'),path);assert.equal(await provider.snapshotBackendsInactive(),false);
 });

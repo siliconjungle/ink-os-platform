@@ -1,17 +1,16 @@
 import { resolve } from 'node:path';
-import { setTimeout as wait } from 'node:timers/promises';
-import { quiescentHostActivity, quiescentRuntimePool } from './maintenance.mjs';
+import { waitForQuiescence } from './quiescence.mjs';
 import { createBackup } from './backup-store.mjs';
 import { backupAssetClosure } from './backup-assets.mjs';
 
 const fail = (status, message) => { throw Object.assign(Error(message), { status }); };
-const changed = error => error?.code === 'MAINTENANCE_ACTIVITY_CHANGED';
 
 /** One in-process reader owns the complete host admission barrier. Process exit
  * interrupts that reader; no stale barrier grants a new process a snapshot.
  * The host must bind HTTP, WebSocket and local-app admission to closed, exclude
  * its control requests from activity, and mutually exclude upgrades/shutdown.
- * The adapter never stops a worker. Existing work drains or acquisition fails.
+ * Existing work drains or acquisition fails. The runtime pool may release only
+ * verified idle workers through its normal lifecycle before returning a proof.
  */
 export class SnapshotGate {
   constructor({ directory, adapter, otherClosed, pollMs = 500 } = {}) {
@@ -48,28 +47,12 @@ export class SnapshotGate {
     try {
       const result = this.adapter.closeAdmission({ poolClosed: false });
       if (result?.then) throw Error('Snapshot admission closure must be synchronous.');
-      for (;;) {
-        signal.throwIfAborted();
-        if (this.otherClosed() !== false) fail(409, 'Another host admission gate changed during snapshot acquisition.');
-        if (quiescentHostActivity(await this.adapter.activity())) {
-          const pool = await this.adapter.quiesceSnapshot();
-          lease.poolClosed = pool?.admissionClosed === true;
-          if (quiescentRuntimePool(pool)) {
-            try {
-              await this.adapter.flush();
-              signal.throwIfAborted();
-              if (quiescentHostActivity(await this.adapter.activity())) {
-                lease.phase = 'reading';
-                return { directory: this.directory, consistency: 'quiesced', coverage: { remoteAssets: false, externalProjects: false, externalSecrets: false }, release };
-              }
-            } catch (error) { if (!changed(error)) throw error; }
-          }
-          this.adapter.continueDraining(); lease.poolClosed = false;
-        } else if (lease.poolClosed) {
-          this.adapter.continueDraining(); lease.poolClosed = false;
-        }
-        await wait(this.pollMs, undefined, { signal });
-      }
+      await waitForQuiescence({ adapter: this.adapter, signal, pollMs: this.pollMs,
+        checkOwnership: () => { if (this.otherClosed() !== false) fail(409, 'Another host admission gate changed during snapshot acquisition.'); },
+        onPoolAdmission: closed => { lease.poolClosed = closed; },
+      });
+      lease.phase = 'reading';
+      return { directory: this.directory, consistency: 'quiesced', coverage: { remoteAssets: false, externalProjects: false, externalSecrets: false }, release };
     } catch (error) {
       try { await release(); } catch (releaseError) { throw new AggregateError([error, releaseError], 'Snapshot acquisition failed and admission needs recovery.'); }
       throw error;

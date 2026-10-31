@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { projectCLI } from './projects.mjs';
+import{continuationFromEnvironment,continuationHeaders,redactConnectionSecrets}from '../../shared/continuation.mjs';
 import{appInteractionCLI,APP_INTERACTIONS}from'./app-api.mjs';
 import { backupCLI } from './backup.mjs';
 import { nativeCLI } from './native.mjs';
@@ -82,6 +83,7 @@ export async function main(args=process.argv.slice(2)){
  const options={};const positional=[];for(let i=0;i<args.length;i++){if(args[i].startsWith('--')){const option=args[i].slice(2),equals=option.indexOf('=');if(equals!==-1)options[option.slice(0,equals)]=option.slice(equals+1);else options[option]=args[i+1]&&!args[i+1].startsWith('--')?args[++i]:true;}else positional.push(args[i]);}
  const [command='help',sub,value]=positional;
  if(command==='backup')return backupCLI({sub,options});
+ const continuation=continuationFromEnvironment(process.env);
  const configPath=process.env.INK_OS_CONFIG||join(homedir(),'.config/ink-os/config.json');let config={};try{config=JSON.parse(await readFile(configPath,'utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}
  let url,token,connection,identity;const explicitToken=process.env.INK_OS_TOKEN;
  async function authenticate({login=false}={}){if(!connection)connection=(async()=>{
@@ -92,8 +94,9 @@ export async function main(args=process.argv.slice(2)){
   }
  })();await connection;if(login){identity||=healthIdentity(url);await identity;}return{url,token};}
  async function projectTarget(){await authenticate();identity||=healthIdentity(url);return{origin:url,instanceId:(await identity)??null};}
- const errorMessage=message=>{let text=String(message);for(const secret of[token,config.token])if(typeof secret==='string'&&secret)text=text.replaceAll(secret,'[redacted]');return text;};
- async function request(path,method='GET',body){await authenticate();const response=await fetch(new URL('/api/v1/'+path,url),{method,redirect:'error',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const result=await response.json().catch(()=>{throw Error('Ink OS API response must be JSON');});if(!response.ok)throw Object.assign(Error(errorMessage(result?.error||response.statusText)),{status:response.status,current:result?.current});return result;}
+ const errorMessage=message=>redactConnectionSecrets(message,[token,config.token,continuation?.token]);
+ const authenticatedHeaders=target=>({Authorization:'Bearer '+token,...continuationHeaders(target,continuation)});
+ async function request(path,method='GET',body){await authenticate();const target=new URL('/api/v1/'+path,url),response=await fetch(target,{method,redirect:'error',headers:{...authenticatedHeaders(target),'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});const result=await response.json().catch(()=>{throw Error('Ink OS API response must be JSON');});if(!response.ok)throw Object.assign(Error(errorMessage(result?.error||response.statusText)),{status:response.status,current:result?.current});return result;}
  const print=value=>console.log(JSON.stringify(value,null,2));
  if(command==='maintenance')return maintenanceCLI({sub,id:value,options,request,print});
  if(command==='migrations')return migrationCLI({sub,action:value,operation:positional[3],options,request,print});
@@ -125,7 +128,7 @@ export async function main(args=process.argv.slice(2)){
   if(sub==='delete')return print(await request('files/'+value+(options.permanent?'?permanent=true':''),'DELETE'));
   if(sub==='restore')return print(await request('files/'+value+'/restore','POST',{}));
   if(sub==='upload'){const path=resolve(value),bytes=await readFile(path);if(bytes.length>24*1024*1024)throw Error('Keep each file below 24 MiB');return print(await request('files','POST',{files:[{name:path.split(sep).at(-1),mime:options.mime||'application/octet-stream',base64:bytes.toString('base64')}]}));}
-  if(sub==='download'){if(!options.output)throw Error('Specify --output PATH');await authenticate();const response=await fetch(new URL('/api/v1/files/'+value+'/content?download=1',url),{redirect:'error',headers:{Authorization:'Bearer '+token}});if(!response.ok)throw Error(errorMessage((await response.json()).error||'Download failed'));await writeFile(resolve(String(options.output)),Buffer.from(await response.arrayBuffer()),{flag:options.force?'w':'wx'});return print({path:resolve(String(options.output))});}
+  if(sub==='download'){if(!options.output)throw Error('Specify --output PATH');await authenticate();const target=new URL('/api/v1/files/'+value+'/content?download=1',url),response=await fetch(target,{redirect:'error',headers:authenticatedHeaders(target)});if(!response.ok)throw Error(errorMessage((await response.json()).error||'Download failed'));await writeFile(resolve(String(options.output)),Buffer.from(await response.arrayBuffer()),{flag:options.force?'w':'wx'});return print({path:resolve(String(options.output))});}
   return print(await request(options.deleted?'trash':'files'));
  }
  if(command==='call'||command==='apps'&&APP_INTERACTIONS.includes(sub))return print(await appInteractionCLI({command,sub,id:value,name:positional[3],options,request,redact:errorMessage}));
@@ -175,7 +178,7 @@ export async function main(args=process.argv.slice(2)){
 
   if(options['env-file']){const source=await readFile(resolve(String(options['env-file'])),'utf8');if(Buffer.byteLength(source)>256*1024)throw Error('Environment input exceeds 256 KiB');await request('apps/'+app.id+'/env','PUT',{values:parseEnv(source)});}
   const retained=new Map();try{for(const part of await request('apps/'+app.id+'/artifacts'))if(part.id&&/^[a-f0-9]{64}$/.test(part.sha256))retained.set(part.sha256,part);}catch{}
-  const desktop=creationDesktop;const artifacts=await artifactManifest(paths.assetDirectory,{...await commandAssets(manifest,directory),upload:async(digest,bytes)=>{await authenticate();try{return retained.get(digest)||await uploadArtifact(new URL('/api/v1/apps/'+app.id+'/artifacts/'+digest,url),bytes,{token,onRetry:({attempt,error})=>console.error('Retrying artifact upload ('+attempt+'/7; '+(error.cause?.code||error.status||error.name)+')')});}catch(error){error.message=errorMessage(error.message);throw error;}},onProgress:progress=>console.error('Prepared '+(progress.bytes/1024/1024).toFixed(1)+' MiB')});const files=[{path:'ink-assets.json',base64:Buffer.from(JSON.stringify(artifacts)).toString('base64')}];if(paths.backendFile)files.push({path:manifest.backend.entry,base64:(await readFile(paths.backendFile)).toString('base64')});const release=await request('apps/'+app.id+'/releases','POST',{files,entry:manifest.entry||'index.html',backend,desktop,commands:manifest.commands,capabilities:manifest.capabilities,source});
+  const desktop=creationDesktop;const artifacts=await artifactManifest(paths.assetDirectory,{...await commandAssets(manifest,directory),upload:async(digest,bytes)=>{await authenticate();try{return retained.get(digest)||await uploadArtifact(new URL('/api/v1/apps/'+app.id+'/artifacts/'+digest,url),bytes,{token,continuation,onRetry:({attempt,error})=>console.error('Retrying artifact upload ('+attempt+'/7; '+(error.cause?.code||error.status||error.name)+')')});}catch(error){error.message=errorMessage(error.message);throw error;}},onProgress:progress=>console.error('Prepared '+(progress.bytes/1024/1024).toFixed(1)+' MiB')});const files=[{path:'ink-assets.json',base64:Buffer.from(JSON.stringify(artifacts)).toString('base64')}];if(paths.backendFile)files.push({path:manifest.backend.entry,base64:(await readFile(paths.backendFile)).toString('base64')});const release=await request('apps/'+app.id+'/releases','POST',{files,entry:manifest.entry||'index.html',backend,desktop,commands:manifest.commands,capabilities:manifest.capabilities,source});
   if(options['preview-only'])return print({appId:app.id,releaseId:release.id,status:'ready'});
   const result=await request(`apps/${app.id}/releases/${release.id}/publish`,'POST',{});return print({appId:app.id,releaseId:release.id,url:JSON.parse(result.body).url});
  }
