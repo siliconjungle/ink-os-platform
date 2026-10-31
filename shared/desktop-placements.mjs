@@ -1,13 +1,14 @@
 import{isAppRegistration}from './app-desktop.mjs';
+import{placementPoint,relativePlacement}from'./desktop-coordinates.mjs';
 const objectId = /^[a-f0-9]{32}$/;
 const finite = value => Number.isFinite(value) && Math.abs(value) < 1e8;
-export function validPlacement(point) { return !!point && finite(point.x) && finite(point.y); }
+export function validPlacement(point) { return !!point && finite(point.x) && finite(point.y) && (point.relative===undefined||point.relative===true&&point.x>=0&&point.x<=1&&point.y>=0&&point.y<=1); }
 export function placementMaps(input, workspaces) {
   const result = {}, allowed = new Set(workspaces.map(space => String(space.id)));
   for (const [space, entries] of Object.entries(input || {})) {
     if (!allowed.has(space) || !entries || typeof entries !== 'object') continue;
     const positions = {};
-    for (const [id, point] of Object.entries(entries)) if (objectId.test(id) && validPlacement(point)) positions[id] = { x: point.x, y: point.y };
+    for (const [id, point] of Object.entries(entries)) if (objectId.test(id) && validPlacement(point)) positions[id] = { x: point.x, y: point.y, ...(point.relative===true?{relative:true}:{}) };
     result[space] = positions;
   }
   return result;
@@ -25,15 +26,17 @@ export function placedObjects(objects, positions) {
 
 // A clipboard move is one command, including its source removal. Record only
 // affected entries so undo does not replace a collaborator's whole arrangement.
-export function placementTransfer(placements, workspaces, ids, {from, to, cut=false, point}) {
+export function placementTransfer(placements, workspaces, ids, {from, to, cut=false, point,area}) {
   if (!workspaces.some(space=>space.id===to) || from===to) return {before:[],after:[]};
   const before=[],after=[],source=placements[from]||{},target=placements[to]||{};
-  const keys=[...new Set(ids)].filter(id=>objectId.test(id)),anchor=source[keys[0]]||point;
+  const pixel=value=>area?placementPoint(value,area):value;
+  const keys=[...new Set(ids)].filter(id=>objectId.test(id)),anchor=pixel(source[keys[0]]||point);
   for (const id of keys) {
     if (!target[id]) {
-      const position=source[id]||anchor;
+      const position=source[id]?pixel(source[id]):anchor;
       before.push({space:to,id});
-      after.push({space:to,id,point:{x:point.x+position.x-anchor.x,y:point.y+position.y-anchor.y}});
+      const next={x:point.x+position.x-anchor.x,y:point.y+position.y-anchor.y};
+      after.push({space:to,id,point:area?relativePlacement(next,area):next});
     }
     if (cut && source[id]) {
       before.push({space:from,id,point:{...source[id]}});

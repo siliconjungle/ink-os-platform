@@ -5,6 +5,7 @@ import{contextMenuNode}from './native/context-menu';
 import './theme.css';
 import './native.css';
 import './standalone.css';
+import{relativePlacement}from'../shared/desktop-coordinates.mjs';
 import{appPath,parseAppLink}from '../shared/app-links.mjs';
 import{appLaunch,isAppRegistration,appManifest,installedApps}from '../shared/app-desktop.mjs';
 import{desktopFile}from '../shared/desktop-placements.mjs';
@@ -51,7 +52,7 @@ async function start(initial:{appId:string;objectId?:string}){
  async function place(object:WorldObject,point?:{x:number;y:number}){
   // Open the layout only for an explicit placement; never restore desktop windows.
   const replica=new StateReplica({host:documents(),key:'desktop',onError:(error:Error)=>toast(error.message)});
-  try{await replica.open();const layout=projectDesktop(replica.state),space=layout.workspaces[0]?.id;if(space===undefined)throw Error('Create a desktop in Ink first.');const entries=layout.placements?.[space]||{},position=point||entries[object.id]||{x:40+(Object.keys(entries).length%8)*100,y:40+Math.floor(Object.keys(entries).length/8)*110};await replica.commit([{path:'/placements/'+space+'/'+object.id,value:position}]);toast('Added to desktop');}finally{await replica.close();}
+  try{await replica.open();const layout=projectDesktop(replica.state),space=layout.workspaces[0]?.id;if(space===undefined)throw Error('Create a desktop in Ink first.');const entries=layout.placements?.[space]||{},position=point||entries[object.id]||{x:40+(Object.keys(entries).length%8)*100,y:40+Math.floor(Object.keys(entries).length/8)*110};await replica.commit([{path:'/placements/'+space+'/'+object.id,value:relativePlacement(position,{width:innerWidth,height:innerHeight})}]);toast('Added to desktop');}finally{await replica.close();}
  }
  async function openObject(object:WorldObject){
   if(isAppRegistration(object)){await show(object.id);return;}

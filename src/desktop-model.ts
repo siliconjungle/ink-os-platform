@@ -1,10 +1,11 @@
 import type {Area,Rect} from './window-model';
-export interface Point{x:number;y:number}
+import{placementPoint,ICON_WIDTH,ICON_HEIGHT}from'../shared/desktop-coordinates.mjs';
+export interface Point{x:number;y:number;relative?:true}
 export function iconRect(index:number,area:Area,position?:Point):Rect{
- const width=88,height=80,rows=Math.max(1,Math.floor((area.height-146)/94));
+ const width=ICON_WIDTH,height=ICON_HEIGHT,rows=Math.max(1,Math.floor((area.height-146)/94));
  const p=position||{x:18+Math.floor(index/rows)*104,y:54+index%rows*94};
  if(area.infinite)return{x:p.x,y:p.y,width,height};
- return{x:Math.max(0,Math.min(p.x,area.width-width)),y:Math.max(0,Math.min(p.y,area.height-height)),width,height};
+ return{...placementPoint(p,area),width,height};
 }
 export function intersects(a:Rect,b:Rect){return a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;}
 export function groupDelta(rects:Rect[],dx:number,dy:number,area:Area):Point{
