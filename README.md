@@ -116,6 +116,8 @@ node cli/bin/ink-os.mjs backup restore --offline --directory /path/to/restored-d
 
 Restore requires an absent or empty destination and authenticates the complete archive before publishing it. It preserves instance keys and local blob bytes, rebases managed project paths, and renews connection metadata on startup. External project directories, environment-provided secrets and remote object storage require separate recovery; inspect the returned coverage. The local owner SDK exports `createStoppedBackup` and `recoverBackup` from `@ink-os/platform/backup`. This interface does not establish a live snapshot barrier.
 
+Embedding hosts can also use the local owner SDK's `SnapshotGate` and `createLiveBackup`. The gate must share the host's admission adapter and exclude other snapshots, upgrades and shutdown. It drains admitted work, verifies the runtime pool, and checkpoints collaborative state before reading the private tree. Direct local app requests join that admission and activity tracking. Acquisition timeouts and cancellation resume admission without stopping workers; an acquired snapshot remains held until its reader releases it. This captures the local tree with explicit coverage flags. Hosted HTTP/CLI snapshot jobs and materialization of remote assets remain unfinished.
+
 Ink apps accept a single source or an explicit committed module graph. For example, `ink-app.json` can declare:
 
 ```json

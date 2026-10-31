@@ -1,0 +1,39 @@
+{
+  "format": "ink-os-live-snapshot-gate-proof-v1",
+  "status": "passed",
+  "mode": "same-process local owner SDK",
+  "inputs": {
+    "server/snapshot-gate.mjs": "2e6af7cc4fce4fc4662f83f7c17ce836e441f46b55e4ac32850f9d5a8852c881",
+    "server/maintenance-host.mjs": "b23241ab97ce32d08e34c4cb2ddd52b94083a708db0019b0fa794c16d3e5ead7",
+    "server/maintenance.mjs": "3c379aeba0efe6ceadb179f7ea9390f8aa52369cd98710ea7d21188589d8f152",
+    "infra/local-provider.mjs": "4516c75060805b51f8da2a5393641bf8c98d4932ecf65235e3c3d5d73401c2ff",
+    "sdk/src/backup.js": "f5cd19f612ddc372fd27235c31432dd79a077b7ea06774e391dfb672dbe11399",
+    "tests/snapshot-gate.test.mjs": "9532c0a0b998d9f222de3302aa7c942104bd315c5220ca9f7dd00f19363a58b6"
+  },
+  "verification": {
+    "command": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "tests": 292,
+    "passed": 287,
+    "failed": 0,
+    "skipped": 5,
+    "logSha256": "e3d924fc5276bcb039d3193de81195261ab089b790a4b27988fe8aa11bd2ef44",
+    "focusedTests": 40,
+    "typecheck": "passed",
+    "sourceAudit": "passed"
+  },
+  "observed": [
+    "A real direct local app HTTP request admitted before closure completed a World and causal-state write.",
+    "New direct local app requests were refused while its existing app server remained running.",
+    "The encrypted backup restored the exact captured causal checkpoint, private instance bytes and managed Git source.",
+    "A later source-host state change was absent from the restored snapshot.",
+    "Held runtime acquisition cancelled without capture, and admission resumed.",
+    "Projection races re-entered draining; stale release handles could not reopen a later snapshot.",
+    "Archive read failures did not publish a partial archive; failed admission resume stayed closed and its owner could retry."
+  ],
+  "limits": [
+    "This proves the owner SDK barrier and encrypted local-tree capture in an embedded host fixture.",
+    "Hosted HTTP/CLI snapshot jobs and complete remote object-store materialization are not implemented by this proof.",
+    "The new snapshot path has not yet been accepted against a real Docker or hosted runtime pool.",
+    "Existing offline relocation/restart and maintenance regression tests passed separately in the same suite."
+  ]
+}

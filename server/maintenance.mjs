@@ -22,6 +22,7 @@ const imagesValid = value => exact(value, ['os', 'runtime']) && pin(value.os) &&
 const validPool = value => value && typeof value.admissionClosed === 'boolean' && ['active', 'held', 'uncertain', 'oldRuntimeSlotsRemaining', 'incompatibleRuntimeOverrides'].every(key => Number.isSafeInteger(value[key]) && value[key] >= 0) && Array.isArray(value.retired) && value.retired.length <= 2000 && value.retired.every(id => hex(id, 32)) && new Set(value.retired).size === value.retired.length && Array.isArray(value.customRuntimeImages) && value.customRuntimeImages.length <= 1000 && value.customRuntimeImages.every(pin) && new Set(value.customRuntimeImages).size === value.customRuntimeImages.length;
 const idlePool = value => validPool(value) && value.admissionClosed && ['active', 'held', 'uncertain', 'oldRuntimeSlotsRemaining', 'incompatibleRuntimeOverrides'].every(key => value[key] === 0);
 const initialPool = () => ({ admissionClosed: false, active: 0, held: 0, uncertain: 1, oldRuntimeSlotsRemaining: 0, incompatibleRuntimeOverrides: 0, retired: [], customRuntimeImages: [] });
+export { idle as quiescentHostActivity, idlePool as quiescentRuntimePool };
 const directorySync = async path => { const handle = await open(path, 'r'); try { await handle.sync(); } finally { await handle.close(); } };
 
 /** A durable admission gate. It never stops the host or a worker. The adapter

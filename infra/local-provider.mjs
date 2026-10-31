@@ -15,6 +15,14 @@ export class LocalProvider {
   constructor({ originTemplate = process.env.INK_OS_APP_ORIGIN_TEMPLATE, compute } = {}) {
     if (originTemplate && !originTemplate.includes('{release}') && !originTemplate.includes('__RELEASE__')) throw Error('App origin template must contain a release placeholder.');
     this.servers = new Map(); this.originTemplate = originTemplate; this.compute = compute;
+    this.requests = new Set(); this.responses = new Set(); this.admissionGate = null;
+  }
+  bindAdmission(gate) {
+    if (typeof gate !== 'function' || this.admissionGate && this.admissionGate !== gate) throw Error('Local app admission already belongs to another host gate.');
+    this.admissionGate = gate;
+  }
+  snapshotAdmissionClosed() {
+    return !!this.admissionGate && this.admissionGate() === true && [...this.servers.values()].every(runtime => runtime.trackedAdmission === true);
   }
   async attach(platform) {
     this.platform = platform;
@@ -40,8 +48,11 @@ export class LocalProvider {
       return value?.appId === appId && value.releaseId === releaseId && value.exp > Date.now();
     };
     const server = http.createServer(async (req, res) => {
+      let finish; const task = new Promise(resolve => finish = resolve);
+      this.requests.add(task); this.responses.add(res); res.once('close', () => this.responses.delete(res));
       try {
         if (connections.closing) { res.writeHead(503, { Connection: 'close' }); res.end('This app host is stopping.'); return; }
+        if (this.admissionGate?.()) { res.writeHead(503, { 'Retry-After': '2' }); res.end('This computer is preserving admitted work before a snapshot.'); return; }
         const url = new URL(req.url, 'http://127.0.0.1');
         res.setHeader('Cache-Control', 'private, no-store');
         res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -85,6 +96,7 @@ export class LocalProvider {
         res.setHeader('Content-Type', mime[extname(file.path)] || 'application/octet-stream');
         res.writeHead(200); res.end(req.method === 'HEAD' ? undefined : Buffer.from(file.base64, 'base64'));
       } catch (error) { if (res.destroyed) return; if (res.headersSent) { res.destroy(); return; } res.writeHead(error.status || 400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: error.message || 'Invalid application request' })); }
+      finally { this.requests.delete(task); finish(); }
     });
     const connections = httpConnections(server);
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
@@ -93,7 +105,7 @@ export class LocalProvider {
     const parsed = new URL(publicURL);
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.pathname !== '/') { server.close(); throw Error('Invalid app origin template.'); }
     const deployment = { provider: 'local', url: publicURL, appId, releaseId };
-    this.servers.set(releaseId, { server, connections, deployment, internalURL });
+    this.servers.set(releaseId, { server, connections, deployment, internalURL, trackedAdmission: true });
     return deployment;
   }
   route(req, res) {

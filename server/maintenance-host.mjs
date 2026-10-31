@@ -24,6 +24,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
   check(requests instanceof Set||typeof requests==='function','MAINTENANCE_ADAPTER_CONFIG','Provide tracked ordinary HTTP request tasks');
   check(responses instanceof Set||typeof responses==='function','MAINTENANCE_ADAPTER_CONFIG','Provide tracked ordinary HTTP responses');
   const observations=new WeakMap();let closed=false,backgroundError=false;
+  if(platform.provider instanceof LocalProvider)platform.provider.bindAdmission(externalClosed);
   function observation(task){if(!promise(task))return null;let state=observations.get(task);if(!state){state={state:'pending'};observations.set(task,state);task.then(value=>{state.state='fulfilled';state.value=value;},()=>{state.state='rejected';});}return state;}
   async function pending(tasks){const states=[...new Set(tasks.filter(Boolean))].map(task=>{check(promise(task),'MAINTENANCE_QUEUE_UNVERIFIED','Host mutation queue has an unsupported shape');return observation(task);});await nextTurn();check(states.every(state=>state.state!=='rejected'),'MAINTENANCE_QUEUE_FAILED','An admitted host task failed before its durable completion');return states.filter(state=>state.state==='pending').length;}
   function tracked(value,label){const current=ref(value);check(current instanceof Set,'MAINTENANCE_TRACKING_UNVERIFIED','Ordinary HTTP '+label+' tracking is unavailable');return current;}
@@ -51,11 +52,11 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
   }
   async function markerCount(map){let unknown=0;const tasks=[];for(const marker of values(map)){const task=promise(marker)?marker:marker?.promise;if(task)tasks.push(task);else unknown++;}return unknown+await pending(tasks);}
   async function activity(){
-    await healthy();if(closed)startAccepted();const q=queues();const requestTasks=[...tracked(requests,'request')];
+    await healthy();if(closed)startAccepted();const q=queues();const requestTasks=[...tracked(requests,'request'),...values(platform.provider?.requests)];
     const [http,publicationCount,writerCount,codeCount,assignmentCount,nativeCount,workflowWorkers,scheduleWorkers]=await Promise.all([pending(requestTasks),pending(q.publications),pending(q.writers),pending(q.code),pending(q.assignments),pending(q.native),markerCount(platform.workflows?.active),markerCount(platform.schedules?.active)]);
     const c=platform.collaboration,compute=pool(),jobs=platform.nativeJobs?.jobs||[];check(jobs.every(job=>nativeStates.has(job.status)),'MAINTENANCE_NATIVE_QUEUE_UNVERIFIED','Native queue contains an unsupported state');
     await healthy();const docTasks=documents().map(doc=>doc.tail);const docWriters=await pending(docTasks);let projectTimers=0;for(const doc of documents())if(doc.projectTimer&&!doc.projectTimer._destroyed)projectTimers++;
-    let transports=0;for(const response of tracked(responses,'response'))if(!response.destroyed&&!response.writableEnded&&!response.writableFinished)transports++;
+    let transports=0;for(const response of new Set([...tracked(responses,'response'),...values(platform.provider?.responses)]))if(!response.destroyed&&!response.writableEnded&&!response.writableFinished)transports++;
     // Fetch the optional WS ref so a late/throwing integration cannot go unnoticed.
     const ws=ref(sockets);if(ws!==undefined&&ws!==null)check(ws.clients instanceof Set,'MAINTENANCE_WS_UNVERIFIED','WebSocket tracking is unavailable');
     return{
@@ -78,7 +79,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
   function releasePool(){const compute=pool();if(!compute)return;if(typeof compute.releaseMaintenance==='function')compute.releaseMaintenance();else check(compute.admissionClosed!==true,'MAINTENANCE_POOL_UNSUPPORTED','This pool cannot release its maintenance gate');}
   function continueDraining(){external(true);releasePool();if(platform.nativeJobs)platform.nativeJobs.accepting=true;}
   function resumeAdmission(){check(externalClosed()===false,'MAINTENANCE_ADMISSION_MISMATCH','External maintenance admission is still closed',409);releasePool();closed=false;if(platform.nativeJobs)platform.nativeJobs.accepting=true;platform.workflows?.start();platform.schedules?.start();}
-  function inventory(request){
+  function inventory(request,{snapshot=false}={}){
     const diagnostics=[],custom=new Set(),apps=new Map(),releases=new Map(),callable=new Set();let incompatible=0;
     const records=world.all();
     for(const record of records)if(record.kind==='app'&&record.namespace==='os'&&!record.archived){
@@ -109,12 +110,12 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
       if(!pin(image)){diagnostics.push({reason:'callable-runtime-pin-unverified'});continue;}
       if(request.retireRuntimeImage&&image===request.fromImages.runtime)incompatible++;else if(image!==request.fromImages.runtime)custom.add(image);
     }
-    const provider=platform.provider,compute=pool();if(provider instanceof LocalProvider){if(provider.servers.size)diagnostics.push({reason:'independent-local-release-server'});if(provider.compute&&!compute)diagnostics.push({reason:'untracked-local-compute'});}else if(provider&&!compute)diagnostics.push({reason:'provider-maintenance-unavailable'});
+    const provider=platform.provider,compute=pool();if(provider instanceof LocalProvider){if(provider.servers.size&&(!snapshot||!provider.snapshotAdmissionClosed()))diagnostics.push({reason:'independent-local-release-server'});if(provider.compute&&!compute)diagnostics.push({reason:'untracked-local-compute'});}else if(provider&&!compute)diagnostics.push({reason:'provider-maintenance-unavailable'});
     check(custom.size<=1000,'MAINTENANCE_RUNTIME_INVENTORY_BOUND','Callable custom runtime inventory exceeds its proof bound');
     return{diagnostics,customRuntimeImages:[...custom].sort(),incompatibleRuntimeOverrides:incompatible};
   }
   function poolProof(result){if(result.admissionClosed&&['active','held','uncertain','oldRuntimeSlotsRemaining','incompatibleRuntimeOverrides'].every(key=>result[key]===0)&&platform.nativeJobs)platform.nativeJobs.accepting=false;return result;}
-  async function quiescePool(request){external(true);await healthy();check(request&&typeof request.retireRuntimeImage==='boolean'&&pin(request.fromImages?.runtime)&&pin(request.targetImages?.runtime)&&request.retireRuntimeImage===(request.fromImages.runtime!==request.targetImages.runtime),'MAINTENANCE_IMAGE_BINDING','Provide the exact source and target runtime pins');const compute=pool(),extra=inventory(request);
+  async function quiescePool(request,{snapshot=false}={}){external(true);await healthy();check(request&&typeof request.retireRuntimeImage==='boolean'&&(snapshot?request.retireRuntimeImage===false:pin(request.fromImages?.runtime)&&pin(request.targetImages?.runtime)&&request.retireRuntimeImage===(request.fromImages.runtime!==request.targetImages.runtime)),'MAINTENANCE_IMAGE_BINDING','Provide the exact source and target runtime pins');const compute=pool(),extra=inventory(request,{snapshot});
     const base={admissionClosed:false,active:0,held:compute?.slots?.reduce((total,slot)=>total+(slot.holds?.length||0),0)||0,uncertain:extra.diagnostics.length+(extra.incompatibleRuntimeOverrides&&compute?.slots?.length?1:0),oldRuntimeSlotsRemaining:request.retireRuntimeImage?compute?.slots?.filter(slot=>slot.deployment&&(!slot.deployment.runtimeImage||slot.deployment.runtimeImage===request.fromImages.runtime)).length||0:0,retired:[],...extra};
     if(extra.diagnostics.length||extra.incompatibleRuntimeOverrides)return base;
     if(!compute){check(!platform.provider||platform.provider instanceof LocalProvider,'MAINTENANCE_POOL_UNSUPPORTED','Runtime maintenance is unsupported for this provider');return poolProof({...base,admissionClosed:true});}
@@ -135,5 +136,6 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
     await healthy();const after=queues();if(await pending([...after.writers,...after.publications]))unchanged();await Promise.all([...after.writers,...after.publications].filter(Boolean));if(!allZero(await activity()))unchanged();
     await world.transact(()=>world.persist());await healthy();if(!allZero(await activity()))unchanged();return{flushed:true};
   }
-  return{closeAdmission,resumeAdmission,continueDraining,activity,quiescePool,flush};
+  const quiesceSnapshot=()=>quiescePool({retireRuntimeImage:false,fromImages:{},targetImages:{}},{snapshot:true});
+  return{closeAdmission,resumeAdmission,continueDraining,activity,quiescePool,quiesceSnapshot,flush};
 }
