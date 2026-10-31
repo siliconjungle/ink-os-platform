@@ -9,9 +9,14 @@ on:
         required: false
         type: string
       toolchainBase64:
-        description: Exact managed-toolchain installer/verifier source bundle, encoded as base64 JSON
+        description: Exact managed-toolchain installer/verifier source bundle, encoded as base64 gzip JSON
         required: false
         type: string
+      toolchainApiBootstrap:
+        description: Verify cold-cache bootstrap through the durable owner API build queue
+        required: false
+        type: boolean
+        default: false
 jobs:
   platform:
     if: github.event_name != 'workflow_dispatch' || inputs.composeBase64 == '' && inputs.toolchainBase64 == ''
@@ -124,8 +129,14 @@ jobs:
         env:
           PROOF_TOOLCHAIN: ${{ inputs.toolchainBase64 }}
         run: |
-          node --input-type=module -e 'import{mkdir,writeFile}from"node:fs/promises";const bytes=Buffer.from(process.env.PROOF_TOOLCHAIN,"base64");if(bytes.length>49000||bytes.toString("base64")!==process.env.PROOF_TOOLCHAIN)throw Error("Invalid toolchain input");const source=JSON.parse(bytes);if(typeof source.installer!=="string"||typeof source.verifier!=="string"||Object.keys(source).length!==2)throw Error("Invalid source bundle");await mkdir("../ink-os-desktop/src",{recursive:true});await mkdir("../ink-os-desktop/scripts");await writeFile("../ink-os-desktop/src/native-toolchain.mjs",source.installer);await writeFile("../ink-os-desktop/scripts/verify-native-toolchain.mjs",source.verifier);'
-      - run: node ../ink-os-desktop/scripts/verify-native-toolchain.mjs --output evidence/managed-native.json --ephemeral-runner --reserve-gib 2 --platform-dir .
+          node --input-type=module -e 'import{mkdir,writeFile}from"node:fs/promises";import{gunzipSync}from"node:zlib";const compressed=Buffer.from(process.env.PROOF_TOOLCHAIN,"base64");if(process.env.PROOF_TOOLCHAIN.length>65000||compressed.toString("base64")!==process.env.PROOF_TOOLCHAIN)throw Error("Invalid toolchain input");const bytes=gunzipSync(compressed,{maxOutputLength:262144});const source=JSON.parse(bytes);if(typeof source.installer!=="string"||typeof source.verifier!=="string"||Object.keys(source).length!==2)throw Error("Invalid source bundle");await mkdir("../ink-os-desktop/src",{recursive:true});await mkdir("../ink-os-desktop/scripts");await writeFile("../ink-os-desktop/src/native-toolchain.mjs",source.installer);await writeFile("../ink-os-desktop/scripts/verify-native-toolchain.mjs",source.verifier);'
+      - name: Verify the selected managed native path
+        env:
+          PROOF_API: ${{ inputs.toolchainApiBootstrap }}
+        run: |
+          args=(--output evidence/managed-native.json --ephemeral-runner --reserve-gib 2 --platform-dir .)
+          if [[ "$PROOF_API" == "true" ]]; then args+=(--api-bootstrap); fi
+          node ../ink-os-desktop/scripts/verify-native-toolchain.mjs "${args[@]}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
