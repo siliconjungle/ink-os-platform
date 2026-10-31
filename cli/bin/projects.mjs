@@ -14,6 +14,8 @@ export async function projectCLI({ sub, id, options, request, print }) {
   if (sub === 'duplicate') return print(await request(base + '/duplicate', 'POST', { ...await settings(), ...(options.title ? { title: options.title } : {}) }));
   if (sub === 'show' || sub === 'status' || sub === 'publication') return print(await request(base + (sub === 'show' ? '' : '/' + sub)));
   if (sub === 'publish') return print(await request(base + '/publish', 'POST', { create: options.create === true, ...(options.commit ? { commit: options.commit } : {}), ...(options['expected-remote'] ? { expectedRemote: options['expected-remote'] } : {}) }));
+  if (sub === 'read-remote' || sub === 'source-plan') return print(await request(base + '/' + sub + (options['expected-remote'] ? '?expectedRemote=' + encodeURIComponent(String(options['expected-remote'])) : '')));
+  if (sub === 'pull') return print(await request(base + '/pull', 'POST', { ...(options['expected-remote'] ? { expectedRemote: options['expected-remote'] } : {}) }));
   if (sub === 'credentials') {
     if (options.token !== undefined) throw Error('Pass credentials using --stdin or --from-env NAME, never a command argument.');
     if ([options.clear, options.stdin, options['from-env']].filter(Boolean).length > 1) throw Error('Use one of --stdin, --from-env NAME or --clear.');
@@ -30,5 +32,5 @@ export async function projectCLI({ sub, id, options, request, print }) {
     }
     return print(await request(base + '/credentials'));
   }
-  throw Error('Use projects list, create, show, status, configure, duplicate, credentials, publication or publish.');
+  throw Error('Use projects list, create, show, status, configure, duplicate, credentials, read-remote, source-plan, pull, publication or publish.');
 }

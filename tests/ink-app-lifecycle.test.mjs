@@ -86,7 +86,8 @@ test('an empty OS installs Ink source from local Git, runs exact commands and wo
   assert.equal(repeated.appId, appId);
   assert.equal((await sdk.apps.ink.run(appId, 'total')).valueWire, '7');
   const priorRelease = repeated.releaseId;
-  await writeFile(join(source, 'main.ink'), (await readFile(join(source, 'main.ink'), 'utf8')) + '\nfn extra()->u32{return 1;}\n');
+  await writeFile(join(source, 'main.ink'), (await readFile(join(source, 'main.ink'), 'utf8')) + '\nfn extra()->u32{return 1;}\nchange migrate_count(value:u32)->u32 writes(Count){Count=value;return Count;}\n');
+  manifest.exports.push('migrate_count'); await writeFile(join(source, 'ink-app.json'), JSON.stringify(manifest));
   await git.git(source, ['add', '.']);
   await git.git(source, ['-c', 'user.name=Ink test', '-c', 'user.email=ink@localhost', '-c', 'commit.gpgsign=false', 'commit', '-m', 'Change source identity']);
   const changed = await cli('deploy', source);
@@ -94,5 +95,18 @@ test('an empty OS installs Ink source from local Git, runs exact commands and wo
   await assert.rejects(sdk.apps.ink.run(appId, 'total'), { status: 409 });
   await assert.rejects(sdk.apps.ink.run(appId, 'total', '[]', { releaseId: priorRelease }), { status: 409 });
   await sdk.apps.publish(appId, priorRelease);
+  assert.equal((await sdk.apps.ink.run(appId, 'total')).valueWire, '7');
+  await sdk.apps.publish(appId, changed.releaseId);
+  const checkpoint = await sdk.apps.ink.checkpoint(appId);
+  assert.equal(checkpoint.releaseId, changed.releaseId);
+  const migration = { fromReleaseId: priorRelease, toReleaseId: changed.releaseId, query: 'total', change: 'migrate_count', expectedAppRevision: checkpoint.appRevision, expectedCheckpointRevision: checkpoint.checkpointRevision };
+  await assert.rejects(sdk.apps.ink.migrate(appId, { ...migration, expectedAppRevision: checkpoint.appRevision - 1 }), { status: 409 });
+  const migrationFile = join(directory, 'migration.json'); await writeFile(migrationFile, JSON.stringify(migration));
+  const migrated = await cli('ink', 'migrate', appId, '--file', migrationFile);
+  assert.equal(migrated.exportValueWire, '7');
+  assert.equal(migrated.valueWire, '7');
+  assert.equal((await cli('ink', 'checkpoint', appId)).checkpointRevision, migrated.revision);
+  assert.equal((await sdk.apps.ink.run(appId, 'total')).valueWire, '7');
+  await stop(); await start();
   assert.equal((await sdk.apps.ink.run(appId, 'total')).valueWire, '7');
 });

@@ -1,0 +1,23 @@
+{
+  "format": "ink-os-github-source-proof-v1",
+  "repository": "https://github.com/siliconjungle/ink-os-proof-project-sources-20261031",
+  "repositoryId": 1440450795,
+  "branch": "proof/reconciliation",
+  "remoteCommit": "305483c2579db460d8231981212b6ba7fce5340a",
+  "tree": "ac9bb9e01877cb1bab587b0d91c2b9d122bbf0ec",
+  "fileCount": 4,
+  "binarySha256": "712450d3c4a79eea9509e75dc1dacdeff58034df538536cfae2da882bd8a0c50",
+  "observed": [
+    "Fresh host contained zero apps before and after source operations.",
+    "Owner SDK read the private GitHub snapshot with explicit encrypted project credentials.",
+    "CLI imported the exact verified tree including binary bytes and executable mode.",
+    "Local and remote commit identities remained distinct.",
+    "Host restart preserved source provenance and repeated pull was a no-op.",
+    "Uncommitted local edits caused a conflict and remained intact.",
+    "GitHub was read only; project credential removal succeeded."
+  ],
+  "limits": [
+    "Single private repository read/import; remote mutation/reconciliation publication is covered by the separate publication proof.",
+    "Live service backup/restore and cloud setup are separate acceptance gates."
+  ]
+}

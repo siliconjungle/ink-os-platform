@@ -5,8 +5,9 @@ import { promisify } from 'node:util';
 import { randomBytes } from 'node:crypto';
 import { sourceFiles } from '../shared/source-files.mjs';
 import { gitRuntime } from './git-runtime.mjs';
-import { ProjectCredentials } from './project-credentials.mjs';
+import { ProjectCredentials, githubDestination } from './project-credentials.mjs';
 import { ProjectPublisher, PublicationGit } from './project-publisher.mjs';
+import { ProjectSourceSync, planSourcePull } from './project-source-sync.mjs';
 
 const execute = promisify(execFile);
 const fail = (status, message) => { throw Object.assign(Error(message), { status }); };
@@ -36,7 +37,7 @@ export function projectSettings(input = {}) {
 }
 
 export class Projects {
-  constructor(directory, { git = gitRuntime().executable, environmentKey, publisher } = {}) {
+  constructor(directory, { git = gitRuntime().executable, environmentKey, publisher, sourceSync = new ProjectSourceSync() } = {}) {
     this.directory = directory;
     this.catalogPath = join(directory, 'projects.json');
     this.root = join(directory, 'projects');
@@ -46,6 +47,7 @@ export class Projects {
     this.operations = new Map();
     this.credentials = new ProjectCredentials(directory, environmentKey);
     this.publisher = publisher || new ProjectPublisher(directory, { git: new PublicationGit({ executable: git }) });
+    this.sourceSync = sourceSync;
   }
   async open() {
     await mkdir(this.root, { recursive: true, mode: 0o700 });
@@ -118,6 +120,63 @@ export class Projects {
   setCredentials(id, token) { return this.operation(id, () => this.credentials.set(this.get(id), token)); }
   removeCredentials(id) { return this.operation(id, () => this.credentials.remove(this.get(id))); }
   publication(id) { return this.publisher.status(this.get(id)); }
+  sourceOptions(input = {}) {
+    if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => key !== 'expectedRemote') || input.expectedRemote !== undefined && !/^[a-f0-9]{40}$/.test(input.expectedRemote)) fail(400, 'Use only expectedRemote with a full remote commit SHA.');
+    return input;
+  }
+  sourceBaseline(project) {
+    const repository = 'https://github.com/' + githubDestination(project);
+    const publication = this.publisher.status(project).publication, imported = project.sourceImport;
+    const candidates = [
+      publication && { receipt: publication, time: Date.parse(publication.publishedAt) },
+      imported && imported.verified === true && imported.visibility === project.source.github.visibility && { receipt: imported, time: Date.parse(imported.pulledAt) },
+    ].filter(value => value && Number.isFinite(value.time) && value.receipt.repository === repository && value.receipt.branch === project.branch);
+    // Import wins an equal timestamp: it was verified against the then-current remote.
+    candidates.sort((a, b) => b.time - a.time || (b.receipt === imported ? 1 : 0) - (a.receipt === imported ? 1 : 0));
+    return candidates[0]?.receipt || null;
+  }
+  async inspectSource(id) {
+    const project = this.get(id);
+    const commit = await this.git(project.directory, ['rev-parse', '--verify', 'HEAD']).catch(() => null);
+    return { commit, tree: commit ? await this.git(project.directory, ['rev-parse', commit + '^{tree}']) : null,
+      branch: await this.git(project.directory, ['symbolic-ref', '--quiet', '--short', 'HEAD']).catch(() => null),
+      changes: await this.gitRaw(project.directory, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignored=matching']) };
+  }
+  readRemote(id, input = {}) {
+    return this.operation(id, async () => {
+      const options = this.sourceOptions(input), project = this.get(id), base = this.sourceBaseline(project);
+      return this.sourceSync.read(project, this.credentials.token(project), { ...options, ...(base ? { repositoryId: base.repositoryId, baseRemote: base.remoteCommit } : {}) });
+    });
+  }
+  async planRemoteSource(id, input) {
+    const options = this.sourceOptions(input), project = this.get(id), local = await this.inspectSource(id), base = this.sourceBaseline(project);
+    const snapshot = await this.sourceSync.read(project, this.credentials.token(project), { ...options, ...(base ? { repositoryId: base.repositoryId, baseRemote: base.remoteCommit } : {}) });
+    const plan = planSourcePull({ project, local, base, remote: snapshot });
+    const conflicts = [...plan.conflicts, ...(!project.managed ? ['external-working-repository'] : []), ...(local.branch !== project.branch ? ['local-source-branch-mismatch'] : [])];
+    return { project, local, base, snapshot, plan: { ...plan, ...(conflicts.length ? { action: 'reconcile', canPull: false, conflicts } : {}) } };
+  }
+  sourcePlan(id, input = {}) { return this.operation(id, async () => (await this.planRemoteSource(id, input)).plan); }
+  pull(id, input = {}) {
+    return this.operation(id, async () => {
+      if (!this.get(id).managed) fail(409, 'Source pull cannot overwrite an external working repository.');
+      const { project, local, base, snapshot, plan } = await this.planRemoteSource(id, input);
+      if (!plan.canPull) throw Object.assign(Error('Source pull requires reconciliation: ' + plan.conflicts.join(', ') + '.'), { status: 409, conflicts: plan.conflicts });
+      await this.checkSourceUnchanged(id, local);
+      // Already inside this project's operation queue: do not call snapshot(), which would reenter it.
+      const imported = await this.importSnapshot({ files: snapshot.files, tree: snapshot.tree, originCommit: snapshot.originCommit }, id, { expectedSource: local });
+      const remote = snapshot.provenance;
+      const receipt = { provider: 'github', verified: true, repository: remote.repository, repositoryId: remote.repositoryId, branch: remote.branch,
+        visibility: project.source.github.visibility, sourceCommit: imported.commit, remoteCommit: remote.remoteCommit, tree: remote.tree,
+        baseRemoteCommit: base?.remoteCommit || null, pulledAt: new Date().toISOString() };
+      this.records[id] = { ...this.get(id), sourceImport: receipt };
+      await this.persist();
+      return { project: this.records[id], sourceImport: receipt, action: plan.action };
+    });
+  }
+  async checkSourceUnchanged(id, expected) {
+    const actual = await this.inspectSource(id);
+    if (actual.commit !== expected.commit || actual.tree !== expected.tree || actual.branch !== expected.branch || actual.changes || expected.changes) fail(409, 'Project changed during source synchronization. Its edits were preserved.');
+  }
   publish(id, input = {}) {
     return this.operation(id, async () => {
       if (!input || typeof input !== 'object' || Array.isArray(input) || input.create !== undefined && typeof input.create !== 'boolean' || input.expectedRemote !== undefined && !/^[a-f0-9]{40}$/.test(input.expectedRemote)) fail(400, 'Use create as a boolean and expectedRemote as a full commit SHA.');
@@ -125,17 +184,26 @@ export class Projects {
       if (!state.commit || state.changes) fail(409, 'Commit project changes before publishing.');
       const commit = input.commit || state.commit, files = await this.files(id, commit);
       if (files.some(file => Buffer.from(file.base64, 'base64').includes(Buffer.from(token)))) fail(400, 'Committed source contains the project credential. Remove it before publishing.');
-      const tree = await this.git(project.directory, ['rev-parse', commit + '^{tree}']);
-      return this.publisher.publish(project, { commit, tree, files }, token, { create: input.create === true, expectedRemote: input.expectedRemote });
+      const tree = await this.git(project.directory, ['rev-parse', commit + '^{tree}']), base = this.sourceBaseline(project);
+      const options = { create: input.create === true, expectedRemote: input.expectedRemote ?? base?.remoteCommit, ...(base ? { expectedRepositoryId: base.repositoryId } : {}) };
+      let receipt = await this.publisher.publish(project, { commit, tree, files }, token, options);
+      // A recovered lost push may finalize an older pending snapshot before publishing this one.
+      if (receipt.sourceCommit !== commit || receipt.tree !== tree) {
+        if (input.expectedRemote !== undefined) fail(409, 'An earlier publication was recovered. Inspect its receipt before publishing with a new explicit expectedRemote.');
+        receipt = await this.publisher.publish(project, { commit, tree, files }, token, { ...options, expectedRemote: receipt.remoteCommit });
+      }
+      if (receipt.sourceCommit !== commit || receipt.tree !== tree) fail(502, 'Publication did not confirm the requested committed source.');
+      return receipt;
     });
   }
-  async importSnapshot(input, id) {
+  async importSnapshot(input, id, { expectedSource } = {}) {
     const files = sourceFiles(input.files);
     if (input.originCommit && !/^[a-f0-9]{40}$/.test(input.originCommit)) fail(400, 'Use a full original commit SHA.');
     const project = id ? this.get(id) : await this.create({ ...(input.settings || {}), directory: undefined, title: input.title || 'Source project' });
     if (!project.managed) fail(409, 'Snapshot import cannot overwrite an external working repository.');
     const settings = input.settings ? projectSettings({ ...project, ...input.settings, source: input.settings.source || project.source }) : {};
     const state = await this.status(project.id);
+    if (expectedSource) await this.checkSourceUnchanged(project.id, expectedSource);
     const clean = async () => {
       if (await this.git(project.directory, ['status', '--porcelain', '--untracked-files=all', '--ignored=matching'])) fail(409, 'The managed project has edits or generated files. Commit or move them before importing another snapshot.');
     };
@@ -162,9 +230,11 @@ export class Projects {
         const commit = (await this.gitRaw(project.directory, ['-c', 'commit.gpgsign=false', 'commit-tree', tree, ...(state.commit ? ['-p', state.commit] : []), '-m', 'Import source snapshot'], { env })).trim();
         await clean();
         if ((await this.status(project.id)).commit !== state.commit) fail(409, 'Project changed during source import.');
+        if (expectedSource) await this.checkSourceUnchanged(project.id, expectedSource);
         changed = true;
         await this.git(project.directory, ['reset', '--hard', commit]);
       }
+      else if (expectedSource) await this.checkSourceUnchanged(project.id, expectedSource);
     } catch (error) {
       if (changed && state.commit) await this.git(project.directory, ['reset', '--hard', state.commit]);
       if (!id) { delete this.records[project.id]; await this.persist(); await rm(project.directory, { recursive: true, force: true }); }

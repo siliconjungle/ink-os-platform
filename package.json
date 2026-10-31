@@ -50,6 +50,7 @@
   "exports": {
     ".": "./sdk/src/server.js",
     "./browser": "./sdk/src/browser.js",
+    "./backup": "./sdk/src/backup.js",
     "./styles": "./sdk/styles/ink.css",
     "./commands": "./sdk/src/commands.js",
     "./workflows": "./sdk/src/workflows.js",

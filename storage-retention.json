@@ -17,7 +17,8 @@
     "evidence/ink-app-ui.json": "Screenshot binding, observed behavior and proof limits.",
     "evidence/github-project.json": "Selected actual private GitHub publication, restart, exact-tree/binary/mode and remote-conflict proof; reproduction script and tests remain in source.",
     "evidence/docker-backends.json": "Selected successful real Docker module/OCI, held-work restart, tenant isolation and idle reuse acceptance binding.",
-    "evidence/compose.json": "Exact deployment Compose SHA binding and successful container/gateway/restart proof."
+    "evidence/compose.json": "Exact deployment Compose SHA binding and successful container/gateway/restart proof.",
+    "evidence/github-source.json": "Selected actual read-only private GitHub import via CLI/SDK, exact binary/mode/tree identity, restart/no-op and dirty-tree refusal proof."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",
@@ -25,6 +26,7 @@
     "compiler/target": "Completed compiler build cache; public compiler artifact, exact source, Cargo.lock, and reproduction script are retained.",
     ".local/ink-app-browser/data": "Disposable local validation instance, after its server is stopped; contains generated test credentials and source copies, not required reproduction inputs.",
     ".local/ink-app-browser/source": "Completed generated starter checkout; exact initializer/template source and lifecycle tests are retained.",
-    ".local/native-runtime-lock": "Completed dependency-lock preparation workspace; server/native-runtime.lock and the exact native Cargo manifest are retained."
+    ".local/native-runtime-lock": "Completed dependency-lock preparation workspace; server/native-runtime.lock and the exact native Cargo manifest are retained.",
+    ".local/managed-native-proof": "Completed failed first macOS toolchain extraction diagnostic; corrected installer and exact CI runs preserve reproduction, with no selected successful proof depending on this output."
   }
 }

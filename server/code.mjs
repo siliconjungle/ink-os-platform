@@ -30,8 +30,11 @@ export class Code {
   }
   run(input) {
     if (typeof input.source !== 'string') return Promise.reject(Error('Provide Ink source text.'));
-    const key = (input.stateKey || hash(input.source || '')) + ':' + (input.namespace || input.instance || 'preview');
-    const task = (this.tasks.get(key) || Promise.resolve()).catch(() => {}).then(() => this.execute(input));
+    return this.serializeState(input.namespace || input.instance || 'preview', input.stateKey || hash(input.source || ''), () => this.execute(input));
+  }
+  serializeState(namespace, stateKey, run) {
+    const key = stateKey + ':' + namespace;
+    const task = (this.tasks.get(key) || Promise.resolve()).catch(() => {}).then(run);
     this.tasks.set(key, task);
     task.finally(() => { if (this.tasks.get(key) === task) this.tasks.delete(key); }).catch(() => {});
     return task;

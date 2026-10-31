@@ -12,6 +12,9 @@ export function createProjects(request) {
     files: (id, commit) => request(base(id) + '/files' + (commit ? '?commit=' + encodeURIComponent(commit) : '')),
     publication: id => request(base(id) + '/publication'),
     publish: (id, input = {}) => request(base(id) + '/publish', { method: 'POST', body: input }),
+    readRemote: (id, input = {}) => request(base(id) + '/read-remote' + (input.expectedRemote ? '?expectedRemote=' + encodeURIComponent(input.expectedRemote) : '')),
+    sourcePlan: (id, input = {}) => request(base(id) + '/source-plan' + (input.expectedRemote ? '?expectedRemote=' + encodeURIComponent(input.expectedRemote) : '')),
+    pull: (id, input = {}) => request(base(id) + '/pull', { method: 'POST', body: input }),
     credentials: {
       status: id => request(base(id) + '/credentials'),
       set: (id, token) => request(base(id) + '/credentials', { method: 'PUT', body: { token } }),

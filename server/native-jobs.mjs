@@ -1,14 +1,14 @@
 import { mkdir, readFile, writeFile, rename, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { captureProcessReceipt, checkProcessReceipt } from './process-receipt.mjs';
 
 const fail = (status, message) => { throw Object.assign(Error(message), { status }); };
-const alive = pid => { try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; } };
 const active = new Set(['queued', 'running', 'recovering']);
 
 export class NativeJobs {
-  constructor(directory, { native, source, enabled = true }) {
-    Object.assign(this, { directory, native, source, enabled });
+  constructor(directory, { native, source, enabled = true, captureProcess = captureProcessReceipt, checkProcess = checkProcessReceipt }) {
+    Object.assign(this, { directory, native, source, enabled, captureProcess, checkProcess });
     this.path = join(directory, 'native-jobs.json'); this.jobs = []; this.tail = Promise.resolve(); this.accepting = true;
   }
   async open() {
@@ -33,12 +33,12 @@ export class NativeJobs {
     });
     this.tail = task.catch(() => {}); return task;
   }
-  visible(job) { const { pid, artifactId, ...result } = job; return { ...result, ...(artifactId ? { artifactId } : {}) }; }
+  visible(job) { const { pid, processReceipt, processReceiptState, artifactId, ...result } = job; return { ...result, ...(artifactId ? { artifactId } : {}) }; }
   list(appId) { return this.jobs.filter(job => job.appId === appId).map(job => this.visible(job)); }
   get(appId, id) { const job = this.jobs.find(job => job.id === id && job.appId === appId); if (!job) fail(404, 'Native build not found.'); return this.visible(job); }
   async status() {
     const toolchain = this.enabled ? await this.native.availability() : { available: false, reason: 'Native compilation is disabled for this host.' };
-    return { ...toolchain, buildAvailable: toolchain.available, readyArtifacts: this.jobs.filter(job => job.status === 'succeeded').length, active: this.jobs.filter(job => active.has(job.status)).length, ...(this.error ? { error: this.error } : {}) };
+    return { ...toolchain, buildAvailable: Boolean(toolchain.available || toolchain.installable), readyArtifacts: this.jobs.filter(job => job.status === 'succeeded').length, active: this.jobs.filter(job => active.has(job.status)).length, ...(this.error ? { error: this.error } : {}) };
   }
   async enqueue(appId, releaseId) {
     if (!/^[a-f0-9]{32}$/.test(appId || '') || !/^[a-f0-9]{32}$/.test(releaseId || '')) fail(400, 'Choose an application and an Ink source release.');
@@ -57,17 +57,23 @@ export class NativeJobs {
       const existing = jobs.findLast(job => job.appId === appId && job.compatibilityKey === plan.compatibilityKey && ['queued', 'running', 'recovering', 'succeeded'].includes(job.status));
       if (existing) return existing;
       if (jobs.filter(job => active.has(job.status)).length >= 32) fail(429, 'Native build queue is full.');
-      const job = { id: randomBytes(16).toString('hex'), appId, releaseId, compatibilityKey: plan.compatibilityKey, artifactId: plan.id, sourceIdentity: plan.artifact.manifest.core_sha256, status: 'queued', createdAt: Date.now() };
+      const job = { id: randomBytes(16).toString('hex'), appId, releaseId, compatibilityKey: plan.compatibilityKey, artifactId: plan.id, sourceIdentity: plan.artifact.manifest.core_sha256, ...(plan.toolchain?.managed ? { toolchain: plan.toolchain } : {}), status: 'queued', createdAt: Date.now() };
       jobs.push(job); return job;
     });
     void this.pump(); return this.visible(job);
   }
   patch(id, changes) { return this.change(jobs => { const job = jobs.find(job => job.id === id); if (!job) fail(404, 'Native build not found.'); Object.assign(job, changes, { updatedAt: Date.now() }); return job; }); }
+  async recordProcess(id, { pid, artifactId, child }) {
+    const captured = await this.captureProcess({ pid, directory: this.directory, child });
+    return this.patch(id, { pid, artifactId, processReceipt: captured.receipt || null, processReceiptState: captured.state });
+  }
   async reconcile() {
     for (const job of this.jobs.filter(job => job.status === 'recovering')) {
-      if (Number.isInteger(job.pid) && job.pid > 0 && alive(job.pid)) continue;
-      try { const record = await this.native.record(job.artifactId, job.appId); await this.patch(job.id, { status: 'succeeded', sourceIdentity: record.sourceIdentity, pid: null, finishedAt: Date.now() }); }
-      catch { await this.patch(job.id, { status: 'interrupted', error: 'The previous build host exited before publishing its artifact. Submit the build again to resume.', pid: null, finishedAt: Date.now() }); }
+      const worker = job.processReceipt || Number.isInteger(job.pid) && job.pid > 0 ? await this.checkProcess(job.processReceipt, { directory: this.directory, pid: job.pid }) : { state: 'gone', blocksCurrentRoot: false };
+      if (job.workerState !== worker.state) await this.patch(job.id, { workerState: worker.state });
+      if (['same-process', 'unverified'].includes(worker.state) && worker.blocksCurrentRoot !== false) continue;
+      try { const record = await this.native.record(job.artifactId, job.appId); await this.patch(job.id, { status: 'succeeded', sourceIdentity: record.sourceIdentity, pid: null, processReceipt: null, processReceiptState: null, finishedAt: Date.now() }); }
+      catch { await this.patch(job.id, { status: 'interrupted', error: 'The previous build host exited before publishing its artifact. Submit the build again to resume.', pid: null, processReceipt: null, processReceiptState: null, finishedAt: Date.now() }); }
     }
   }
   pump() {
@@ -89,9 +95,10 @@ export class NativeJobs {
         const source = await this.source(job.appId, job.releaseId);
         const context = await this.native.compatibility(source, job.appId);
         if (context.compatibilityKey !== job.compatibilityKey) fail(409, 'The compiler or native runtime changed. Submit a fresh build.');
-        const result = await this.native.build(source, { namespace: job.appId, onProcess: value => this.patch(job.id, value) });
-        await this.patch(job.id, { status: 'succeeded', artifactId: result.id, sourceIdentity: result.sourceIdentity, cached: result.cached, pid: null, finishedAt: Date.now() });
-      } catch (error) { await this.patch(job.id, { status: 'failed', error: String(error.message).slice(0, 2000), pid: null, finishedAt: Date.now() }); }
+        if (job.toolchain?.managed && (await this.native.plan(source, job.appId, context.artifact)).id !== job.artifactId) throw Object.assign(Error('The pinned managed toolchain changed. Submit a fresh native build.'), { status: 409, code: 'INK_NATIVE_TOOLCHAIN_CHANGED' });
+        const result = await this.native.build(source, { namespace: job.appId, onProcess: value => this.recordProcess(job.id, value), onStage: value => this.patch(job.id, value) });
+        await this.patch(job.id, { status: 'succeeded', phase: 'ready', artifactId: result.id, sourceIdentity: result.sourceIdentity, cached: result.cached, pid: null, processReceipt: null, processReceiptState: null, finishedAt: Date.now() });
+      } catch (error) { await this.patch(job.id, { status: 'failed', phase: 'failed', error: String(error.message).slice(0, 2000), ...(typeof error.code === 'string' && /^[A-Z][A-Z0-9_]{0,80}$/.test(error.code) ? { errorCode: error.code } : {}), pid: null, processReceipt: null, processReceiptState: null, finishedAt: Date.now() }); }
     }
   }
   async readyFor(appId, source, compiled) {

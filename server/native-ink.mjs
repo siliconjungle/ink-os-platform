@@ -9,6 +9,7 @@ import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
 import { publicResult } from '../shared/ink-values.mjs';
 
 const execute = promisify(execFile);
+const buildEnvironmentName = name => /^(?:PATH|HOME|USERPROFILE|APPDATA|LOCALAPPDATA|TMPDIR|TEMP|TMP|SYSTEMROOT|SystemRoot|COMSPEC|CARGO_HOME|RUSTUP_HOME|RUSTUP_TOOLCHAIN|CC|CXX|AR|SDKROOT|DEVELOPER_DIR|CARGO_TARGET_[A-Z0-9_]+_LINKER)$/.test(name);
 const cargoManifest = `[package]
 name="ink-native-app"
 version="0.1.0"
@@ -58,15 +59,19 @@ fn main(){
 `;
 
 export class NativeInk {
-  constructor(directory, { cargo = 'cargo', rustc = 'rustc', offline = false } = {}) {
-    Object.assign(this, { directory, cargo, rustc, offline });
+  constructor(directory, { cargo = 'cargo', rustc = 'rustc', offline = false, managed = null, execute: executeImpl = execute } = {}) {
+    Object.assign(this, { directory, cargo, rustc, offline, managed, execute: executeImpl });
     this.tail = Promise.resolve();
     this.compilations = new Map();
   }
   async availability() {
     if (this.toolchain && this.toolchain.until > Date.now()) return this.toolchain.value;
+    if (this.managed) {
+      const value = await this.managed.inspect();
+      this.toolchain = { until: Date.now() + 10000, value }; return value;
+    }
     try {
-      const [rust, cargo] = await Promise.all([execute(this.rustc, ['-vV'], { timeout: 5000 }), execute(this.cargo, ['--version'], { timeout: 5000 })]);
+      const [rust, cargo] = await Promise.all([this.execute(this.rustc, ['-vV'], { timeout: 5000 }), this.execute(this.cargo, ['--version'], { timeout: 5000 })]);
       const value = { available: true, rust: rust.stdout.trim(), cargo: cargo.stdout.trim() };
       this.toolchain = { until: Date.now() + 10000, value }; return value;
     } catch { return { available: false, reason: 'Native Rust toolchain is unavailable on this host.' }; }
@@ -88,31 +93,38 @@ export class NativeInk {
     return { compatibilityKey, artifact, info, lock, host };
   }
   async plan(source, namespace, compiled) {
-    const context = await this.compatibility(source, namespace, compiled), toolchain = await this.availability();
-    if (!toolchain.available) throw Object.assign(Error(toolchain.reason), { status: 503 });
+    const context = await this.compatibility(source, namespace, compiled), toolchain = this.managed ? await this.managed.plan() : await this.availability();
+    if (!this.managed && !toolchain.available) throw Object.assign(Error(toolchain.reason), { status: 503 });
     const id = createHash('sha256').update(JSON.stringify({ key: context.compatibilityKey, toolchain })).digest('hex');
     return { ...context, id, toolchain };
   }
-  build(source, { namespace = 'preview', onProcess } = {}) {
-    const task = this.tail.then(() => this.buildSource(source, namespace, onProcess));
+  build(source, { namespace = 'preview', onProcess, onStage } = {}) {
+    const task = this.tail.then(() => this.buildSource(source, namespace, onProcess, onStage));
     this.tail = task.catch(() => {}); return task;
   }
-  async buildSource(source, namespace, onProcess) {
+  async buildSource(source, namespace, onProcess, onStage) {
     const { id, toolchain, artifact, info, lock, compatibilityKey, host } = await this.plan(source, namespace);
     const directory = join(this.directory, id), executable = join(directory, process.platform === 'win32' ? 'program.exe' : 'program');
     try { await this.record(id, namespace); return { id, target: 'native', sourceIdentity: artifact.manifest.core_sha256, cached: true }; } catch (error) { if (!['ENOENT', 'INK_NATIVE_INTEGRITY'].includes(error.code)) throw error; }
+    let tools = { cargo: this.cargo, rustc: this.rustc, runtimeEnvironment: {} };
+    if (this.managed) {
+      await onStage?.({ phase: 'toolchain' });
+      try { tools = await this.managed.ensure(); }
+      finally { this.toolchain = undefined; }
+    }
+    await onStage?.({ phase: 'compiling' });
     await mkdir(join(directory, 'src'), { recursive: true, mode: 0o700 });
     await writeFile(join(directory, 'Cargo.toml'), cargoManifest);
     await writeFile(join(directory, 'Cargo.lock'), lock);
     await writeFile(join(directory, 'src/main.rs'), artifact.rust + driver);
-    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(?:PATH|HOME|USERPROFILE|APPDATA|LOCALAPPDATA|TMPDIR|TEMP|TMP|SYSTEMROOT|SystemRoot|COMSPEC|CARGO_HOME|RUSTUP_HOME|RUSTUP_TOOLCHAIN|CC|CXX|AR|SDKROOT|DEVELOPER_DIR|CARGO_TARGET_[A-Z0-9_]+_LINKER)$/.test(name)));
-    Object.assign(env, { RUSTC: this.rustc, CARGO_TARGET_DIR: join(this.directory, 'target'), CARGO_INCREMENTAL: '0', CARGO_PROFILE_RELEASE_DEBUG: '0', CARGO_ENCODED_RUSTFLAGS: [`--remap-path-prefix=${homedir()}=/build`, `--remap-path-prefix=${directory}=/ink/native`].join('\x1f') });
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => buildEnvironmentName(name)));
+    Object.assign(env, Object.fromEntries(Object.entries(tools.runtimeEnvironment || {}).filter(([name]) => buildEnvironmentName(name))), { RUSTC: tools.rustc, CARGO_TARGET_DIR: join(this.directory, 'target'), CARGO_INCREMENTAL: '0', CARGO_PROFILE_RELEASE_DEBUG: '0', CARGO_ENCODED_RUSTFLAGS: [`--remap-path-prefix=${homedir()}=/build`, `--remap-path-prefix=${directory}=/ink/native`].join('\x1f') });
     const args = ['build', '--locked', '--release', '--manifest-path', join(directory, 'Cargo.toml')];
     if (this.offline) args.push('--offline');
-    const task = execute(this.cargo, args, { env, timeout: 300000, maxBuffer: 4 * 1024 * 1024 });
+    const task = this.execute(tools.cargo, args, { env, timeout: 300000, maxBuffer: 4 * 1024 * 1024 });
     task.catch(() => {});
     let notificationError;
-    try { if (task.child.pid) await onProcess?.({ pid: task.child.pid, artifactId: id }); } catch (error) { notificationError = error; }
+    try { if (task.child?.pid) await onProcess?.({ pid: task.child.pid, artifactId: id, child: task.child }); } catch (error) { notificationError = error; }
     await task;
     if (notificationError) throw notificationError;
     await copyFile(join(env.CARGO_TARGET_DIR, 'release', process.platform === 'win32' ? 'ink-native-app.exe' : 'ink-native-app'), executable);

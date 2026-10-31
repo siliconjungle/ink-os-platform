@@ -1,5 +1,6 @@
 import{workflowRoute}from './workflow-router.mjs';
 import { buildProjectRelease, installedInk, runInstalledInk } from './ink-apps.mjs';
+import { migrateInstalledInk } from './ink-migrations.mjs';
 import { projectRoute } from './project-router.mjs';
 import{commandRoute}from './app-commands.mjs';
 import{scheduleRoute}from './schedule-router.mjs';
@@ -105,6 +106,8 @@ export function platformRouter(platform,{send,body}){return async(req,res,url,pr
   if(/^native\/[a-f0-9]{32}$/.test(action)&&method==='GET'){asApp(appId);return send(res,200,platform.nativeJobs.get(appId,action.split('/')[1]));}
   if(action==='ink'&&method==='GET'){asApp(appId);const app=await installedInk(platform,appId,principal.releaseId);return send(res,200,{spec:app.spec,entries:app.entries,namedTypes:app.namedTypes,releaseId:app.releaseId});}
   if(action==='ink/run'&&method==='POST'){asApp(appId);return send(res,200,await runInstalledInk(platform,appId,await body(req),principal));}
+  if(action==='ink/checkpoint'&&method==='GET'){platform.owner(principal);const app=platform.app(appId),checkpoint=await platform.code.loadCheckpoint(appId,'ink-app:state',principal);return send(res,200,{appId,appRevision:app.revision,releaseId:JSON.parse(app.body).releaseId,checkpointRevision:checkpoint.revision,digest:checkpoint.value?.digest||null,exists:!!checkpoint.value});}
+  if(action==='ink/migrate'&&method==='POST'){platform.owner(principal);return send(res,200,await migrateInstalledInk(platform,appId,await body(req),principal));}
   if(action==='artifacts'&&method==='GET'){platform.owner(principal);return send(res,200,artifactRecords(platform,appId));}
   if(/^artifacts\/[a-f0-9]{64}$/.test(action)&&method==='PUT'){platform.owner(principal);return send(res,201,await uploadArtifact(platform,req,appId,action.split('/')[1]));}
   if(action==='releases'&&method==='GET'){platform.owner(principal);return send(res,200,platform.releases(appId));}

@@ -115,9 +115,10 @@ export class ProjectPublisher {
     if (repository.archived || repository.disabled || repository.permissions?.push === false) fail(403, 'This GitHub repository is not writable.');
     return repository;
   }
-  async publish(project, { commit, tree, files }, token, { create = false, expectedRemote } = {}) {
+  async publish(project, { commit, tree, files }, token, { create = false, expectedRemote, expectedRepositoryId } = {}) {
     const destination = githubDestination(project), key = this.key(project);
     const repository = await this.repository(project, token, create);
+    if (expectedRepositoryId !== undefined && repository.id !== expectedRepositoryId) fail(409, 'The GitHub repository identity differs from the verified source baseline.');
     const state = this.records[key] || {};
     if (state.repositoryId && state.repositoryId !== repository.id) fail(409, 'The GitHub repository identity changed. Register a new project before publishing to a replacement repository.');
     const directory = await mkdtemp(join(this.scratch, 'push-'));
