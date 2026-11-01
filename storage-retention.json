@@ -124,7 +124,8 @@
     "sdk/src/object-drag.js": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence.",
     "shared/object-drag.mjs": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence.",
     "tests/object-drag.test.mjs": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence.",
-    "tests/file-icons.test.mjs": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence."
+    "tests/file-icons.test.mjs": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence.",
+    "evidence/desktop-file-interactions.json": "Selected file-drag, file-glyph and packaged/hosted acceptance evidence or required reproduction input."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",
