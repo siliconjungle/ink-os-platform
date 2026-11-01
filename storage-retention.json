@@ -125,7 +125,9 @@
     "shared/object-drag.mjs": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence.",
     "tests/object-drag.test.mjs": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence.",
     "tests/file-icons.test.mjs": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence.",
-    "evidence/desktop-file-interactions.json": "Selected file-drag, file-glyph and packaged/hosted acceptance evidence or required reproduction input."
+    "evidence/desktop-file-interactions.json": "Selected file-drag, file-glyph and packaged/hosted acceptance evidence or required reproduction input.",
+    "shared/command-drag.mjs": "Command-palette app shortcut and saved-file query drag eligibility shared by the UI and regression tests.",
+    "tests/command-drag.test.mjs": "Required regressions for safe command-search drag targets."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",
