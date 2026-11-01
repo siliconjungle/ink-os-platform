@@ -1,3 +1,4 @@
+export function transferDropEffect(allowed?:string,external?:boolean):'copy'|'link'|'none';
 export function acceptsDropPreview(types:string[],files:any[]):boolean;
 export function dropDestination(window:{key:string;name:string;node?:HTMLElement}|undefined,accepted:boolean,desktop?:string):{kind:'desktop'|'window'|'reject';key?:string;name:string;node?:HTMLElement;reason?:string};
 

@@ -56,6 +56,8 @@
     "./styles": "./sdk/styles/ink.css",
     "./commands": "./sdk/src/commands.js",
     "./workflows": "./sdk/src/workflows.js",
-    "./tables": "./sdk/src/tables.js"
+    "./tables": "./sdk/src/tables.js",
+    "./file-icons": "./sdk/src/file-icons.js",
+    "./object-drag": "./sdk/src/object-drag.js"
   }
 }

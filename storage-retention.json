@@ -119,7 +119,12 @@
     "evidence/adapters-validation.json": "Sanitized selected browser/native/provider validation and test outcomes.",
     "evidence/adapters-browser.png": "Selected browser transcript reuse proof.",
     ".local/adapters-proof-data": "Active isolated validation host state, encrypted package environment and durable transformations; retain while host is live.",
-    "evidence/adapters-deployment.json": "Selected merged/deployed/installed adapter acceptance and exact source/artifact bindings."
+    "evidence/adapters-deployment.json": "Selected merged/deployed/installed adapter acceptance and exact source/artifact bindings.",
+    "sdk/src/file-icons.js": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence.",
+    "sdk/src/object-drag.js": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence.",
+    "shared/object-drag.mjs": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence.",
+    "tests/object-drag.test.mjs": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence.",
+    "tests/file-icons.test.mjs": "Shared internal file/app drag and common file-glyph implementation, bounded handoff validation and required regression evidence."
   },
   "safe_to_remove": {
     "dist": "Completed generated web build; reproducible with npm run build.",

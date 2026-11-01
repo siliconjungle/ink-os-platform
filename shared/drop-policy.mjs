@@ -1,4 +1,5 @@
 import{acceptsFile,fileInfo}from'./file-types.mjs';
+export function transferDropEffect(allowed='uninitialized',external=false){const copy=['copy','copyLink','copyMove','all','uninitialized'].includes(allowed),link=['link','copyLink','linkMove','all','uninitialized'].includes(allowed);return external?copy?'copy':'none':link?'link':copy?'copy':'none';}
 export function acceptsDropPreview(types,files){if(!types.length||files.length>12)return false;return files.every(file=>{const info=fileInfo(file);if(info.extension||file.source||file.title||file.name)return acceptsFile(types,file);if(!info.mime||info.mime==='application/octet-stream')return true;const hasMIME=types.some(type=>type.includes('/')||type==='*'||type===file.kind);return hasMIME&&acceptsFile(types,file)||types.some(type=>type.startsWith('.'));});}
 export function dropDestination(window,accepted,desktop='the desktop'){return window?{kind:accepted?'window':'reject',key:window.key,name:window.name,node:window.node,reason:accepted?'':window.name+' does not accept these files'}:{kind:'desktop',name:desktop};}
 

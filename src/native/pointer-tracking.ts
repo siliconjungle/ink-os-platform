@@ -1,6 +1,6 @@
 /** Capture is an optimisation. Gesture lifetime belongs to the page, not the element. */
-export function trackPointer(start:PointerEvent,move:(event:PointerEvent)=>void,end:(event:Event)=>void,target:HTMLElement){
- const startedAt=Date.now();let stopped=false;
+export function trackPointer(start:PointerEvent,move:(event:PointerEvent)=>void,end:(event:Event)=>void,target:HTMLElement,startedAt=Date.now()){
+ let stopped=false;
  const cleanup=()=>{if(stopped)return;stopped=true;removeEventListener('pointermove',onMove,true);removeEventListener('pointerup',finish,true);removeEventListener('pointercancel',finish,true);removeEventListener('mouseup',mouseUp,true);removeEventListener('blur',interrupted);removeEventListener('pagehide',interrupted);removeEventListener('ink-pointer-interrupt',interrupted);removeEventListener('ink-pointer-release',frameRelease);document.removeEventListener('visibilitychange',visibility);};
  const onMove=(event:PointerEvent)=>{if(event.pointerId===start.pointerId)move(event);};
  const finish=(event:PointerEvent)=>{if(event.pointerId!==start.pointerId)return;cleanup();end(event);};

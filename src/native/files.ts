@@ -2,6 +2,8 @@ import type{Adapter}from '../../shared/adapters.mjs';
 import{fileType}from '../../shared/file-apps.mjs';
 import{appManifest}from '../../shared/app-desktop.mjs';
 import { desktopFile } from '../../shared/desktop-placements.mjs';
+import{objectIcon}from './object-icon';
+import{bindObjectDrag}from '../../sdk/src/object-drag.js';
 import { el, icon } from './dom';
 import { modal } from './dialogs';
 import type { Environment } from './contracts';
@@ -19,9 +21,8 @@ export function filesDialog(env: Environment, place: (object: WorldObject) => vo
     list.replaceChildren();
     if (!files.length) list.append(el('p', { class: 'collection-empty' }, query ? 'No matching files' : 'No files yet. Import files to keep them here.'));
     for (const object of files.slice(0, 500)) {
-      const open = el('button', { class: 'native-file-library-name', onclick: () => { env.open(object); dialog.close(); }, draggable: true, 'data-object-id': object.id }, object.title || 'Untitled file');
-      open.addEventListener('dragstart', event => { event.dataTransfer?.setData('application/x-ink-object', object.id); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'link'; dialog.node.style.pointerEvents = 'none'; dialog.node.style.opacity = '.45'; });
-      open.addEventListener('dragend', () => { dialog.node.style.pointerEvents = ''; dialog.node.style.opacity = ''; });
+      const open = el('button', { class: 'native-file-library-name', onclick: () => { env.open(object); dialog.close(); }, draggable: true, 'data-object-id': object.id }, icon(objectIcon(object),18),object.title || 'Untitled file');
+      bindObjectDrag(open,{objects:()=>[object.id],begin:start=>{env.drag?.(start);dialog.close();},error:error=>env.toast(error.message)});
       const add = el('button', { class: 'text-button', 'aria-label': 'Place ' + (object.title || 'Untitled file') + ' on this desktop', onclick: () => { place(object); dialog.close(); } }, 'Place on desktop');
       list.append(el('div', { class: 'native-file-library-row', role: 'listitem' }, open, el('small', {}, object.kind), el('a',{class:'text-button',href:'/api/v1/files/'+object.id+'/content?download=1',download:object.source||object.title},'Download'), add, remove?el('button',{class:'text-button',onclick:()=>void remove(object).catch(error=>env.toast(error.message))},'Delete'):undefined));
     }

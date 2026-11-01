@@ -4,6 +4,7 @@ import{CallChannel}from './call-channel';
 import{acceptsDropPreview}from '../../shared/drop-policy.mjs';
 import{acceptsFile}from '../../shared/file-types.mjs';
 import{pickFiles}from './file-picker';
+import{objectDragStart}from '../../shared/object-drag.mjs';
 import{desktopFile}from '../../shared/desktop-placements.mjs';
 import './app-loading.css';import{appLaunches}from './app-launch';
 import{isAppRegistration,windowApplication}from '../../shared/app-desktop.mjs';
@@ -47,6 +48,7 @@ export function framePanel(win:DeskWindow,env:Environment):Panel{
   if(method==='desktop.activity'){const id=params.objectId;if(id!==null&&id!==undefined&&(typeof id!=='string'||!env.world.get(id)))throw Error('Activity object is unavailable');dispatchEvent(new CustomEvent('ink-app-activity',{detail:{windowKey:win.key,objectId:id||null}}));return true;}
   if(method==='desktop.features'){if(Object.hasOwn(params,'inlineRoute'))inlineRoute=params.inlineRoute===true;return true;}
   if(method==='desktop.open'){const object=env.world.get(params.objectId);if(object&&(isAppRegistration(object)||desktopFile(object)))env.open(object);else if(object)send('open',{objectId:object.id});return{opened:!!object};}
+  if(method==='desktop.drag'){if(hidden||disposed||!capabilities.includes('world.read'))throw Error('Desktop drag unavailable');const start=objectDragStart(params);if(!start)throw Error('Invalid drag coordinates');if(start.ids.some(id=>{const object=env.world.get(id);return!object||!isAppRegistration(object)&&!desktopFile(object);}))throw Error('File or app not found');if(!env.drag)throw Error('Desktop drag unavailable');env.drag({...start,...point(start.x,start.y),windowKey:win.key});return{dragging:true};}
   if(method==='desktop.place'){const object=env.world.get(params.objectId);if(!object||(!isAppRegistration(object)&&!desktopFile(object)))throw Error('File or app not found');let point;if(params.position!==undefined){const p=params.position;if(!p||![p.x,p.y].every(value=>Number.isFinite(value)&&Math.abs(value)<1e8))throw Error('Invalid desktop position');point={x:p.x,y:p.y};}if(!env.place)throw Error('Desktop placement unavailable');env.place(object,point);return{placed:true};}
   if(method==='desktop.launchApp'){const object=env.world.get(params.appId);if(!isAppRegistration(object))throw Error('App not found');env.open(object);return{opened:true};}
   if(method==='desktop.route'){env.changeRoute(win.key,params.route);return true;}

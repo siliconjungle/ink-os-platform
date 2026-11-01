@@ -1,5 +1,5 @@
 import './fixed-desktop.css';import type{Compositor}from './compositor';import type{DesktopItems}from './desktop-items';
-/** Desktop coordinates are bounded CSS pixels. Resizing changes the view, never shared placements. */
+/** The view uses bounded CSS pixels; saved icon centres are proportional to its size. */
 export class FixedDesktop{
  constructor(readonly shell:HTMLElement,readonly compositor:Compositor,readonly items:DesktopItems){shell.classList.add('fixed-desktop');items.viewport=()=>({width:shell.clientWidth,height:shell.clientHeight});const observer=new ResizeObserver(()=>this.refresh());observer.observe(shell);observer.observe(compositor.stage);this.refresh();}
  worldPoint(x:number,y:number){const r=this.shell.getBoundingClientRect();return{x:x-r.left,y:y-r.top};}

@@ -5,8 +5,8 @@
       "slug": "finder",
       "title": "Finder",
       "repository": "https://github.com/siliconjungle/ink-app-finder",
-      "commit": "2a62ed2f6e769dc65a447ac1ea3549d7bfd168f5",
-      "sha256": "90aa31baf141a593fe4d3d869491781e4f0e89c8cd7b28cd7340ecfd696fd822"
+      "commit": "0a3caf948d1ae730b9b4c8c1bf86c0e335c7899d",
+      "sha256": "c76bc10d4b7353e46af3ddf9cee8b1088417f26582391b3e132552a88fdbe91f"
     },
     {
       "slug": "preview",
