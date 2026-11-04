@@ -17,7 +17,7 @@ export function desktopNeighbor(items,current,direction,viewport){
   if(primary<=.01)continue;
   const cross=Math.abs(horizontal?point.y-origin.y:point.x-origin.x);
   // A tiny sideways offset in a column is not a left/right neighbour.
-  if(cross>primary+.01)continue;
+  if(cross>primary*1.5+.01)continue;
   const beam=horizontal?rect.y<source[1].y+source[1].height&&rect.y+rect.height>source[1].y:rect.x<source[1].x+source[1].width&&rect.x+rect.width>source[1].x;
   candidates.push({id,beam,primary,cross,score:Math.hypot(primary,cross)+cross});
  }
