@@ -208,6 +208,8 @@ snapshotGate=new SnapshotGate({directory:data,adapter:maintenanceHost,otherClose
 backups=await new Backups({gate:snapshotGate,world,storage,instanceId:process.env.INK_OS_INSTANCE_ID,available:()=>!maintenance.closed&&!draining&&!stopping&&!snapshotGate.closed}).open();
 await maintenance.activate();
 if(!maintenance.closed)platform.effects.resumeAdmission();
+// Ink task runs a previous host left running continue from their journals.
+if(!maintenance.closed)void platform.inkTasks.resume().then(runs=>{const failed=runs.filter(r=>r?.error);if(runs.length)console.log(`Ink tasks: resumed ${runs.length - failed.length} of ${runs.length} interrupted runs`);for(const r of failed)console.error('Ink task run '+r.runId+' could not resume: '+r.error);},error=>console.error('Ink task resume failed: '+error.message));
 platform.maintenance=maintenance;
 const server = http.createServer(async (req, res) => {
  let finish;const task=new Promise(resolve=>finish=resolve);let tracked=false;

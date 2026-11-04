@@ -154,3 +154,100 @@ test('task contracts bind every effect, order writes, match driver types and dec
   await reject({ source: TASK.replace('effect fetch(request:HttpEffectRequest)', 'effect fetch(request:ClockEffectRequest)').replace('fetch(HttpEffectRequest{method:"GET",path:path,body:None,bytes:None,expected:None})', 'fetch(ClockEffectRequest{delayMs:0})') }, /http effect request/);
   await reject({ capabilities: ['effects.http', 'apps.invoke'] }, /effects.model/);
 });
+
+test('an interrupted task run resumes from its journal without repeating effects, and replays on scratch state', async (t) => {
+  let hang = true;
+  const hits = { tickets: 0, classify: 0, summarise: 0 },
+    hung = [];
+  const server = createServer(async (req, res) => {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    if (req.url === '/tickets/1') {
+      hits.tickets++;
+      return res.end('the app crashes on start');
+    }
+    const prompt = JSON.parse(body).messages[0].content,
+      kind = prompt.includes('classify(') ? 'classify' : 'summarise';
+    hits[kind]++;
+    // The first summarise never answers: the host "stops" while it is open.
+    if (kind === 'summarise' && hang) return hung.push(res);
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ content: [{ type: 'text', text: kind === 'classify' ? '"Label.Bug"' : '"crash on start"' }] }));
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => {
+    for (const res of hung) res.destroy();
+    server.close();
+  });
+  const origin = 'http://127.0.0.1:' + server.address().port,
+    { platform } = await fixture(t, {
+      allowHttp: true,
+      policy: {
+        version: 1,
+        resources: {
+          assistant: { kind: 'model', namespaces: ['*'], origin, model: 'test-model', maxTokens: 256 },
+          tickets: { kind: 'http', namespaces: ['*'], origin, methods: ['GET'], pathPrefix: '/tickets/' },
+        },
+      },
+    });
+  const log = await install(platform, await buildInkApp({ slug: 'log', language: 'ink', exports: ['log', 'last'] }, [file('main.ink', LOG)])),
+    triage = await install(platform, await taskApp({ app: log.app, release: log.release })),
+    total = async () => (await runInstalledInk(platform, triage.app.id, { entry: 'total', input: '[]' }, owner)).valueWire,
+    last = async () => (await runInstalledInk(platform, log.app.id, { entry: 'last', input: '[]' }, owner)).valueWire;
+
+  // First host: the run keeps fetch and classify, then stops mid-summarise.
+  const first = new InkTasks({ platform }),
+    stop = new AbortController(),
+    running = first.run(triage.app.id, { task: 'triage', input: '["/tickets/1"]', requestId: 'durable' }, owner, { signal: stop.signal }).catch((e) => e);
+  const journal = async () => {
+    const keys = await platform.code.stateKeys('ink-tasks', 'run:');
+    const key = keys.find((k) => /^run:[a-f0-9]{32}$/.test(k));
+    return key && (await platform.code.readState('ink-tasks', key)).value;
+  };
+  for (let i = 0; i < 200 && !(hung.length && JSON.parse((await journal())?.records || '[]').length >= 2); i++) await new Promise((r) => setTimeout(r, 25));
+  const kept = JSON.parse((await journal()).records);
+  assert.deepEqual(kept.map((r) => r.effect), ['fetch', 'classify']);
+  stop.abort();
+  assert.match(String((await running).message), /abort/i);
+  assert.equal((await journal()).status, 'running');
+  assert.equal(await total(), '0');
+
+  // Second host: the run continues where it stopped.
+  hang = false;
+  const second = new InkTasks({ platform }),
+    [resumed] = await second.resume();
+  assert.equal(resumed.valueWire, '{"Ok":"Label.Bug"}');
+  assert.equal(second.resumed, 1);
+  assert.deepEqual(hits, { tickets: 1, classify: 1, summarise: 2 }, 'only the unfinished effect runs again');
+  assert.equal(await total(), '1');
+  assert.equal(await last(), '"crash on start"');
+  assert.deepEqual(
+    parseExactJSON(resumed.trace).effects.map((e) => [e.effect, e.outcome]),
+    [['fetch', 'accepted'], ['classify', 'accepted'], ['summarise', 'accepted'], ['notify', 'accepted']],
+  );
+  const done = await journal();
+  assert.equal(done.status, 'done');
+  assert.equal(done.records, '[]');
+
+  // The same request identity returns the finished run without running it.
+  const again = await second.run(triage.app.id, { task: 'triage', input: '["/tickets/1"]', requestId: 'durable' }, owner);
+  assert.equal(again.traceId, resumed.traceId);
+  assert.deepEqual(hits, { tickets: 1, classify: 1, summarise: 2 });
+  await assert.rejects(second.run(triage.app.id, { task: 'triage', input: '["/tickets/2"]', requestId: 'durable' }, owner), { status: 409 });
+
+  // In-platform replay: effects come from the trace and state changes land on
+  // a scratch copy of the state the run started from.
+  const replay = await second.replay(triage.app.id, resumed.runId, owner);
+  assert.equal(replay.matches, true);
+  assert.equal(replay.valueWire, resumed.valueWire);
+  assert.deepEqual(hits, { tickets: 1, classify: 1, summarise: 2 }, 'replay performs no effect');
+  assert.equal(await total(), '1', 'replay leaves live state alone');
+  assert.equal(await last(), '"crash on start"');
+  assert.deepEqual(
+    (await platform.code.stateKeys('ink-tasks', '')).filter((k) => k.startsWith('replay:') || (k.startsWith('@ink:') && !k.includes('run:'))),
+    [],
+    'scratch state is removed',
+  );
+  await assert.rejects(second.replay(log.app.id, resumed.runId, owner), { status: 404 });
+});

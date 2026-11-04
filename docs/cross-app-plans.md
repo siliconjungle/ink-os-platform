@@ -176,17 +176,33 @@ with the runtime's vendored scheduler:
 - **Concurrency.** Independent effects overlap, but the result is that of
   sequential execution.
 - **State calls.** Only the running task's generated queries and named steps
-  are callable. Changes carry stable request identities.
+  are callable. Changes and app writes carry request identities keyed by
+  their step.
 - **Model and app replies.** These must pass the generated accept query, or
   the step takes its authored fallback.
 - **HTTP, clock and random.** Driver failures are typed `EffectError`
   values.
+- **Durable runs.** Each run keeps a journal in the host namespace
+  `ink-tasks` (`run:<runId>`). Every effect reply and step result is written
+  there before the task uses it. A host that starts while runs are still
+  `running` resumes them: kept replies and results are reused, and only
+  unfinished steps run again. A change or app write that committed before
+  its result was kept is not applied twice while the target still holds its
+  receipt. A run repeated with the same `requestId` returns the finished
+  result, and the same identity with different input is refused.
 - **Traces.** Each run's trace is stored in World as `ink-task-run`, bound
-  to its release. It replays offline without effects: `ink replay-task
-  SOURCE TRACE --restore SNAPSHOT`.
+  to its release. It replays offline without effects (`ink replay-task
+  SOURCE TRACE --restore SNAPSHOT`) or in the platform:
+  `POST /api/v1/apps/APP/ink/task-runs/RUN/replay` (`client.apps.ink.replayTask`)
+  answers every effect from the trace and runs the queries and changes on a
+  scratch copy of the state the run started from (kept for states up to
+  1 MiB). Live state is not touched, and the result and outcomes must match
+  exactly. They do when no other commit interleaved with the run.
 
 Queries and changes a task calls must be root-module exports. A task runs
-within its contract's deadline (at most 30 s). It does not survive a restart.
+within its contract's deadline (at most 30 s), counted again when it
+resumes. Model and HTTP reads that were in flight when the host stopped are
+sent again.
 
 ## Measurements
 
@@ -238,6 +254,8 @@ reuse and faster snapshots.
   - undeclared plans refused;
   - impure or mistyped plans rejected at system build.
 - `tests/ink-tasks.test.mjs`:
+  - an interrupted run resuming on a new host without repeating its kept
+    effects, idempotent repeats and in-platform replay on scratch state;
   - model, HTTP and cross-app effects against local stand-ins;
   - overlapping model calls;
   - typed fallbacks and typed HTTP denial;

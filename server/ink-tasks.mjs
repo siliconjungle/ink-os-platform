@@ -14,12 +14,19 @@
 //   checks protocols use. Driver failures of http/clock/random become typed
 //   EffectError values; model and app replies are checked by the step's
 //   generated accept query like any other reply;
-// - a durable trace in World (`ink-task-run`) bound to the release. It replays
-//   offline without any effect: `ink replay-task SOURCE TRACE --restore SNAPSHOT`
-//   or the runtime's replayTask against a snapshot taken before the run.
+// - a durable run journal (host namespace `ink-tasks`, key `run:<runId>`):
+//   each effect reply and step result is kept before it is used, so a run
+//   interrupted by a restart resumes where it stopped instead of repeating
+//   effects. Changes and app writes carry step-keyed request identities, so a
+//   step that committed before its result was kept is not applied twice
+//   (while the target's receipt is retained);
+// - a trace in World (`ink-task-run`) bound to the release. It replays
+//   offline (`ink replay-task SOURCE TRACE --restore SNAPSHOT`) or in the
+//   platform (`replay`) against a scratch copy of the state the run started
+//   from, with every effect answered from the trace.
 import { createHash, randomBytes } from 'node:crypto';
 import { installedInk, runInstalledInk } from './ink-apps.mjs';
-import { runTask, TaskFailed, effectPrompt, replyValue, MANIFEST_FORMAT } from './ink-task-runner.mjs';
+import { runTask, replayTask, TaskFailed, effectPrompt, replyValue, MANIFEST_FORMAT } from './ink-task-runner.mjs';
 import { httpEffect, effectFailure } from './ink-effect-io.mjs';
 import { hostBudget } from './execution-budget.mjs';
 import { TASK_CAPABILITIES } from '../shared/ink-tasks.mjs';
@@ -31,7 +38,11 @@ const fail = (status, message) => {
   throw Object.assign(Error(message), { status });
 };
 const sha = (text) => createHash('sha256').update(text).digest('hex');
-const MAX_TRACE = 256 * 1024,
+const RUNS = 'ink-tasks',
+  JOURNAL_FORMAT = 'ink-os-task-journal-v1',
+  MAX_JOURNAL = 768 * 1024,
+  MAX_START = 1024 * 1024,
+  MAX_TRACE = 256 * 1024,
   MAX_PROMPT = 64 * 1024,
   MAX_REPLY = 256 * 1024;
 const RECORD_KINDS = ['http', 'clock', 'random'];
@@ -120,10 +131,51 @@ export async function modelComplete(profile, prompt, signal, owner) {
   });
 }
 
+/** One run's durable record; writes are serialized and compare revisions. */
+class RunJournal {
+  constructor(code, runId) {
+    Object.assign(this, { code, key: 'run:' + runId, revision: 0, chain: Promise.resolve() });
+  }
+  async read() {
+    const saved = await this.code.storage.read(RUNS, this.key);
+    this.revision = saved.revision;
+    return saved.value;
+  }
+  write(value) {
+    const next = this.chain.then(async () => {
+      const saved = await this.code.storage.batch(RUNS, this.key, this.revision, [{ key: this.key, value }]);
+      this.revision = saved.revision;
+    });
+    this.chain = next.catch(() => {});
+    return next;
+  }
+}
+
 export class InkTasks {
   constructor({ platform }) {
     this.platform = platform;
     this.runs = 0;
+    this.resumed = 0;
+    this.active = new Map();
+  }
+  /** Resume every run a previous host left running. */
+  async resume() {
+    const keys = (await this.platform.code.stateKeys(RUNS, 'run:')).filter((k) => /^run:[a-f0-9]{32}$/.test(k)),
+      results = [];
+    for (const key of keys) {
+      const journal = new RunJournal(this.platform.code, key.slice(4)),
+        record = await journal.read().catch(() => null);
+      if (record?.format !== JOURNAL_FORMAT || record.status !== 'running' || this.active.has(record.runId)) continue;
+      const task = this.continue(record, journal).catch((error) => ({ runId: record.runId, error: error.message }));
+      results.push(task);
+    }
+    return Promise.all(results);
+  }
+  async continue(record, journal) {
+    const prepared = await this.prepare(record.appId, record.task, { releaseId: record.releaseId });
+    if (prepared.app.releaseId !== record.releaseId) fail(409, 'The run belongs to another release');
+    this.resumed++;
+    return this.execute(prepared, record, journal);
   }
   policy() {
     const policy = this.platform.effects?.policy;
@@ -214,9 +266,13 @@ export class InkTasks {
     const authority = this.platform.runtime.bind({ owner: false, appId, namespace: appId, releaseId: app.releaseId });
     return { app: { ...app, appId }, contract, compiled, manifest, steps, allowed, authority };
   }
-  caller({ app, compiled, allowed, authority }, runId, signal) {
-    let changes = 0;
-    return async (name, args) => {
+  /**
+   * State calls of a run. A change's request identity is its step, so a
+   * resumed run that repeats the step receives the original reply. `target`
+   * redirects every call to scratch state (replay).
+   */
+  caller({ app, compiled, allowed, authority }, runId, signal, target = { namespace: app.appId, stateKey: 'ink-app:state', principal: authority }) {
+    return async (name, args, { step } = {}) => {
       if (!allowed.has(name)) fail(403, 'A task may call only its own steps');
       const action = compiled.artifact.manifest.state?.actions?.find((a) => a.name === name);
       const result = await this.platform.code.run({
@@ -224,35 +280,90 @@ export class InkTasks {
         entry: name,
         args,
         task: name.startsWith('__task_'),
-        namespace: app.appId,
-        stateKey: 'ink-app:state',
-        principal: authority,
+        ...target,
         signal,
-        ...(action?.change ? { requestId: `task:${runId}:c${changes++}` } : {}),
+        ...(action?.change ? { requestId: `task:${runId}:s${step}` } : {}),
       });
       return parseExactJSON(result.wire).result;
     };
   }
   /** Run a task; returns its exact result, its trace and the stored run's id. */
-  async run(appId, input = {}, principal) {
+  async run(appId, input = {}, principal, { signal } = {}) {
     if (typeof input.task !== 'string') fail(400, 'Name the Ink task to run');
     if (input.requestId !== undefined && (typeof input.requestId !== 'string' || !input.requestId.length || input.requestId.length > 128))
       fail(400, 'Invalid task request identity');
     const prepared = await this.prepare(appId, input.task, principal),
-      { contract, compiled, manifest, app } = prepared,
-      args = parseExactJSON(input.input ?? '[]'),
-      runId = input.requestId ? sha(appId + '\0' + input.task + '\0' + input.requestId).slice(0, 32) : randomBytes(16).toString('hex'),
-      signal = AbortSignal.timeout(contract.deadlineMs);
+      wire = input.input ?? '[]',
+      args = parseExactJSON(wire),
+      runId = input.requestId ? sha(appId + '\0' + input.task + '\0' + input.requestId).slice(0, 32) : randomBytes(16).toString('hex');
     if (!Array.isArray(args)) fail(400, 'Task input is a JSON argument array');
+    if (this.active.has(runId)) return this.active.get(runId);
+    const journal = new RunJournal(this.platform.code, runId),
+      existing = await journal.read();
+    if (existing) {
+      if (existing.appId !== appId || existing.task !== input.task || existing.input !== wire)
+        fail(409, 'Task request identity was already used for a different run');
+      if (existing.status === 'running') return this.execute(prepared, existing, journal, signal);
+      return this.finished(existing);
+    }
+    const record = {
+      format: JOURNAL_FORMAT,
+      runId,
+      appId,
+      releaseId: prepared.app.releaseId,
+      task: input.task,
+      input: wire,
+      status: 'running',
+      started: Date.now(),
+      records: '[]',
+    };
+    await journal.write(record);
+    // The state the run starts from, for in-platform replay (small states only).
+    try {
+      const start = await this.platform.code.loadCheckpoint(appId, 'ink-app:state'),
+        value = start.value === null ? { empty: true } : start.value.snapshot && start.value.snapshot.length <= MAX_START ? start.value : null;
+      if (value) await this.platform.code.storage.batch(RUNS, 'run:' + runId + ':start', 0, [{ key: 'run:' + runId + ':start', value }]);
+    } catch {}
+    return this.execute(prepared, record, journal, signal);
+  }
+  execute(prepared, record, journal, cancel) {
+    const task = this.perform(prepared, record, journal, cancel).finally(() => this.active.delete(record.runId));
+    this.active.set(record.runId, task);
+    return task;
+  }
+  async perform(prepared, record, journal, cancel) {
+    const { contract, compiled, manifest, app } = prepared,
+      { runId } = record,
+      // A cancelled run stays `running` in its journal and resumes later.
+      signal = cancel ? AbortSignal.any([cancel, AbortSignal.timeout(contract.deadlineMs)]) : AbortSignal.timeout(contract.deadlineMs),
+      // Exact JSON reads integers as BigInt; steps are indices.
+      kept = parseExactJSON(record.records).map((r) => ({ ...r, step: Number(r.step) })),
+      effects = new Map(kept.filter((r) => r.effect).map((r) => [r.step, r])),
+      calls = new Map(kept.filter((r) => r.call).map((r) => [r.step, r.result]));
+    let entries = [...kept],
+      bounded = false;
+    // Each reply and step result is durable before the task uses it.
+    const onRecord = (entry) => {
+      if (bounded) return;
+      const text = stringifyExactJSON([...entries, entry]);
+      if (Buffer.byteLength(text) > MAX_JOURNAL) {
+        bounded = true;
+        return;
+      }
+      entries.push(entry);
+      return journal.write({ ...record, records: text });
+    };
     const types = effectTypes(manifest, compiled.artifact);
     let outcome;
     try {
       outcome = await runTask({
         manifest,
         call: this.caller(prepared, runId, signal),
-        task: input.task,
-        args,
+        task: record.task,
+        args: parseExactJSON(record.input),
         effects: this.handlers(app, contract, types, compiled.artifact.manifest.named_types, runId),
+        journal: { effects, calls },
+        onRecord,
         concurrency: contract.concurrency,
         signal,
       });
@@ -262,18 +373,82 @@ export class InkTasks {
     }
     this.runs++;
     const trace = stringifyExactJSON(outcome.trace),
-      record = await this.platform.world.create(
+      kept_trace = Buffer.byteLength(trace) <= MAX_TRACE ? trace : null,
+      stored = await this.platform.world.create(
         {
-          namespace: appId,
+          namespace: record.appId,
           kind: 'ink-task-run',
-          title: 'Task ' + input.task + (outcome.failed ? ' failed' : ''),
+          title: 'Task ' + record.task + (outcome.failed ? ' failed' : ''),
           tags: ['ink-task-run'],
-          body: JSON.stringify({ format: 'ink-os-task-run-v1', runId, releaseId: app.releaseId, task: input.task, trace: Buffer.byteLength(trace) <= MAX_TRACE ? trace : null }),
+          body: JSON.stringify({ format: 'ink-os-task-run-v1', runId, releaseId: app.releaseId, task: record.task, trace: kept_trace }),
         },
-        { writer: appId, actor: 'Ink task', action: 'ran task ' + input.task },
+        { writer: record.appId, actor: 'Ink task', action: 'ran task ' + record.task },
       );
-    if (outcome.failed) fail(422, outcome.failed);
-    const valueWire = stringifyExactJSON(outcome.result);
-    return { runId, task: input.task, releaseId: app.releaseId, valueWire, value: displayWire(valueWire), trace, traceId: record.id };
+    const finished = {
+      ...record,
+      status: outcome.failed ? 'failed' : 'done',
+      records: '[]',
+      finished: Date.now(),
+      outcome: outcome.failed ? { failed: outcome.failed } : { valueWire: stringifyExactJSON(outcome.result) },
+      trace: kept_trace,
+      traceId: stored.id,
+    };
+    await journal.write(finished);
+    return this.finished(finished);
+  }
+  finished(record) {
+    if (record.outcome.failed) fail(422, record.outcome.failed);
+    const valueWire = record.outcome.valueWire;
+    return {
+      runId: record.runId,
+      task: record.task,
+      releaseId: record.releaseId,
+      valueWire,
+      value: displayWire(valueWire),
+      trace: record.trace,
+      traceId: record.traceId,
+    };
+  }
+  /**
+   * Re-run a finished run in the platform: every effect is answered from its
+   * trace, and its queries and changes run on a scratch copy of the state the
+   * run started from. The replay must reproduce the recorded outcomes and
+   * result exactly (it does when no other commit interleaved with the run).
+   * Live state is never touched.
+   */
+  async replay(appId, runId, principal) {
+    if (!/^[a-f0-9]{32}$/.test(runId)) fail(400, 'Invalid task run identity');
+    const record = await new RunJournal(this.platform.code, runId).read();
+    if (record?.format !== JOURNAL_FORMAT || record.appId !== appId) fail(404, 'No such task run');
+    if (record.status === 'running') fail(409, 'The task run has not finished');
+    if (!record.trace) fail(409, 'The task run kept no trace');
+    const startKey = 'run:' + runId + ':start',
+      start = await this.platform.code.storage.read(RUNS, startKey);
+    if (!start.value) fail(409, 'The task run kept no start state');
+    const prepared = await this.prepare(appId, record.task, { ...principal, releaseId: record.releaseId });
+    if (prepared.app.releaseId !== record.releaseId) fail(409, 'The run belongs to another release');
+    const scratch = 'replay:' + runId + ':' + randomBytes(8).toString('hex'),
+      code = this.platform.code;
+    // A run that started before the app's first commit replays on fresh state.
+    if (!start.value.empty) await code.saveCheckpoint(RUNS, scratch, start.value, 0);
+    try {
+      const parsed = parseExactJSON(record.trace),
+        trace = { ...parsed, effects: parsed.effects.map((e) => ({ ...e, step: Number(e.step) })) },
+        replayed = await replayTask({
+          manifest: prepared.manifest,
+          call: this.caller(prepared, 'replay-' + runId, AbortSignal.timeout(prepared.contract.deadlineMs), { namespace: RUNS, stateKey: scratch }),
+          trace,
+        });
+      return { runId, task: record.task, releaseId: record.releaseId, matches: true, effects: replayed.effects.length, valueWire: stringifyExactJSON(replayed.result) };
+    } catch (error) {
+      if (/replay differs/.test(error.message)) fail(409, 'Replay differs from the recorded run');
+      throw error;
+    } finally {
+      // Scratch state and its journal payloads leave with the replay.
+      const keys = (await code.stateKeys(RUNS, scratch)).concat(await code.stateKeys(RUNS, '@ink:'));
+      const own = keys.filter((k) => k === scratch || k.startsWith('@ink:' + sha(scratch) + ':'));
+      const saved = await code.readState(RUNS, scratch);
+      await code.storage.batch(RUNS, scratch, saved.revision, own.map((key) => ({ key, delete: true }))).catch(() => {});
+    }
   }
 }

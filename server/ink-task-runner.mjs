@@ -1,6 +1,12 @@
 // Vendored from ink-runtime hosts/tasks.mjs and hosts/model-effect.mjs (MIT,
 // siliconjungle/ink-runtime 8bfe2c6). Keep behaviour identical: traces made here
 // replay with `ink replay-task` and the runtime's replayTask.
+//
+// OS additions, which leave traces unchanged: `call` receives `{step}` as a
+// third argument, and a durable host can pass `journal` ({effects, calls}:
+// effect records and call results kept from an interrupted run, by step) and
+// `onRecord` (awaited with each new effect record or call result before it is
+// used) to resume a run without repeating what it already did.
 import { stringifyExactJSON } from '../shared/exact-json.mjs';
 
 // Concurrent host for Ink task manifests (`ink emit-tasks`, format ink-tasks-v1).
@@ -54,11 +60,13 @@ const isOk = v => v !== null && typeof v === 'object' && Object.hasOwn(v, 'Ok');
  * @param {Array} o.args       task arguments
  * @param {object} [o.effects] handlers by effect name: (...args, context) => reply
  * @param {object} [o.replay]  a recorded trace; replies are taken from it by step
+ * @param {object} [o.journal] {effects: Map(step -> record), calls: Map(step -> result)} from an interrupted run
+ * @param {Function} [o.onRecord] awaited with {step, effect, args, reply|error} or {step, call, result}
  * @param {number} [o.concurrency] maximum concurrently running steps (default 16)
  * @param {AbortSignal} [o.signal]
  * @returns {Promise<{result:any, trace:object}>}
  */
-export async function runTask({manifest, call, task: name, args, effects = {}, replay, concurrency = 16, signal}) {
+export async function runTask({manifest, call, task: name, args, effects = {}, replay, journal, onRecord, concurrency = 16, signal}) {
   const t = task(manifest, name);
   if (!Array.isArray(args) || args.length !== t.params.length) throw TypeError(`task ${name} takes ${t.params.length} arguments`);
   if (!(concurrency >= 1)) throw RangeError('concurrency must be at least 1');
@@ -86,8 +94,9 @@ export async function runTask({manifest, call, task: name, args, effects = {}, r
     const effect = declared.get(s.callee);
     const record = {step: i, effect: s.callee, args: values, outcome: 'accepted'};
     let reply, failed = false;
-    if (replay) {
-      const r = recorded.get(i);
+    const kept = journal?.effects?.get(i);
+    if (replay || kept) {
+      const r = replay ? recorded.get(i) : kept;
       if (!r || r.effect !== s.callee) throw Error(`trace has no reply for step ${i + 1}`);
       if (Object.hasOwn(r, 'error')) { failed = true; record.error = r.error; } else { reply = r.reply; record.reply = reply; }
     } else {
@@ -102,6 +111,9 @@ export async function runTask({manifest, call, task: name, args, effects = {}, r
         finally { controllers.delete(i); }
         record.reply = reply;
       } catch (e) { failed = true; record.error = String(e?.message ?? e); }
+      // An effect aborted because an earlier step ended the task, or because
+      // the run was cancelled, is not kept.
+      if (onRecord && !(i > failedAt) && !signal?.aborted) await onRecord({step: i, effect: s.callee, args: values, ...(failed ? {error: record.error} : {reply})});
     }
     let accepted = false;
     if (!failed) {
@@ -116,10 +128,14 @@ export async function runTask({manifest, call, task: name, args, effects = {}, r
 
   async function step(i) {
     const s = t.steps[i];
-    if (s.kind === 'value') return call(s.callee, used(s));
+    if (s.kind === 'value') return call(s.callee, used(s), {step: i});
     const values = [];
-    for (const q of s.args) values.push(await call(q, used(s)));
-    return s.kind === 'effect' ? perform(i, s, values) : call(s.callee, values);
+    for (const q of s.args) values.push(await call(q, used(s), {step: i}));
+    if (s.kind === 'effect') return perform(i, s, values);
+    if (journal?.calls?.has(i)) return journal.calls.get(i);
+    const result = await call(s.callee, values, {step: i});
+    if (onRecord) await onRecord({step: i, call: s.callee, result});
+    return result;
   }
 
   const running = new Set();
