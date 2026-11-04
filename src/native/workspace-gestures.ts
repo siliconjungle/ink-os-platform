@@ -18,7 +18,7 @@ export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compos
   switcher.setAttribute('role', 'group');
   switcher.setAttribute('aria-label', 'Desktops');
   switcher.title = 'Swipe horizontally to switch desktops · Ctrl Alt ← / →';
-  const blocked = () => !!document.documentElement.dataset.gesture || !!document.querySelector('.modal-backdrop,.quick-look-backdrop,.window-overview,.desktop-context,.system-menu');
+  const blocked = () => !!compositor.gesture || !!document.documentElement.dataset.gesture || !!document.querySelector('.modal-backdrop,.quick-look-backdrop,.window-overview,.desktop-context,.system-menu');
   const step = (direction:number) => {
     if (blocked()) {swipe.reset(); return;}
     const id = adjacentWorkspace(compositor.workspaces, compositor.workspace, direction);
