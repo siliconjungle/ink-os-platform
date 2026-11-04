@@ -2,10 +2,15 @@
 .desktop-shell :is(.desktop-stage,.desktop-items,.window-overview,.overview-desktops,.overview-canvas):is(:focus,:focus-visible){outline:none}
 .window-overview :is(button,input):focus-visible{outline:1px solid #bcbcbc;outline-offset:3px}
 .overview-gesture-hint{font-size:11px;color:var(--secondary,#999);margin-right:14px}
-/* Keep the side controls above the live miniature without intercepting the picker. */
+/* Float edge fades and controls above both schematic and live previews. */
+.window-overview{padding-inline:0}
+.window-overview .overview-header{margin-inline:32px}
 .overview-navigation{position:fixed;inset:auto;margin:0;padding:0 12px;border:0;background:transparent;overflow:visible;display:grid;grid-template-columns:40px 1fr 40px;align-items:center;height:40px;box-sizing:border-box;pointer-events:none;opacity:1;transition:opacity 240ms ease-out}
+.overview-navigation::before,.overview-navigation::after{content:"";position:absolute;top:var(--preview-top);height:var(--preview-height);width:clamp(64px,8vw,120px);pointer-events:none}
+.overview-navigation::before{left:0;background:linear-gradient(to right,#101010 0%,#101010ee 22%,#10101080 60%,transparent)}
+.overview-navigation::after{right:0;background:linear-gradient(to left,#101010 0%,#101010ee 22%,#10101080 60%,transparent)}
 .overview-navigation::backdrop{background:transparent;pointer-events:none}
-.overview-navigation>.overview-step-button{display:grid;place-items:center;width:40px;height:40px;pointer-events:auto;border:1px solid #ffffff25;border-radius:50%;background:#202020ed;color:var(--text,#ddd);box-shadow:0 3px 14px #0005;transition:background 160ms,border-color 160ms}
+.overview-navigation>.overview-step-button{position:relative;z-index:1;display:grid;place-items:center;width:40px;height:40px;pointer-events:auto;border:1px solid #ffffff25;border-radius:50%;background:#202020ed;color:var(--text,#ddd);box-shadow:0 3px 14px #0005;transition:background 160ms,border-color 160ms}
 .overview-navigation>.overview-step-button:first-child{grid-column:1}
 .overview-navigation>.overview-step-button:last-child{grid-column:3}
 .overview-navigation>.overview-step-button:hover{background:#333;border-color:#ffffff50}
@@ -13,7 +18,7 @@
 .window-overview.is-closing .overview-navigation{opacity:0!important}
 .desktop-shell>.desktop-bottom{opacity:1;transition:opacity 240ms ease-out}
 .desktop-shell.overview-open>.desktop-bottom{opacity:0;pointer-events:none}
-.window-overview .overview-desktops{display:block;position:relative;overflow:clip;width:calc(100% - 64px);scroll-snap-type:none;scroll-behavior:auto;padding:12px 0 30px;scrollbar-width:none}
+.window-overview .overview-desktops{display:block;position:relative;overflow:clip;width:100%;max-width:none;scroll-snap-type:none;scroll-behavior:auto;padding:12px 0 30px;scrollbar-width:none}
 .window-overview .overview-track{position:relative;display:flex;align-items:flex-start;gap:20px;width:max-content;will-change:transform;transition:transform 320ms cubic-bezier(.22,.8,.25,1)}
 .window-overview .overview-section{opacity:.55;transform:scale(.88);transform-origin:center center;transition:transform 280ms cubic-bezier(.22,.8,.25,1),opacity 280ms,border-color 180ms}
 .window-overview .overview-section.is-current{opacity:1;transform:scale(1)}
@@ -27,3 +32,5 @@
 .window-overview.is-closing,.window-overview.is-closing *{pointer-events:none!important}
 
 @media(prefers-reduced-motion:reduce){.window-overview :is(.overview-track,.overview-section),.desktop-shell>.desktop-bottom,.overview-navigation{transition:none}}
+
+@media(max-width:700px){.window-overview .overview-header{margin-inline:20px}}

@@ -27,7 +27,9 @@ export class DesktopOverview{
   const popovers=typeof this.navigation.showPopover==='function';
   if(this.navigation.hidden){if(popovers&&this.navigation.matches(':popover-open'))this.navigation.hidePopover();return;}
   const bounds=this.node.getBoundingClientRect(),viewport=this.desktops.getBoundingClientRect(),preview=this.cards.get(this.selected)?.canvas;if(!preview)return;let top=0;for(let element:HTMLElement|null=preview;element&&element!==this.desktops;element=element.offsetParent as HTMLElement|null)top+=element.offsetTop;
-  this.navigation.style.left=bounds.left+'px';this.navigation.style.top=viewport.top+top+preview.offsetHeight/2-20+'px';this.navigation.style.width=bounds.width+'px';
+  const navigationTop=viewport.top+top+preview.offsetHeight/2-20;
+  this.navigation.style.left=bounds.left+'px';this.navigation.style.top=navigationTop+'px';this.navigation.style.width=bounds.width+'px';
+  this.navigation.style.setProperty('--preview-top',viewport.top-navigationTop+'px');this.navigation.style.setProperty('--preview-height',viewport.height+'px');
   if(popovers&&!this.navigation.matches(':popover-open')){this.navigation.style.opacity='0';this.navigation.showPopover();this.navigation.getBoundingClientRect();this.navigation.style.opacity='1';}
  }
  destroy(){this.observer.disconnect();if(typeof this.navigation.hidePopover==='function'&&this.navigation.matches(':popover-open'))this.navigation.hidePopover();}
