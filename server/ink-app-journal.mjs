@@ -247,7 +247,7 @@ export class InkAppJournal {
       source: base.source,
     };
   }
-  async commit(saved, recovery, compiled, record, checkpoint) {
+  async commit(saved, recovery, compiled, record, checkpoint, { onHeader } = {}) {
     const previous = saved.value?.format === appJournalFormat ? saved.value : null;
     // The newest reply is always retained, even when it exceeds the target.
     const receipts = retainReceipts([...recovery.receipts, record.receipt]);
@@ -295,6 +295,9 @@ export class InkAppJournal {
       seq,
       bytes: compact ? 0 : (previous && !compact ? previous.bytes : 0) + JSON.stringify(record).length,
     };
+    // Observers learn the exact header before it lands, so they can tell this
+    // commit's state change from any other write that arrives meanwhile.
+    onHeader?.(root);
     const committed = await this.batch(saved.revision, [{ key: this.key, value: root }]);
     if (compact || saved.value?.format !== appJournalFormat) await this.collect(committed);
     return { ...committed, header: root, receipts, compacted: compact, chunksWritten: written };

@@ -268,9 +268,15 @@ export class InkViews {
               mount.appId + '\0ink-app:state',
             )?.body !== event.object.body))
       ) {
-        const hint = this.platform.code.commitHints.get(
-          key(mount.appId, 'ink-app:state'),
-        );
+        const candidate = this.platform.code.commitHints.get(
+            key(mount.appId, 'ink-app:state'),
+          ),
+          // Only the state the hinted commit wrote is explained by its paths.
+          body =
+            event.type === 'object'
+              ? event.object.body
+              : this.platform.world.stateCommits?.get(mount.appId + '\0ink-app:state')?.body,
+          hint = candidate && (candidate.body === undefined || candidate.body === body) ? candidate : null;
         if (hint?.source === mount.source) {
           for (const root of hint.roots) mount.dirty.add(root);
           // Use the same compiler-checked dependencies as component caching.

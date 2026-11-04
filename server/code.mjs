@@ -459,6 +459,7 @@ export class Code {
           compiled,
           record,
           () => scheduledEndpoint.request({ op: 'checkpoint' }),
+          { onHeader: (root) => { hint.body = JSON.stringify(root); } },
         );
         }finally{this.commitHints.delete(hintKey);}
         for(const listener of this.commitListeners)try{listener({namespace,stateKey,before:saved.revision,after:committed.revision,header:committed.header,record:{entry:record.entry,input:record.input,wire:record.wire},source:hint.source,roots:hint.roots});}catch{}

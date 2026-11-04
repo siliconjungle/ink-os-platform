@@ -66,6 +66,10 @@ everything.
   input `[42]` becomes `Rows[42]` plus `Rows[*]`. Keys are named only for
   `u32`, `i32`, `u64` and `String` keys given as exact JSON integers or
   strings; anything else depends on the root.
+- **Exact headers.** A hint carries the journal header its commit writes. It
+  explains only a state change to exactly that header. A replicated or
+  migration write that lands while the commit is in flight advances every
+  path instead.
 - **Root versions** keep one version per path. Past 4,096 paths for one app
   they are all forgotten and advanced once.
 
@@ -154,8 +158,4 @@ What remains:
 - The first render of a planned read still loads the copy (about 2 s here at
   100,000 rows).
 - Fields within a row are not tracked; `Rows[k]` names whole rows.
-- A commit hint is matched to the next state change of its app. A replicated
-  or migration write that lands while a local commit is in flight takes that
-  commit's paths instead of advancing every path, so readers of other paths
-  can keep a stale result until the app's next commit. The review that found
-  this rated it correctness only: readers are entitled to the exported query.
+

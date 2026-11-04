@@ -54,8 +54,12 @@ export class RootVersions {
     const token = this.token(appId);
     if (token === entry.token) return null;
     entry.token = token;
+    // A hint explains only the state its own commit wrote; any other write
+    // (replicated, migrated) that lands while that commit is in flight does not
+    // match its header and advances every path.
     const version = ++this.counter,
-      hint = event.restore ? null : this.platform.code?.commitHints?.get(appId + '\0' + STATE);
+      candidate = event.restore ? null : this.platform.code?.commitHints?.get(appId + '\0' + STATE),
+      hint = candidate && (candidate.body === undefined || candidate.body === this.body(appId)) ? candidate : null;
     if (!hint) {
       entry.all = version;
       return { appId, roots: null };
@@ -68,6 +72,13 @@ export class RootVersions {
       entry.all = version;
     }
     return { appId, roots: [...hint.roots] };
+  }
+  /** The app's current state header text. */
+  body(appId) {
+    const authority = this.platform.world.stateCommits?.get(appId + '\0' + STATE);
+    if (authority) return authority.body;
+    const state = this.platform.world.get(stateObjectId(appId, STATE));
+    return state?.archived ? '' : state?.body || '';
   }
   /** Current versions of an app's roots; an unexplained change advances them all. */
   versions(appId, roots) {
