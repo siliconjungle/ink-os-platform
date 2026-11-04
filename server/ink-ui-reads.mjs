@@ -3,6 +3,7 @@ import { resolveEffectType, effectTypeEqual } from '../shared/ink-effects.mjs';
 import { parseExactJSON } from '../shared/exact-json.mjs';
 import { RootVersions } from './ink-root-versions.mjs';
 import { readRoots } from './ink-footprints.mjs';
+import { InkLinks } from './ink-links.mjs';
 const fail = (status, message) => {
   throw Object.assign(Error(message), { status });
 };
@@ -38,6 +39,7 @@ export class InkUiReads {
     this.cache = new Map();
     this.latest = new Map();
     this.versions = new RootVersions(platform);
+    this.links = new InkLinks(platform, this);
     this.reads = 0;
     this.hits = 0;
     this.reused = 0;
@@ -72,6 +74,7 @@ export class InkUiReads {
   }
   /** Record a World event; returns the provider whose roots changed, if tracked. */
   observe(event) {
+    this.links.observe(event);
     return this.versions.observe(event);
   }
   async roots(binding) {
@@ -91,7 +94,7 @@ export class InkUiReads {
   }
   async read(binding, expected, signal, consumer) {
     if (binding.plan)
-      return this.platform.inkLinks.read(binding, expected, { signal, consumer });
+      return this.links.read(binding, expected, { signal, consumer });
     await this.platform.code.readState(binding.appId, 'ink-app:state');
     const key = JSON.stringify([binding, expected]),
       prior = this.cache.get(key);
@@ -158,5 +161,6 @@ export class InkUiReads {
   close() {
     this.cache.clear();
     this.latest.clear();
+    this.links.close();
   }
 }

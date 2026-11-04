@@ -27,6 +27,8 @@ export class Code {
     this.tasks = new Map();
     this.pureTasks = new Set();
     this.commitHints=new Map();
+    // Notified after each durable commit: {namespace, stateKey, before, after, record, source, roots}.
+    this.commitListeners = new Set();
     this.budget = options.budget || hostBudget;
     this.compilations = new Map();
     this.residents = new InkResidents(options);
@@ -438,7 +440,7 @@ export class Code {
             receipt,
           };
         // Readers re-run only when a commit writes a root they read (IR write roots).
-        const hintKey=namespace+'\0'+stateKey;this.commitHints.set(hintKey,{source:inkProgramKey(compiled.source),roots:writeRoots(await this.footprints(compiled),compiled,selected)});let committed;
+        const hintKey=namespace+'\0'+stateKey,hint={source:inkProgramKey(compiled.source),roots:writeRoots(await this.footprints(compiled),compiled,selected)};this.commitHints.set(hintKey,hint);let committed;
         try{
         committed = await journal.commit(
           saved,
@@ -448,6 +450,7 @@ export class Code {
           () => scheduledEndpoint.request({ op: 'checkpoint' }),
         );
         }finally{this.commitHints.delete(hintKey);}
+        for(const listener of this.commitListeners)try{listener({namespace,stateKey,before:saved.revision,after:committed.revision,record:{entry:record.entry,input:record.input,wire:record.wire},source:hint.source,roots:hint.roots});}catch{}
         session.revision = committed.revision;
         // Only receipts are needed while the state is resident. Recovery reads
         // the immutable base and tail again after eviction or an external write.
