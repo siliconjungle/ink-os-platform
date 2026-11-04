@@ -1,6 +1,8 @@
 import{personalWindows,savePersonalWindows}from '../../shared/personal-windows.mjs';
 import{ViewportIndex}from '../../shared/viewport-index.mjs';
 import './window-chrome.css';
+import './workspace-transition.css';
+import {WorkspaceTransition} from '../../shared/workspace-transition.mjs';
 import type{MapScene}from '../../shared/minimap-layout.mjs';
 import{iconRect}from '../desktop-model';
 import{applicationWindow}from '../../shared/file-apps.mjs';
@@ -12,6 +14,7 @@ import{trackPointer}from './pointer-tracking';import{sessionWorkspaces,reorderWo
 const SESSION='ink-native-desktop-v1',PERSONAL='ink-personal-desktop-v2';
 export interface WindowScene{model:DeskWindow;node:HTMLElement;header:HTMLElement;caption:HTMLElement;content:HTMLElement;panel:Panel;hidden:boolean;last?:Rect}
 export class Compositor{
+ readonly workspaceTransition=new WorkspaceTransition(document);
  readonly cameraIndex=new ViewportIndex<WindowScene>();cameraVisible=new Set<WindowScene>();cameraEligible=new Set<string>();cameraMoving=false;geometryVersion=0;
  previewMap?:(workspace:number,omit?:string)=>MapScene;
  desktopMap(workspace:number,omit?:string):MapScene{return this.previewMap?.(workspace,omit)||{rects:[...this.windows.filter(w=>w.workspace===workspace&&!w.minimized&&w.key!==omit),...Object.entries(this.placements[workspace]||{}).filter(([id])=>!!this.env.world.get(id)).map(([,position],i)=>iconRect(i,this.area,position))],view:{x:this.area.x||0,y:this.area.y||0,width:this.area.width,height:this.area.height}};}
@@ -54,7 +57,7 @@ export class Compositor{
  renameWorkspace(id:number,name:string){const workspace=this.workspaces.find(w=>w.id===id);if(!workspace||!name.trim())return;workspace.name=name.trim().slice(0,80);this.onChange();this.persist();}
  reorderWorkspace(id:number,index:number){this.workspaces=reorderWorkspace(this.workspaces,id,index);this.onWorkspaceMove(id);this.onChange();this.persist();}
  removeWorkspace(id:number){const target=removalTarget(this.workspaces,id);if(target===undefined)return false;for(const w of this.windows)if(w.workspace===id)w.workspace=target;delete this.placements[id];delete this.pins[id];this.workspaces=this.workspaces.filter(w=>w.id!==id);if(this.workspace===id)this.workspace=target;this.visibility();this.persist();return true;}
- switchWorkspace(value:number){if(!this.workspaces.some(w=>w.id===value))return;const focused=document.hasFocus()||window.inkDesktopGestures?.isActive?.();this.workspace=value;this.visibility();if(focused)this.stage.focus({preventScroll:true});this.persist();}
+ switchWorkspace(value:number){this.workspaceTransition.finish();const from=this.workspaces.findIndex(w=>w.id===this.workspace),to=this.workspaces.findIndex(w=>w.id===value);if(to<0||value===this.workspace)return Promise.resolve();const focused=document.hasFocus()||window.inkDesktopGestures?.isActive?.();this.workspace=value;return this.workspaceTransition.run(to>from?1:-1,()=>{this.visibility();if(focused)this.stage.focus({preventScroll:true});this.persist();});}
  moveToWorkspace(key:string,value:number){const w=this.windows.find(w=>w.key===key);if(w&&this.workspaces.some(space=>space.id===value)){w.workspace=value;this.visibility();this.persist();}}
  showDesktop(){if(this.canRestoreWindows){this.restoreDesktop();return;}if(!this.windows.some(w=>w.workspace===this.workspace&&!w.minimized))return;this.desktopReveal={workspace:this.workspace,active:this.active};this.visibility();}
  restoreDesktop(){const saved=this.desktopReveal;if(!saved){const list=this.windows.filter(w=>w.workspace===this.workspace);for(const window of list)window.minimized=false;const recent=list.sort((a,b)=>b.z-a.z)[0];if(recent)this.focus(recent.key);return;}this.desktopReveal=undefined;const scene=this.scenes.get(saved.active||'');if(scene&&scene.model.workspace===this.workspace&&!scene.model.minimized)this.focus(scene.model.key);else this.visibility();}
@@ -99,5 +102,5 @@ export class Compositor{
   const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();end(event);}};addEventListener('keydown',escape,true);stopTracking=trackPointer(e,move,end,target);
  }
 
- destroy(){this.disposed=true;removeEventListener('resize',this.resizeViewport);removeEventListener('ink-text-metrics',this.resizeViewport);cancelAnimationFrame(this.resizeFrame);clearTimeout(this.persistTimer);for(const scene of this.scenes.values())scene.panel.destroy();this.scenes.clear();}
+ destroy(){this.workspaceTransition.finish();this.disposed=true;removeEventListener('resize',this.resizeViewport);removeEventListener('ink-text-metrics',this.resizeViewport);cancelAnimationFrame(this.resizeFrame);clearTimeout(this.persistTimer);for(const scene of this.scenes.values())scene.panel.destroy();this.scenes.clear();}
 }
