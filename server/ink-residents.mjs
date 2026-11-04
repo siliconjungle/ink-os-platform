@@ -111,7 +111,12 @@ export class InkResidents {
       closed: false,
     });
   }
-  async acquire(key, create, { owner = 'ink', signal, pooled = false } = {}) {
+  /**
+   * `idleMs` keeps a new session alive that long after its last release
+   * (default: the pool's). Idle sessions still give way to new ones when the
+   * pool is full and to the host budget's memory reclaimer.
+   */
+  async acquire(key, create, { owner = 'ink', signal, pooled = false, idleMs } = {}) {
     if (pooled) {
       const lane = Array.from(
         { length: this.limit },
@@ -143,7 +148,7 @@ export class InkResidents {
           );
         eviction = this.drop(idle);
       }
-      session = { key, busy: true, used: Date.now() };
+      session = { key, busy: true, used: Date.now(), idleMs: Number.isFinite(idleMs) && idleMs >= 1 ? idleMs : this.idleMs };
       this.sessions.set(key, session);
       try {
         await eviction;
@@ -177,7 +182,7 @@ export class InkResidents {
     session.used = Date.now();
     session.timer = setTimeout(
       () => void this.drop(session).catch(() => {}),
-      this.idleMs,
+      session.idleMs ?? this.idleMs,
     );
     session.timer.unref();
     this.budget.notify();

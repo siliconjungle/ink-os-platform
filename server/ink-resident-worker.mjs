@@ -1,7 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import { parseExactJSON } from '../shared/exact-json.mjs';
 import { publicResult } from '../shared/ink-values.mjs';
-import { native } from './ink-input.mjs';
+import { native, fastArguments } from './ink-input.mjs';
 import { changedPaths } from '../shared/ink-state-paths.mjs';
 
 const { artifact, entries } = workerData;
@@ -12,7 +12,10 @@ const module = await import(
 // One admitted CPU lane owns this worker. Nested parallel_map keeps its
 // literal ordered semantics with one worker instead of multiplying host lanes.
 module.setParallelism?.(1);
-const api = (await WebAssembly.instantiate(workerData.compiler, {})).exports;
+// The compiler is instantiated only when an input needs its `prepare`:
+// plainly typed action arguments are decoded without it (fastArguments).
+let instance = null;
+const compiler = () => (instance ??= new WebAssembly.Instance(workerData.compiler, {}).exports);
 let checked = false,
   state,
   bindings,
@@ -29,7 +32,8 @@ function prepare(entry, input) {
   );
   if (bytes.length > 8 * 1024 * 1024)
     throw Error('Compiler request exceeds 8 MiB.');
-  const pointer = api.ink_env_alloc(bytes.length);
+  const api = compiler(),
+    pointer = api.ink_env_alloc(bytes.length);
   if (!pointer) throw Error('Compiler request allocation failed.');
   try {
     new Uint8Array(api.memory.buffer, pointer, bytes.length).set(bytes);
@@ -55,10 +59,17 @@ function measure(spans, name, run) {
 async function call({ entry, input }, spans) {
   const selected = entries.find((candidate) => candidate.name === entry);
   if (!selected) throw Error('Select an exported Ink entry.');
-  const canonical = measure(spans, "worker.prepare", () => prepare(entry, input));
-  const args = measure(spans, "worker.decode", () => parseExactJSON(canonical).map((value, index) =>
-    native(value, selected.params[index].type, module.metadata.named_types),
-  ));
+  const named = module.metadata.named_types,
+    fast = selected.action
+      ? measure(spans, "worker.prepare", () => fastArguments(input, selected.params, named))
+      : null;
+  let args = fast;
+  if (!args) {
+    const canonical = measure(spans, "worker.prepare", () => prepare(entry, input));
+    args = measure(spans, "worker.decode", () =>
+      parseExactJSON(canonical).map((value, index) => native(value, selected.params[index].type, named)),
+    );
+  }
   let result;
   if (selected.action) {
     if (!state) throw Error('Resident Ink state was not loaded.');

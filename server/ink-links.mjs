@@ -34,7 +34,11 @@ const STATE = 'ink-app:state',
   RESULT_LIMIT = 128 * 1024,
   CACHE_BYTES = 32 * 1024 * 1024,
   CACHE_ENTRIES = 64,
-  WARM_MS = 60_000;
+  WARM_MS = 60_000,
+  // A copy costs a snapshot restore and a journal replay to load, so an idle
+  // copy stays resident this long (it still yields to new sessions and to
+  // the memory reclaimer).
+  COPY_IDLE_MS = 10 * 60_000;
 const fail = (status, message) => {
   throw Object.assign(Error(message), { status });
 };
@@ -145,7 +149,7 @@ export class InkLinks {
       session = await residents.acquire(
         link.key,
         (options) => javascriptResident(link.compiled, { ...options, worker: WORKER }),
-        { owner, signal },
+        { owner, signal, idleMs: COPY_IDLE_MS },
       );
     if (session !== link.session) {
       link.session = session;

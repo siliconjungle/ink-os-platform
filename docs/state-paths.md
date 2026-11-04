@@ -107,6 +107,19 @@ Aggregates are still summed over the matching rows, from reused results.
   over entry arrays.
 - **F32 captures** below 1,024 elements stay packed arrays: on Node 22 a
   `Float32Array` map costs about twice as much at 100 elements.
+- **Replay without the compiler.** Resident and link workers decode plainly
+  typed action arguments in JavaScript (`fastArguments` in
+  `server/ink-input.mjs`) and instantiate the compiler only for an input that
+  needs its `prepare`. Anything not in its plainest form (an `Int` spelled
+  `"+5"`, an integer token `-0`, a lone surrogate, `F32Bits`, nesting past 64
+  levels) still goes to the compiler, whose answer or error stands.
+  `tests/ink-fast-arguments.test.mjs` compares both on hand-written edge cases
+  and 400 seeded values. Replaying a 100,000-row copy's five-record journal
+  tail went from 223 to 72 ms, and the copy no longer instantiates the 8 MB
+  compiler at all.
+- **Idle copies stay resident for 10 minutes** instead of 30 seconds. They
+  still give way to new sessions when the pool is full and to the host
+  budget's memory reclaimer.
 
 ## Measurements
 
@@ -152,10 +165,16 @@ Inside one engine, without workers:
 What remains:
 
 - A query that returns every matching row still builds every row it returns.
-- The first load is dominated by restoring the base snapshot and replaying
-  the journal tail, each record still through the compiler's `prepare`.
+- The first load is dominated by restoring the base snapshot (about 210 ms
+  at 100,000 rows, 4.3 MB). A host-level first planned read now takes
+  480–514 ms (from 528).
 - A copy still adds about 1 ms to each write on this 2-vCPU host.
-- The first render of a planned read still loads the copy (about 2 s here at
-  100,000 rows).
+- The first render of a planned read still loads the copy. In the desktop
+  benchmark both windows still take 2.1–2.2 s to show their data, the same
+  as before within this host's noise. A server-side trace of one run
+  showed both windows' server work finishing within about 1 s of the first
+  open: the dashboard's copy loaded in 464 ms while Tables' window loaded on
+  the other core. The rest is the browser and the benchmark's 100–200 ms
+  polling.
 - Fields within a row are not tracked; `Rows[k]` names whole rows.
 

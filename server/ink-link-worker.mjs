@@ -10,7 +10,7 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
 import { wireValue, wireResult } from '../shared/ink-values.mjs';
-import { native } from './ink-input.mjs';
+import { native, fastArguments } from './ink-input.mjs';
 
 const { artifact, entries } = workerData;
 const load = (javascript) =>
@@ -18,7 +18,9 @@ const load = (javascript) =>
 const provider = await load(artifact.javascript);
 provider.setParallelism?.(1);
 const named = artifact.manifest.named_types;
-const api = (await WebAssembly.instantiate(workerData.compiler, {})).exports;
+// Instantiated only for inputs fastArguments leaves to the compiler.
+let instance = null;
+const compiler = () => (instance ??= new WebAssembly.Instance(workerData.compiler, {}).exports);
 const consumers = new Map();
 let checked = false,
   state = null,
@@ -34,7 +36,8 @@ function prepare(entry, input) {
       input,
     }),
   );
-  const pointer = api.ink_env_alloc(bytes.length);
+  const api = compiler(),
+    pointer = api.ink_env_alloc(bytes.length);
   if (!pointer) throw Error('Compiler request allocation failed.');
   try {
     new Uint8Array(api.memory.buffer, pointer, bytes.length).set(bytes);
@@ -53,9 +56,9 @@ function invoke(entry, input) {
   const selected = entries.find((candidate) => candidate.name === entry && candidate.action);
   if (!selected) throw Error('Unknown provider action ' + entry);
   if (!state) throw Error('The provider copy is not loaded.');
-  const args = parseExactJSON(prepare(entry, input)).map((value, i) =>
-    native(value, selected.params[i].type, named),
-  );
+  const args =
+    fastArguments(input, selected.params, named) ||
+    parseExactJSON(prepare(entry, input)).map((value, i) => native(value, selected.params[i].type, named));
   if (!bindings.has(entry)) bindings.set(entry, state.bind(entry));
   return { selected, output: bindings.get(entry)(...args) };
 }
