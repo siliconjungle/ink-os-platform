@@ -188,7 +188,10 @@ with the runtime's vendored scheduler:
   `running` resumes them: kept replies and results are reused, and only
   unfinished steps run again. A change or app write that committed before
   its result was kept is not applied twice while the target still holds its
-  receipt. A run repeated with the same `requestId` returns the finished
+  receipt: journals keep the newest 512 task receipts (beside 64 ordinary
+  ones, within 2 MiB). HTTP writes, from tasks and from effect protocols,
+  carry an `Idempotency-Key` fixed by the run and step, so a server that
+  honours it applies a resent write once. A run repeated with the same `requestId` returns the finished
   result, and the same identity with different input is refused.
 - **Traces.** Each run's trace is stored in World as `ink-task-run`, bound
   to its release. It replays offline without effects (`ink replay-task

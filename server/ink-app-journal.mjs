@@ -46,12 +46,25 @@ export function contentChunks(bytes) {
   if (start < bytes.length || !cuts.length) cuts.push([start, bytes.length]);
   return cuts;
 }
-function retainReceipts(receipts) {
-  while (
-    receipts.length > 64 ||
-    (receipts.length > 1 && JSON.stringify(receipts).length > 1024 * 1024)
-  )
-    receipts.shift();
+/**
+ * Receipts answer repeated requests without running them again. Task steps
+ * (request identities `task:...`) keep a larger share, since a run resumed
+ * after a host restart relies on them not to apply a step twice: the newest
+ * 64 ordinary and 512 task receipts, within 2 MiB, oldest dropped first.
+ */
+export function retainReceipts(receipts) {
+  const task = (r) => typeof r?.id === 'string' && r.id.startsWith('task:');
+  const bound = (kind, max) => {
+    let n = receipts.filter(kind).length;
+    for (let i = 0; n > max && i < receipts.length - 1; )
+      if (kind(receipts[i])) {
+        receipts.splice(i, 1);
+        n--;
+      } else i++;
+  };
+  bound((r) => !task(r), 64);
+  bound(task, 512);
+  while (receipts.length > 1 && JSON.stringify(receipts).length > 2 * 1024 * 1024) receipts.shift();
   return receipts;
 }
 const baseHash = (meta, snapshot) =>

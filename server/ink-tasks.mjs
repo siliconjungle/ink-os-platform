@@ -210,7 +210,11 @@ export class InkTasks {
             const profile = this.resource(binding, appId);
             if (binding.effect === 'read' && !['GET', 'HEAD'].includes(payload.method))
               throw effectFailure('Denied', 'A read effect cannot dispatch an HTTP write');
-            return { Ok: await httpEffect(profile, payload, signal, () => {}, appId) };
+            return {
+              Ok: await httpEffect(profile, payload, signal, () => {}, appId, {
+                idempotencyKey: sha('ink-task\0' + runId + '\0' + context.step).slice(0, 32),
+              }),
+            };
           }
           if (binding.kind === 'clock') {
             if (payload.delayMs) await new Promise((resolve, reject) => {

@@ -65,6 +65,7 @@ export async function httpEffect(
   signal,
   markDispatched,
   owner = 'effects',
+  { idempotencyKey } = {},
 ) {
   return hostBudget.run(
     {
@@ -73,10 +74,10 @@ export async function httpEffect(
       signal,
       label: 'HTTP effect',
     },
-    () => dispatchHttpEffect(profile, request, signal, markDispatched),
+    () => dispatchHttpEffect(profile, request, signal, markDispatched, idempotencyKey),
   );
 }
-async function dispatchHttpEffect(profile, request, signal, markDispatched) {
+async function dispatchHttpEffect(profile, request, signal, markDispatched, idempotencyKey) {
   const base = new URL(profile.origin),
     url = new URL(request.path, base),
     expected = optional(request.expected),
@@ -123,6 +124,9 @@ async function dispatchHttpEffect(profile, request, signal, markDispatched) {
   const headers = {
     ...profile.headers,
     ...(expected !== undefined ? { 'If-Match': expected } : {}),
+    // A write sent again after a restart carries the same key, so a server that
+    // honours idempotency keys applies it once.
+    ...(idempotencyKey && !['GET', 'HEAD'].includes(request.method) ? { 'Idempotency-Key': idempotencyKey } : {}),
     ...(body !== undefined
       ? { 'Content-Length': Buffer.byteLength(body) }
       : {}),

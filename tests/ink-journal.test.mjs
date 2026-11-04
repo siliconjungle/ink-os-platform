@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { Code } from '../server/code.mjs';
 import { InkResidents } from '../server/ink-residents.mjs';
 import { hash } from '../server/world.mjs';
-import { contentChunks, InkAppJournal } from '../server/ink-app-journal.mjs';
+import { contentChunks, InkAppJournal, retainReceipts } from '../server/ink-app-journal.mjs';
 
 const source = `module rows;
 record Row {id:u64,title:String,amount:u64,}
@@ -121,4 +121,18 @@ test('version 1 journals recover and become version 2 on their next commit', asy
   assert.ok(!stored.some((k) => k.includes('legacy')), 'version 1 payloads are collected');
   await f.restart();
   assert.equal((await f.run('total', [])).output.result, 12);
+});
+
+test('task receipts keep a larger share so resumed runs do not apply a step twice', () => {
+  const receipts = [];
+  for (let i = 0; i < 600; i++) receipts.push({ id: 'task:run:s' + i, hash: 'h', reply: {} });
+  for (let i = 0; i < 100; i++) receipts.push({ id: 'request-' + i, hash: 'h', reply: {} });
+  receipts.push({ id: 'task:run:last', hash: 'h', reply: {} });
+  const kept = retainReceipts(receipts);
+  assert.equal(kept.filter((r) => r.id.startsWith('task:')).length, 512);
+  assert.equal(kept.filter((r) => !r.id.startsWith('task:')).length, 64);
+  assert.equal(kept.at(-1).id, 'task:run:last', 'the newest reply is kept');
+  assert.equal(kept.find((r) => r.id.startsWith('request-')).id, 'request-36', 'oldest ordinary receipts go first');
+  const big = Array.from({ length: 40 }, (_, i) => ({ id: 'task:' + i, hash: 'h', reply: { text: 'x'.repeat(100000) } }));
+  assert.ok(JSON.stringify(retainReceipts(big)).length <= 2 * 1024 * 1024);
 });

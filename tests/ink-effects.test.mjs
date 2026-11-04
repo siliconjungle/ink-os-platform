@@ -258,6 +258,13 @@ test('HTTP profiles retain methods, ETags and binary values, reject path escapes
     ),
   );
   assert.equal(headers['if-match'], '"v1"');
+  // Writes carry an idempotency key fixed by the run and step; reads do not.
+  assert.match(headers['idempotency-key'], /^[a-f0-9]{32}$/);
+  const firstKey = headers['idempotency-key'];
+  reply(await call(p, app, httpRequest('/api/item', 'PUT', some('write'), some('"v1"'))));
+  assert.notEqual(headers['idempotency-key'], firstKey, 'another run has another key');
+  reply(await call(p, app, httpRequest('/api/item')));
+  assert.equal(headers['idempotency-key'], undefined);
   for (const path of [
     '//evil.invalid/api',
     '/api/../secret',

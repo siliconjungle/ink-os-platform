@@ -814,7 +814,7 @@ export class InkEffects {
                   );
                 value = await httpEffect(profile, payload, signal, () => {
                   dispatched = true;
-                },run.appId);
+                },run.appId,{idempotencyKey:hash('ink-effect\0'+id+'\0'+run.sequence).slice(0,32)});
                 version = optional(value.etag);
               } else
                 value = await processEffect(
