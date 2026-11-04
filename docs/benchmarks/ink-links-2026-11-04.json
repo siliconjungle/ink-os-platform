@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "recordedAt": "2026-11-04T08:44:53.510Z",
+  "recordedAt": "2026-11-04T08:58:25.235Z",
   "host": {
     "platform": "linux",
     "arch": "x64",
@@ -13,16 +13,16 @@
     "rows": 100000,
     "openRows": 10000,
     "reads": 9,
-    "seedMs": 5407
+    "seedMs": 5037
   },
   "direct": {
-    "readMs": 108.5427209999998,
+    "readMs": 56.561109999998735,
     "rowsCrossing": 20,
     "note": "provider-defined page; the consumer cannot filter"
   },
   "plan": {
-    "firstReadMs": 1095,
-    "readAfterWriteMs": 62.04501999999957,
+    "firstReadMs": 722,
+    "readAfterWriteMs": 43.630982000000586,
     "scanned": 10008,
     "matched": 2867,
     "bytesCrossing": 1481,
@@ -31,19 +31,19 @@
     "firstMatches": 2858
   },
   "unrelatedWrite": {
-    "directReadMs": 1.1841120000008232,
-    "planReadMs": 0.3370780000004743,
+    "directReadMs": 0.29933100000016566,
+    "planReadMs": 0.27874100000008184,
     "directEvaluations": 0,
     "planEvaluations": 0
   },
   "writes": {
-    "withFollowingCopyMs": 9.003780999999435,
-    "withoutCopyMs": 5.748400000000402
+    "withFollowingCopyMs": 6.825549999999566,
+    "withoutCopyMs": 5.097670000001017
   },
   "links": {
     "admitted": 1,
     "evaluations": 10,
-    "hits": 5,
+    "hits": 2,
     "reused": 0,
     "loads": 1,
     "applies": 9,
