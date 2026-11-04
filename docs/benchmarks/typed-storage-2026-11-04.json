@@ -1,0 +1,31 @@
+{
+  "node": "v24.22.2",
+  "backend": "world-memory-v1",
+  "backendHash": "7cb45e68ef2881b23f7654c09b452fde76a26ae1efdef2d79b3753e254df1f9a",
+  "queryHash": "3f3f0d413717360b356c1ae0ed655ef5e9aef4fb0512958d6c9a2124532d6ff3",
+  "cpu": "Apple M4 Pro",
+  "rows": 400,
+  "iterations": 20,
+  "setupMs": 2182.714542,
+  "coldMs": 40.68170799999962,
+  "summaries": {
+    "legacy": {
+      "medianMs": 4.673665999999685,
+      "responseBytes": 637707
+    },
+    "typed": {
+      "medianMs": 0.6787500000000364,
+      "responseBytes": 24638
+    }
+  },
+  "projectedPageBytes": 4319,
+  "hotWork": {
+    "decodedRows": 0,
+    "indexBuildRows": 0,
+    "indexNodes": 42,
+    "aggregateBuildRows": 0,
+    "visitedRows": 21,
+    "returnedRows": 20,
+    "wireBytes": 4319
+  }
+}

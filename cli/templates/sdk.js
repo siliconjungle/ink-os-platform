@@ -18,7 +18,7 @@
 		if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
 		return target;
 	};
-	// work/ink-os-platform/sdk/src/object-drag.js
+	// sdk/src/object-drag.js
 	function dragObjectIds(value) {
 		if (!Array.isArray(value) || !value.length || value.length > 1e3 || value.some((id) => typeof id !== "string" || !/^[a-f0-9]{32}$/.test(id))) return [];
 		return [...new Set(value)];
@@ -93,7 +93,7 @@
 			node.removeEventListener("click", click, true);
 		};
 	}
-	// work/ink-os-platform/sdk/src/file-icons.js
+	// sdk/src/file-icons.js
 	var page = "<path d=\"M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6\"/>";
 	var fileIconPaths = {
 		document: page + "<path d=\"M8 13h8M8 17h5\"/>",
@@ -155,7 +155,7 @@
 		size = Number.isFinite(size) ? Math.max(8, Math.min(256, size)) : 24;
 		return "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">" + fileIconPaths[fileIconType(file)] + "</svg>";
 	}
-	// work/ink-os-platform/sdk/src/workflows.js
+	// sdk/src/workflows.js
 	/** Shared workflow definitions and durable background runs. */
 	function createWorkflows(request) {
 		const call = (method, input = {}) => request("workflows." + method, input);
@@ -189,7 +189,7 @@
 			})
 		});
 	}
-	// work/ink-os-platform/sdk/src/commands.js
+	// sdk/src/commands.js
 	/** Public commands use one API in browser and backend clients. */
 	function createCommands(request, show) {
 		return Object.freeze({
@@ -217,7 +217,7 @@
 			...show ? { show: (query = {}) => show(query) } : {}
 		});
 	}
-	// work/ink-os-platform/sdk/src/command-bridge.js
+	// sdk/src/command-bridge.js
 	function commandBridge({ origin, appId, handlers = {} }) {
 		const host = parent, cache = Symbol.for("ink.commands.client");
 		if (globalThis[cache]?.__host === host) {
@@ -314,7 +314,7 @@
 		globalThis[cache] = api;
 		return api;
 	}
-	// work/ink-os-platform/sdk/src/interop-bridge.js
+	// sdk/src/interop-bridge.js
 	/** Optional second checked channel lets old app-frame hosts adopt new SDK APIs. */
 	function interopBridge({ origin, instance, appId, emit }) {
 		let port, serial = 0, appReady = false;
@@ -387,7 +387,7 @@
 			}
 		};
 	}
-	// work/ink-os-platform/sdk/src/context-menu.js
+	// sdk/src/context-menu.js
 	/** App-owned menus travel over the existing, checked SDK channel. */
 	function createContextMenus({ send, on, selection = () => String(getSelection() || ""), report = () => {}, defer = (fn) => typeof requestAnimationFrame === "function" ? requestAnimationFrame(fn) : queueMicrotask(fn) }) {
 		let registration, serial = 0, active;
@@ -479,7 +479,7 @@
 			handle
 		};
 	}
-	// work/ink-os-platform/sdk/src/app-api.js
+	// sdk/src/app-api.js
 	var appID = (id) => {
 		if (!/^[a-f0-9]{32}$/.test(id || "")) throw Error("Provide a valid app ID");
 		return id;
@@ -522,7 +522,7 @@
 			...open ? { open: (id, data, options = {}) => open(appID(id), data, options) } : {}
 		};
 	}
-	// work/ink-os-platform/sdk/src/desktop-keys.js
+	// sdk/src/desktop-keys.js
 	var desktop_keys_exports = /* @__PURE__ */ __exportAll({
 		DESKTOP_SHORTCUTS: () => DESKTOP_SHORTCUTS,
 		desktopCommand: () => desktopCommand
@@ -716,7 +716,7 @@
 			]
 		];
 	}));
-	// work/ink-os-platform/sdk/src/live-query.js
+	// sdk/src/live-query.js
 	var live_query_exports = /* @__PURE__ */ __exportAll({
 		queryInvalidator: () => queryInvalidator,
 		watchQuery: () => watchQuery
@@ -789,6 +789,33 @@
 		});
 	}
 	function queryInvalidator(query = {}) {
+		if (query.format === "ink-relational-v1") {
+			let namespaces = /* @__PURE__ */ new Set(), version = -1;
+			const visit = (node) => {
+				if (node?.op === "scan") namespaces.add(node.namespace);
+				if (node?.input) visit(node.input);
+				if (node?.left) visit(node.left);
+				if (node?.right) visit(node.right);
+			};
+			visit(query.relation);
+			return {
+				accept(result) {
+					version = Number(result.version ?? -1);
+					namespaces = new Set((result.dependencies || []).map((dependency) => dependency.namespace));
+				},
+				relevant(event) {
+					if ([
+						"ready",
+						"refresh",
+						"world.metadata"
+					].includes(event.type)) return event.version === void 0 || Number(event.version) > version;
+					if (event.object) return namespaces.has(event.object.namespace);
+					if (event.objects) return event.objects.some((object) => namespaces.has(object.namespace)) || (event.removed || []).length > 0;
+					if (event.namespace) return namespaces.has(event.namespace);
+					return true;
+				}
+			};
+		}
 		let ids = /* @__PURE__ */ new Set(), version = -1;
 		const matches = (o) => !!o && (!query.namespace || o.namespace === query.namespace) && (!query.kind || o.kind === query.kind);
 		return {
@@ -810,7 +837,7 @@
 		};
 	}
 	var init_live_query = __esmMin((() => {}));
-	// work/ink-os-platform/sdk/src/browser.js
+	// sdk/src/browser.js
 	function connect() {
 		const keymap = Promise.resolve().then(() => (init_desktop_keys(), desktop_keys_exports));
 		return new Promise((resolve, reject) => {
@@ -1399,7 +1426,7 @@
 			}, origin);
 		});
 	}
-	// work/sdk-global-entry.mjs
+	// sdk/src/cli-global.js
 	window.Ink = Object.freeze({
 		connect,
 		version: 1

@@ -221,3 +221,10 @@ Apps opt in with `desktop.preview: {"fileTypes": ["image/*", ".png"]}` independe
 Apps register selectable scopes with `client.selection.set(ids, {root: element, items: orderedVisibleIds})` and may invoke `client.desktop.preview(ids, {items})`. A single selection browses the supplied item order; multiple selections browse the selected subset. `Open with` and `Preview with` have independent persisted type defaults in File → Default apps and in the preview provider chooser. The owner API exposes `/api/v1/preview-defaults` with the same GET/PUT, reconcile, resolve, dismiss and DELETE operations as file defaults. CLI users can pass `--action preview` to `files defaults` and `files default`; explicit Open with choices are preserved.
 
 Desktop arrow keys navigate icon geometry rather than catalog order, stop at edges, and keep reserved modified shortcuts available. Shift-arrow extends the selection and retracing the path shrinks it. When Quick Look starts on the desktop, all four arrows move that same desktop selection; closing the preview returns focus to the current item. Previews from list scopes use their supplied item order.
+
+### Typed storage queries
+
+The Tables SDK now sends [typed relational queries to storage](docs/typed-storage-queries.md),
+including predicates, projections, joins, aggregates, ordering, counts, and
+snapshot-bound pages. Indexed point/page reads and maintained aggregates avoid
+fetching complete tables into application JavaScript.

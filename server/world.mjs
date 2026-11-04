@@ -74,6 +74,7 @@ export class World {
       const result=this.state.invoke(action.name,args);
       if(!result.committed||JSON.stringify(plain(result))!==action.outcome)throw Error('World transaction replay mismatch.');
     }
+    if(this.relationalStorage){try{this.relationalStorage.apply(record.actions);}catch{this.relationalStorage=undefined;}}
     if(record.history)this.history=[...record.history,...this.history].slice(0,300);
     if(record.mutation)this.mutations[record.mutation.key]=record.mutation.sequence;
     for(const action of record.actions)if(action.name==='put')this.rememberBlob(action.object);
