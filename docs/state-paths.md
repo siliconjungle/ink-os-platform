@@ -106,30 +106,51 @@ Aggregates are still summed over the matching rows, from reused results.
 
 ## Measurements
 
-These numbers were taken with a native build of the branch compiler standing
-in for the browser compiler (the Wasm build is produced separately), on the
-same 2-vCPU sandbox and workload as
-[the recorded link benchmark](cross-app-plans.md#measurements): 100,000 rows,
-10,000 open, medians after one write each.
+Both benchmarks ran on the same 2-vCPU sandbox (Node 22, headless Chromium 153)
+with the rebuilt browser compiler (`bae346cd…`).
+
+**Host-level link paths** (`scripts/benchmark-ink-links.mjs --rows 100000`,
+[recorded run](benchmarks/ink-links-2026-11-05.json), against
+[the earlier run](benchmarks/ink-links-2026-11-04.json)). The workload has
+100,000 rows, 10,000 of them open; figures are medians after one write each.
 
 | | Before | After |
 | --- | ---: | ---: |
-| Direct read after a write (provider worker) | 56.6 ms | 6.6 ms |
-| Planned read after a write (link copy) | 43.6 ms | 7.7 ms |
+| Direct read after a write (provider worker) | 56.6 ms | 7.0 ms |
+| Planned read after a write (link copy) | 43.6 ms | 5.9 ms |
 | Consumer function calls over ten evaluations | ~130,000 | 27 |
-| First planned read (loads the copy) | 722 ms | 607 ms |
-| Writes with a copy following | 6.8 ms | 7.9 ms |
-| Writes without a copy | 5.1 ms | 4.5 ms |
+| First planned read (loads the copy) | 722 ms | 528 ms |
+| Writes with a copy following | 6.8 ms | 5.2 ms |
+| Writes without a copy | 5.1 ms | 4.2 ms |
 
-Inside one engine, without workers: a page of the open view reads in
-0.64 ms against 12.4 ms for the same filter as a scan; a query returning
-10,000 records went from 10.6 to 3.8 ms; a 100,000-row checkpoint from 617 to
-156 ms and its restore from 326 to 207 ms.
+**End to end in the real desktop** (`scripts/benchmark-ink-scale-browser.mjs
+--rows 100000 --edits 9`, [after](benchmarks/ink-scale-browser-2026-11-05.json),
+[before, main 95593b1](benchmarks/ink-scale-browser-main-2026-11-05.json)).
+A production host and the built desktop show Tables and the dashboard as
+windows with live delivery. Each figure is the median time from just before
+an edit's commit request until its new title appears in the window:
+
+| | Before | After |
+| --- | ---: | ---: |
+| Tables (own read), dashboard reads directly | 75 ms | 38 ms |
+| Dashboard, direct cross-app read | 66 ms | 31 ms |
+| Tables (own read), dashboard has a plan | 77 ms | 36 ms |
+| Dashboard, planned cross-app read | 161 ms | 46 ms |
+| Both windows' first render, planned | 1,992 ms | 2,057 ms |
+
+Inside one engine, without workers:
+- a page of the open view reads in 0.64 ms, against 12.4 ms for the same
+  filter as a scan;
+- a query returning 10,000 records went from 10.6 to 3.8 ms;
+- a 100,000-row checkpoint went from 617 to 156 ms, and its restore from 326
+  to 207 ms.
 
 What remains:
 
 - A query that returns every matching row still builds every row it returns.
 - The first load is dominated by restoring the base snapshot and replaying
   the journal tail, each record still through the compiler's `prepare`.
-- A copy still adds about 3 ms to each write on this 2-vCPU host.
+- A copy still adds about 1 ms to each write on this 2-vCPU host.
+- The first render of a planned read still loads the copy (about 2 s here at
+  100,000 rows).
 - Fields within a row are not tracked; `Rows[k]` names whole rows.
