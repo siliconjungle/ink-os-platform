@@ -1,4 +1,5 @@
 export function desktopCommand(e,editing=false,context={}){
+ editing=editing||e.target?.isContentEditable===true;
  const key=e.key.toLowerCase(),mod=e.metaKey||e.ctrlKey;
  const control=e.target?.closest?.('button,a[href],[role=button],summary');
  if(!editing&&!mod&&!e.altKey&&!e.shiftKey&&key===' '&&context.hasObjects&&(!control||control.matches?.('[data-object-id]')))return'selection.preview';

@@ -1,5 +1,5 @@
 import type{WorldObject,Route}from'../src/types';import type{DeskWindow}from'../src/window-model';
-export function fileType(file:WorldObject,action?:'open'|'preview'):string;
+export function fileType(file:WorldObject):string;
 export function fileApps(objects:WorldObject[],file:WorldObject,action?:'open'|'preview'):WorldObject[];
 export function fileLaunch(app:WorldObject,file:WorldObject,action?:'open'|'preview'):{appId:string;route:Route};
 export function applicationWindow(objects:WorldObject[],window:DeskWindow):DeskWindow|undefined;

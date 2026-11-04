@@ -1,3 +1,4 @@
+import{commandPreviewIds}from'../shared/command-drag.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -24,6 +25,8 @@ test('preview is an explicit app capability with a separate provider and default
  for(const preview of [true,{}, {fileTypes:[]},{fileTypes:['not a MIME']}])assert.throws(()=>desktopManifest({preview}));
  assert.equal(previewableObject({...file,kind:'palette-analysis',namespace:other.id}),true);
  assert.equal(previewableObject(editor),false);
+ assert.deepEqual(commandPreviewIds({handler:{type:'query'}},{...file,kind:'ink-table',namespace:other.id}),[file.id]);
+ assert.deepEqual(commandPreviewIds({handler:{type:'query'}},editor),[]);
  const table=app('4','Tables',[],['ink-table']),record={...file,kind:'ink-table',source:'',namespace:table.id,body:'{}'};assert.equal(preferredFileApp([viewer,table],record,{'application/octet-stream':viewer.id},'preview').id,table.id);
 });
 
@@ -31,6 +34,7 @@ test('Space previews a selection without consuming typing, controls, empty scope
  const key=(name,options={})=>({key:name,...options});
  assert.equal(desktopCommand(key(' '),false,{hasObjects:true}),'selection.preview');
  assert.equal(desktopCommand(key(' '),true,{hasObjects:true}),undefined);
+ assert.equal(desktopCommand(key(' ',{target:{isContentEditable:true}}),false,{hasObjects:true}),undefined);
  assert.equal(desktopCommand(key(' '),false,{hasObjects:false}),undefined);
  const button={closest:()=>({matches:()=>false})};
  assert.equal(desktopCommand(key(' ',{target:button}),false,{hasObjects:true}),undefined);
