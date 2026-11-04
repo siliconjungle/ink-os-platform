@@ -66,6 +66,16 @@ export interface UiFrame {
   expiresAt: number;
   target: 'dom';
   computed: string[];
+  updates?: { stream: string; sequence: number; reset?: boolean };
+  snapshots?: Array<{
+    component: string;
+    id: string;
+    sequence: number;
+    appId: string;
+    releaseId: string;
+    stateRevision: number;
+    versionWire: string;
+  }>;
   tree?: UiTree;
   patch?: UiPatch;
   event?: {
@@ -97,7 +107,22 @@ export interface UiEvent {
 }
 export interface UiTransport {
   open(options?: { target?: 'dom'; releaseId?: string }): Promise<UiFrame>;
-  refresh(id: string, input: { revision: number }): Promise<UiFrame>;
+  refresh(
+    id: string,
+    input: { revision: number; reset?: boolean },
+  ): Promise<UiFrame>;
+  watch?(
+    id: string,
+    input: { stream: string; sequence: number; revision: number },
+  ): Promise<
+    | UiFrame
+    | {
+        heartbeat: true;
+        id: string;
+        revision: number;
+        updates: { stream: string; sequence: number };
+      }
+  >;
   event(id: string, input: UiEvent): Promise<UiFrame>;
   dispose(id: string): Promise<unknown>;
 }
@@ -131,7 +156,7 @@ export function diffUiTree(previous: UiTree | null, next: UiTree): UiPatch;
 export function createUiModel(adapter: UiAdapter): UiModel;
 export function createInkUi(
   request: (
-    action: 'open' | 'refresh' | 'event' | 'dispose',
+    action: 'open' | 'refresh' | 'watch' | 'event' | 'dispose',
     input: unknown,
   ) => Promise<unknown>,
 ): UiTransport;
@@ -179,7 +204,12 @@ export function mountInkUi(options: {
     reopen?: () => Promise<void>;
   }) => void;
   onLifecycle?: (event: UiLifecycle) => void;
-  onTrace?: (event: { name: string; start: number; end: number; detail: Record<string, unknown> }) => void;
+  onTrace?: (event: {
+    name: string;
+    start: number;
+    end: number;
+    detail: Record<string, unknown>;
+  }) => void;
 }): Promise<{
   readonly renderer: DomUi;
   readonly pending: boolean;

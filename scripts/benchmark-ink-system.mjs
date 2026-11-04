@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { systemFixture, owner } from '../tests/ink-system-fixture.mjs';
 import { Collaboration } from '../server/collaboration.mjs';
-import { InkViews } from '../server/ink-ui.mjs';
+import { InkViews, watchInkUi } from '../server/ink-ui.mjs';
 import { runInstalledInk } from '../server/ink-apps.mjs';
 const execute = promisify(execFile),
   args = process.argv.slice(2),
@@ -20,23 +20,58 @@ const execute = promisify(execFile),
   },
   mode = option('--mode'),
   tracing = args.includes('--trace'),
+  live = args.includes('--live'),
   edits = Number(option('--edits', '16')),
   rowCounts = option('--rows', '64').split(',').map(Number);
-if (!Number.isInteger(edits) || edits < 1 || edits > 64 || !rowCounts.length || rowCounts.some(n => !Number.isInteger(n) || n < 20 || n > 4096)) throw Error('Use 20–4096 rows and 1–64 edits');
+if (tracing && live)
+  throw Error(
+    'Use --live without --trace; retained delivery uses causal spans from outstanding requests',
+  );
+if (
+  !Number.isInteger(edits) ||
+  edits < 1 ||
+  edits > 64 ||
+  !rowCounts.length ||
+  rowCounts.some((n) => !Number.isInteger(n) || n < 20 || n > 4096)
+)
+  throw Error('Use 20–4096 rows and 1–64 edits');
 if (!mode) {
   const runs = [];
-  for (const rows of rowCounts) for (const target of option('--modes', 'baseline-javascript,javascript,native').split(',')) {
-    const result = await execute(
-      process.execPath,
-      [fileURLToPath(import.meta.url), '--mode', target, '--rows', String(rows), '--edits', String(edits), ...(tracing ? ['--trace'] : [])],
-      { env: process.env, maxBuffer: 8 * 1024 * 1024 },
-    );
-    runs.push(JSON.parse(result.stdout));
-  }
+  for (const rows of rowCounts)
+    for (const target of option(
+      '--modes',
+      'baseline-javascript,javascript,native',
+    ).split(',')) {
+      const result = await execute(
+        process.execPath,
+        [
+          fileURLToPath(import.meta.url),
+          '--mode',
+          target,
+          '--rows',
+          String(rows),
+          '--edits',
+          String(edits),
+          ...(tracing ? ['--trace'] : []),
+          ...(live ? ['--live'] : []),
+        ],
+        { env: process.env, maxBuffer: 8 * 1024 * 1024 },
+      );
+      runs.push(JSON.parse(result.stdout));
+    }
   const report = {
       schema: tracing ? 2 : 1,
       recordedAt: new Date().toISOString(),
-      source: { commit: (await execute('git', ['rev-parse','HEAD'])).stdout.trim(), trackedChanges: (await execute('git', ['status','--porcelain','--untracked-files=no'])).stdout.trim() },
+      source: {
+        commit: (await execute('git', ['rev-parse', 'HEAD'])).stdout.trim(),
+        trackedChanges: (
+          await execute('git', [
+            'status',
+            '--porcelain',
+            '--untracked-files=no',
+          ])
+        ).stdout.trim(),
+      },
       host: {
         platform: platform(),
         arch: arch(),
@@ -76,11 +111,13 @@ const cleanups = [],
       collaborative: true,
     },
   );
-const rows = rowCounts[0], profile = tracing ? new SystemProfile() : null;
+const rows = rowCounts[0],
+  profile = tracing ? new SystemProfile() : null;
 let profiling = tracing;
 let p = f.p,
   version = 0;
-const streams = new Set();
+const streams = new Set(),
+  completed = [];
 let received = 0,
   sent = 0,
   requests = 0,
@@ -101,8 +138,17 @@ let stop = p.world.subscribe((event) => {
       event.object.title === 'ink-app:state')
   )
     for (const stream of streams) {
-      const data = 'data: ' + JSON.stringify({ trace: profile?.current?.trace ?? null, type: event.type }) + '\n\n';
-      profile?.mark('sse.send', { bytes: Buffer.byteLength(data), type: event.type });
+      const data =
+        'data: ' +
+        JSON.stringify({
+          trace: profile?.current?.trace ?? null,
+          type: event.type,
+        }) +
+        '\n\n';
+      profile?.mark('sse.send', {
+        bytes: Buffer.byteLength(data),
+        type: event.type,
+      });
       stream.write(data);
     }
 });
@@ -122,62 +168,103 @@ const server = createServer(async (req, res) => {
       res.on('close', () => streams.delete(res));
       return;
     }
-    if (req.url === '/clock') { res.end(String(performance.timeOrigin + performance.now())); return; }
+    if (req.url === '/clock') {
+      res.end(String(performance.timeOrigin + performance.now()));
+      return;
+    }
     if (req.url === '/rpc') {
       const requestDetail = {};
       const dispatch = async () => {
-      let text = '';
-      for await (const b of req) text += b;
-      received += Buffer.byteLength(text);
-      requests++;
-      const request = profile ? profile.span('http.decode', {}, () => JSON.parse(text)) : JSON.parse(text);
-      const { action, name, id, input } = request;
-      if (profiling) req.profileRequest = request;
-      Object.assign(requestDetail, { action, name });
-      let value;
-      if (action === 'put')
-        value = await runInstalledInk(
-          p,
-          f.deployed.apps.tables.appId,
-          {
-            entry: 'put',
-            input: JSON.stringify(input.args),
-            requestId: input.requestId,
-          },
-          owner,
-        );
-      else if (action === 'dashboard')
-        value = await runInstalledInk(
-          p,
-          f.deployed.apps.tables.appId,
-          { entry: 'dashboard', input: '[0,0]' },
-          owner,
-        );
-      else if (action === 'open')
-        value = await p.inkViews.openApp(f.deployed.apps[name].appId, owner);
-      else value = await p.inkViews[action](id, owner, input);
-      if (action === 'put' && loseReply) {
-        loseReply = false;
-        res.setHeader('X-Ink-Benchmark-Lost-Reply', '1');
-      }
-      const body = profile ? profile.span('http.encode', {}, () => JSON.stringify(value)) : JSON.stringify(value);
-      sent += Buffer.byteLength(body);
-      res.setHeader('Content-Type', 'application/json');
-      res.end(body);
-      if (profiling) profile.span('profile.accounting', {}, () => {
-        profile.rpc.push({ trace: profile.current.trace, action, name, received: jsonBytes(request), sent: jsonBytes(value) });
-      });
+        let text = '';
+        for await (const b of req) text += b;
+        received += Buffer.byteLength(text);
+        requests++;
+        const request = profile
+          ? profile.span('http.decode', {}, () => JSON.parse(text))
+          : JSON.parse(text);
+        const { action, name, id, input } = request;
+        if (profiling) req.profileRequest = request;
+        Object.assign(requestDetail, { action, name });
+        req.rpcAccounting = { action, name, bytes: Buffer.byteLength(text) };
+        let value;
+        if (action === 'put')
+          value = await runInstalledInk(
+            p,
+            f.deployed.apps.tables.appId,
+            {
+              entry: 'put',
+              input: JSON.stringify(input.args),
+              requestId: input.requestId,
+            },
+            owner,
+          );
+        else if (action === 'dashboard')
+          value = await runInstalledInk(
+            p,
+            f.deployed.apps.tables.appId,
+            { entry: 'dashboard', input: '[0,0]' },
+            owner,
+          );
+        else if (action === 'watch')
+          value = await watchInkUi(p.inkViews, id, owner, input, res);
+        else if (action === 'open')
+          value = await p.inkViews.openApp(f.deployed.apps[name].appId, owner);
+        else value = await p.inkViews[action](id, owner, input);
+        if (action === 'put' && loseReply) {
+          loseReply = false;
+          res.setHeader('X-Ink-Benchmark-Lost-Reply', '1');
+        }
+        const body = profile
+          ? profile.span('http.encode', {}, () => JSON.stringify(value))
+          : JSON.stringify(value);
+        sent += Buffer.byteLength(body);
+        completed.push({
+          action,
+          name,
+          received: Buffer.byteLength(text),
+          sent: Buffer.byteLength(body),
+        });
+        res.setHeader('Content-Type', 'application/json');
+        res.end(body);
+        if (profiling)
+          profile.span('profile.accounting', {}, () => {
+            profile.rpc.push({
+              trace: profile.current.trace,
+              action,
+              name,
+              received: jsonBytes(request),
+              sent: jsonBytes(value),
+            });
+          });
       };
-      return await (profiling ? profile.run(req.headers['x-ink-profile'] || 'background', 'http.server', requestDetail, dispatch) : dispatch());
+      return await (profiling
+        ? profile.run(
+            req.headers['x-ink-profile'] || 'background',
+            'http.server',
+            requestDetail,
+            dispatch,
+          )
+        : dispatch());
     }
     res.setHeader('Content-Type', 'text/html');
     res.end('<main id="tables"></main><main id="dashboard"></main>');
   } catch (error) {
+    if(res.destroyed)return;
     res.statusCode = error.status || 500;
     res.setHeader('Content-Type', 'application/json');
-    const value = { error: error.message, current: error.current }, text = JSON.stringify(value);
+    const value = { error: error.message, current: error.current },
+      text = JSON.stringify(value);
     sent += Buffer.byteLength(text);
-    if (profiling && req.profileRequest) profile.rpc.push({ trace: req.headers['x-ink-profile'] || 'background', action: req.profileRequest.action, name: req.profileRequest.name, status: res.statusCode, received: jsonBytes(req.profileRequest), sent: jsonBytes(value) });
+    if(req.rpcAccounting)completed.push({...req.rpcAccounting,received:req.rpcAccounting.bytes,sent:Buffer.byteLength(text)});
+    if (profiling && req.profileRequest)
+      profile.rpc.push({
+        trace: req.headers['x-ink-profile'] || 'background',
+        action: req.profileRequest.action,
+        name: req.profileRequest.name,
+        status: res.statusCode,
+        received: jsonBytes(req.profileRequest),
+        sent: jsonBytes(value),
+      });
     res.end(text);
   }
 });
@@ -210,67 +297,94 @@ const rss = async () => {
 try {
   const startup = performance.now();
   await page.goto('http://127.0.0.1:' + server.address().port);
-  await page.evaluate(async (tracing) => {
-    const { mountInkUi } = await import('/sdk/ui-runtime.js');
-    globalThis.uiErrors = [];
-    globalThis.profileTrace = null;
-    globalThis.profileEvents = [];
-    globalThis.profileMark = (name, start, end, detail = {}) => {
-      if (tracing && profileTrace && profileEvents.length < 20000) profileEvents.push({ trace: profileTrace, name, start, end, detail });
-    };
-    globalThis.clockSamples = [];
-    if (tracing) for (let i = 0; i < 9; i++) {
-      const start = performance.timeOrigin + performance.now();
-      const server = Number(await (await fetch('/clock')).text());
-      const end = performance.timeOrigin + performance.now();
-      clockSamples.push({ offset: (start + end) / 2 - server, uncertainty: (end - start) / 2 });
-    }
-    const listeners = new Set(),
-      stream = new EventSource('/events');
-    stream.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      profileMark('sse.received', performance.now(), performance.now(), data);
-      listeners.forEach((fn) => fn());
-    };
-    globalThis.rpc = async (action, name, id, input) => {
-      const started = performance.now();
-      const r = await fetch('/rpc', {
-          method: 'POST',
-          headers: tracing && profileTrace ? { 'X-Ink-Profile': profileTrace } : {},
-          body: JSON.stringify({ action, name, id, input }),
-        }),
-        headersAt = performance.now(), text = await r.text(), readAt = performance.now(), value = JSON.parse(text), parsedAt = performance.now();
-      profileMark('http.client.headers', started, headersAt, { action, name });
-      profileMark('http.client.body', headersAt, readAt, { action, name });
-      profileMark('http.client.decode', readAt, parsedAt, { action, name });
-      profileMark('http.client', started, parsedAt, { action, name });
-      if (r.headers.get('X-Ink-Benchmark-Lost-Reply'))
-        throw Error('Deliberately discarded reply');
-      if (!r.ok)
-        throw Object.assign(Error(value.error), {
-          status: r.status,
-          current: value.current,
+  await page.evaluate(
+    async ({ tracing, live }) => {
+      const { mountInkUi } = await import('/sdk/ui-runtime.js');
+      globalThis.uiErrors = [];
+      globalThis.profileTrace = null;
+      globalThis.profileEvents = [];
+      globalThis.profileMark = (name, start, end, detail = {}) => {
+        if (tracing && profileTrace && profileEvents.length < 20000)
+          profileEvents.push({ trace: profileTrace, name, start, end, detail });
+      };
+      globalThis.clockSamples = [];
+      if (tracing)
+        for (let i = 0; i < 9; i++) {
+          const start = performance.timeOrigin + performance.now();
+          const server = Number(await (await fetch('/clock')).text());
+          const end = performance.timeOrigin + performance.now();
+          clockSamples.push({
+            offset: (start + end) / 2 - server,
+            uncertainty: (end - start) / 2,
+          });
+        }
+      const listeners = new Set(),
+        stream = new EventSource('/events');
+      stream.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        profileMark('sse.received', performance.now(), performance.now(), data);
+        listeners.forEach((fn) => fn());
+      };
+      globalThis.rpc = async (action, name, id, input) => {
+        const started = performance.now();
+        const r = await fetch('/rpc', {
+            method: 'POST',
+            headers:
+              tracing && profileTrace ? { 'X-Ink-Profile': profileTrace } : {},
+            body: JSON.stringify({ action, name, id, input }),
+          }),
+          headersAt = performance.now(),
+          text = await r.text(),
+          readAt = performance.now(),
+          value = JSON.parse(text),
+          parsedAt = performance.now();
+        profileMark('http.client.headers', started, headersAt, {
+          action,
+          name,
         });
-      return value;
-    };
-    globalThis.controllers = {};
-    for (const name of ['tables', 'dashboard'])
-      controllers[name] = await mountInkUi({
-        element: document.querySelector('#' + name),
-        transport: {
-          open: () => rpc('open', name),
-          refresh: (id, input) => rpc('refresh', name, id, input),
-          event: (id, input) => rpc('event', name, id, input),
-          dispose: (id) => rpc('dispose', name, id, {}),
-        },
-        subscribe: (fn) => {
-          listeners.add(fn);
-          return () => listeners.delete(fn);
-        },
-        onError: (error) => uiErrors.push(error.message),
-        ...(tracing ? { onTrace: event => profileMark(event.name, event.start, event.end, { ...event.detail, name }) } : {}),
-      });
-  }, tracing);
+        profileMark('http.client.body', headersAt, readAt, { action, name });
+        profileMark('http.client.decode', readAt, parsedAt, { action, name });
+        profileMark('http.client', started, parsedAt, { action, name });
+        if (r.headers.get('X-Ink-Benchmark-Lost-Reply'))
+          throw Error('Deliberately discarded reply');
+        if (!r.ok)
+          throw Object.assign(Error(value.error), {
+            status: r.status,
+            current: value.current,
+          });
+        return value;
+      };
+      globalThis.controllers = {};
+      for (const name of ['tables', 'dashboard'])
+        controllers[name] = await mountInkUi({
+          element: document.querySelector('#' + name),
+          transport: {
+            open: () => rpc('open', name),
+            refresh: (id, input) => rpc('refresh', name, id, input),
+            ...(live
+              ? { watch: (id, input) => rpc('watch', name, id, input) }
+              : {}),
+            event: (id, input) => rpc('event', name, id, input),
+            dispose: (id) => rpc('dispose', name, id, {}),
+          },
+          subscribe: (fn) => {
+            listeners.add(fn);
+            return () => listeners.delete(fn);
+          },
+          onError: (error) => uiErrors.push(error.message),
+          ...(tracing
+            ? {
+                onTrace: (event) =>
+                  profileMark(event.name, event.start, event.end, {
+                    ...event.detail,
+                    name,
+                  }),
+              }
+            : {}),
+        });
+    },
+    { tracing, live },
+  );
   await page.waitForFunction(
     () => document.querySelectorAll('li').length === 40,
   );
@@ -284,7 +398,12 @@ try {
       return bytes;
     },
     appJournalBefore = await docBytes(),
-    networkBefore = { received, sent, requests }, editSamples = [], profileRpcStart = profile?.rpc.length ?? 0, profileSpanStart = profile?.spans.length ?? 0;
+    networkBefore = { received, sent, requests },
+    completedBefore = completed.length,
+    readsBefore = p.inkViews.reads.reads,
+    editSamples = [],
+    profileRpcStart = profile?.rpc.length ?? 0,
+    profileSpanStart = profile?.spans.length ?? 0;
   if (profile) await profile.attach(p);
   for (let i = 0; i < edits; i++) {
     const label = 'Edit ' + i,
@@ -311,7 +430,12 @@ try {
           await new Promise(requestAnimationFrame);
           const end = performance.now();
           profileMark('frame.tail', observed, end);
-          const result = { trace: profileTrace, start, end, origin: performance.timeOrigin };
+          const result = {
+            trace: profileTrace,
+            start,
+            end,
+            origin: performance.timeOrigin,
+          };
           globalThis.profileTrace = null;
           return result;
         },
@@ -323,25 +447,62 @@ try {
   }
   const journalBytes = p.world.journal.bytes - journalBefore,
     appJournalBytes = (await docBytes()) - appJournalBefore,
-    wire = {
-      received: received - networkBefore.received,
-      sent: sent - networkBefore.sent,
-      requests: requests - networkBefore.requests,
-    };
-  const profileResult = profile ? {
-    clock: await page.evaluate(() => clockSamples.sort((a,b) => a.uncertainty - b.uncertainty)[0]),
-    browserOrigin: editSamples[0].origin, edits: editSamples,
-    browser: await page.evaluate(() => profileEvents),
-    server: profile.spans.slice(profileSpanStart),
-    rpc: profile.rpc.slice(profileRpcStart),
-    checkpoints: profile.checkpoints.filter(s => s.trace.startsWith('edit-')),
-    wal: profile.wal.filter(s => s.trace.startsWith('edit-')), dropped: profile.dropped,
-    workerScope: 'JavaScript worker timings split checked preparation, decoding, compute and result encoding. Native resident spans include computation, codecs and IPC.',
-    presentationScope: 'DOM mutation completion and next animation-frame opportunity; physical presentation and compositor paint are not measured.',
-  } : undefined;
+    wire = live
+      ? completed.slice(completedBefore).reduce(
+          (total, r) => ({
+            received: total.received + r.received,
+            sent: total.sent + r.sent,
+            requests: total.requests + 1,
+          }),
+          { received: 0, sent: 0, requests: 0 },
+        )
+      : {
+          received: received - networkBefore.received,
+          sent: sent - networkBefore.sent,
+          requests: requests - networkBefore.requests,
+        };
+  const measuredQueryReads = p.inkViews.reads.reads - readsBefore,
+    measuredRpcActions = completed
+      .slice(completedBefore)
+      .reduce(
+        (counts, r) => ({ ...counts, [r.action]: (counts[r.action] || 0) + 1 }),
+        {},
+      );
+  const profileResult = profile
+    ? {
+        clock: await page.evaluate(
+          () => clockSamples.sort((a, b) => a.uncertainty - b.uncertainty)[0],
+        ),
+        browserOrigin: editSamples[0].origin,
+        edits: editSamples,
+        browser: await page.evaluate(() => profileEvents),
+        server: profile.spans.slice(profileSpanStart),
+        rpc: profile.rpc.slice(profileRpcStart),
+        checkpoints: profile.checkpoints.filter((s) =>
+          s.trace.startsWith('edit-'),
+        ),
+        wal: profile.wal.filter((s) => s.trace.startsWith('edit-')),
+        dropped: profile.dropped,
+        workerScope:
+          'JavaScript worker timings split checked preparation, decoding, compute and result encoding. Native resident spans include computation, codecs and IPC.',
+        presentationScope:
+          'DOM mutation completion and next animation-frame opportunity; physical presentation and compositor paint are not measured.',
+      }
+    : undefined;
   if (profileResult) {
-    assert.equal(profileResult.rpc.reduce((n,r) => n + r.received.bytes + r.sent.bytes, 0), wire.received + wire.sent, 'RPC body accounting must reconcile');
-    assert.equal(profileResult.wal.reduce((n,r) => n + r.bytes, 0), appJournalBytes, 'WAL write accounting must reconcile');
+    assert.equal(
+      profileResult.rpc.reduce(
+        (n, r) => n + r.received.bytes + r.sent.bytes,
+        0,
+      ),
+      wire.received + wire.sent,
+      'RPC body accounting must reconcile',
+    );
+    assert.equal(
+      profileResult.wal.reduce((n, r) => n + r.bytes, 0),
+      appJournalBytes,
+      'WAL write accounting must reconcile',
+    );
     assert.equal(profileResult.dropped, 0);
   }
   profiling = false;
@@ -443,8 +604,12 @@ try {
   // Stop new refreshes and drain each browser lane before retiring its mount
   // service. Otherwise an already scheduled invalidation can race close().
   await page.evaluate(async () => {
-    Object.values(controllers).forEach(controller => controller.suspend(true));
-    await Promise.all(Object.values(controllers).map(controller => controller.refresh()));
+    Object.values(controllers).forEach((controller) =>
+      controller.suspend(true),
+    );
+    await Promise.all(
+      Object.values(controllers).map((controller) => controller.refresh()),
+    );
   });
   stop();
   await p.inkViews.close();
@@ -481,7 +646,11 @@ try {
       Object.values(controllers).map((controller) => controller.reopen()),
     ),
   );
-  await page.evaluate(() => Object.values(controllers).forEach(controller => controller.suspend(false)));
+  await page.evaluate(() =>
+    Object.values(controllers).forEach((controller) =>
+      controller.suspend(false),
+    ),
+  );
   await page.waitForFunction(
     () =>
       [...document.querySelectorAll('li')].filter(
@@ -499,11 +668,18 @@ try {
   assert.equal(restored.valueWire, beforeRecovery);
   assert.deepEqual(errors, []);
   const uiErrors = await page.evaluate(() => uiErrors);
-  assert.deepEqual(uiErrors, [], "UI errors must not be silently accepted by the benchmark");
+  assert.deepEqual(
+    uiErrors,
+    [],
+    'UI errors must not be silently accepted by the benchmark',
+  );
   latencies.sort((a, b) => a - b);
   console.log(
     JSON.stringify({
       mode,
+      delivery: live ? 'retained' : 'refresh',
+      measuredQueryReads,
+      measuredRpcActions,
       system: f.packet.graph.identity,
       compiler: f.packet.graph.units[0].modules.compiler,
       planSteps: f.packet.graph.units[0].implementation.steps,
@@ -522,8 +698,8 @@ try {
       },
       editToPaint: {
         samplesMs: latencies,
-        p50Ms: latencies[Math.ceil(edits * .5) - 1],
-        p95Ms: latencies[Math.ceil(edits * .95) - 1],
+        p50Ms: latencies[Math.ceil(edits * 0.5) - 1],
+        p95Ms: latencies[Math.ceil(edits * 0.95) - 1],
       },
       concurrency: {
         durationMs: concurrencyMs,
@@ -548,8 +724,9 @@ try {
       transferred: {
         ...wire,
         bytesPerEdit: (wire.received + wire.sent) / edits,
-        scope:
-          'HTTP RPC request/response bodies; excludes headers, SSE notifications and initial source/assets',
+        scope: live
+          ? 'RPC request/response body pairs completed during measurement; includes watch requests begun before the window; excludes pending next-watch requests, headers, SSE and initial assets'
+          : 'HTTP RPC request/response bodies; excludes headers, SSE notifications and initial source/assets',
       },
       memory: {
         peakNodeRss,

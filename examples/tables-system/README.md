@@ -1,6 +1,6 @@
 # Tables and a connected dashboard
 
-Both apps are authored in Ink. Tables owns typed rows, guarded writes, events and filtered sum/count keeps. Its UI and the dashboard use the same paginated exported query. The selected plan contains replayable maintained-fold proofs for `OpenTotal` and `OpenCount`.
+Both apps are authored in Ink. On the current host they retain one shared exported query and receive ordered view patches through the UI watch transport. Tables owns typed rows, guarded writes, events and filtered sum/count keeps. Its UI and the dashboard use the same paginated exported query. The selected plan contains replayable maintained-fold proofs for `OpenTotal` and `OpenCount`.
 
 From the platform repository:
 
@@ -36,3 +36,5 @@ INK_UI_BROWSER_EXECUTABLE=/path/to/chrome node scripts/benchmark-ink-system.mjs
 To regenerate the proof, explicitly configure `INK_COMPILER` and `PYTHONPATH` for the pinned Ink CLI and planner/knowledge source packages, then run `node scripts/author-tables-system-plan.mjs`. It authors ordinary fold proofs, shares duplicate self-contained certificates, and checks the complete resulting packet. No planner, catalogue download or Rust installation runs during an ordinary application request.
 
 [Contracts, limits and remaining boundaries](../../docs/system-planning.md) · [Measured run](../../docs/benchmarks/tables-system-2026-11-04.json)
+
+[Retained query delivery and reconnect contract](../../docs/retained-queries.md).
