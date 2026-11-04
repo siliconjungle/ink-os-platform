@@ -69,3 +69,5 @@ node scripts/benchmark-ink-system.mjs --live --rows 64,2048 \
 ```
 
 The benchmark records query evaluation counts and completed RPC action counts. In live mode it accounts for request/response pairs completed in the window, including watch requests started before the first edit and excluding the next outstanding request. HTTP/body bytes still include the existing verbose write replies; retained delivery does not remove those descriptors. The latency remains a DOM/animation-frame proxy, with production authentication, desktop MessagePort and physical presentation outside that measurement.
+
+[Measured refresh-versus-retained comparison](benchmarks/retained-query-2026-11-04.md) records execution counts, body bytes, latency and recovery outcomes.

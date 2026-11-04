@@ -177,6 +177,8 @@ export class InkUiReads {
       !record.dirty
     )
       return;
+    clearTimeout(record.timer);
+    record.timer = undefined;
     this.controllers.add(record.controller);
     const task = (async () => {
       while (this.accepting && record.listeners.size && record.dirty) {
@@ -206,8 +208,20 @@ export class InkUiReads {
             }
           }
         } catch (error) {
-          if (record.controller.signal.aborted) return;
-          if (error.current?.uiRetry || [429, 503].includes(error.status)) {
+          if (record.controller.signal.aborted || !this.accepting) return;
+          const quiet =
+            error.current?.uiRetry || [429, 503].includes(error.status);
+          const retry =
+            quiet || ![400, 401, 403, 404, 409, 413].includes(error.status);
+          if (!quiet) {
+            record.error = error;
+            for (const notify of record.listeners) {
+              try {
+                notify({ error });
+              } catch {}
+            }
+          }
+          if (retry) {
             record.dirty = true;
             record.timer = setTimeout(
               () => {
@@ -215,20 +229,16 @@ export class InkUiReads {
                 this.pump(record);
               },
               Math.min(
-                1000,
-                10 *
+                quiet ? 1000 : 30000,
+                50 *
                   2 **
-                    Math.min((record.failures = (record.failures || 0) + 1), 7),
+                    Math.min(
+                      (record.failures = (record.failures || 0) + 1),
+                      10,
+                    ),
               ),
             );
             record.timer.unref();
-          } else {
-            record.error = error;
-            for (const notify of record.listeners) {
-              try {
-                notify({ error });
-              } catch {}
-            }
           }
           return;
         }
@@ -284,10 +294,14 @@ export class InkUiReads {
           fail(413, 'Exported UI data exceeds 128 KiB');
         if (!this.current(snapshot)) continue;
         snapshot.value = freeze(parseExactJSON(result.valueWire));
-        snapshot.delta = queryPageDelta(prior?.value || record?.last?.value, snapshot.value);
+        snapshot.delta = queryPageDelta(
+          prior?.value || record?.last?.value,
+          snapshot.value,
+        );
         snapshot.stateRevision = JSON.parse(snapshot.stamp)[1];
         snapshot.versionWire = stringifyExactJSON(snapshot.value.version);
-        if (record) snapshot.id = record.id;
+        const active = this.retained.get(key);
+        if (active) snapshot.id = active.id;
         snapshot.bytes =
           Buffer.byteLength(result.valueWire) +
           Buffer.byteLength(stringifyExactJSON(snapshot.delta));
@@ -305,7 +319,7 @@ export class InkUiReads {
           8 * 1024 * 1024
         )
           fail(429, 'Retained query memory budget is busy');
-        snapshot.sequence = record ? ++record.sequence : 1;
+        snapshot.sequence = active ? ++active.sequence : 1;
         this.reads++;
         return snapshot;
       }
