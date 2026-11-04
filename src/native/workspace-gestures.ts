@@ -17,7 +17,7 @@ export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compos
   switcher.append(status);
   switcher.setAttribute('role', 'group');
   switcher.setAttribute('aria-label', 'Desktops');
-  switcher.title = 'Swipe horizontally to switch desktops · Ctrl Alt ← / →';
+  switcher.title = 'Two-finger horizontal swipe on the desktop or a window title bar · Ctrl Alt ← / →';
   const blocked = () => !!compositor.gesture || !!document.documentElement.dataset.gesture || !!document.querySelector('.modal-backdrop,.quick-look-backdrop,.window-overview,.desktop-context,.system-menu');
   const step = (direction:number) => {
     if (blocked()) {swipe.reset(); return;}
@@ -26,13 +26,18 @@ export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compos
     compositor.switchWorkspace(id);
     status.textContent = compositor.workspaces.find(space => space.id === id)?.name || 'Desktop';
   };
+  const eligible = (target:EventTarget|null) => {
+    if (!(target instanceof Element)) return false;
+    if (target.closest('.workspace-switch,.window-chrome')) return true;
+    return !!target.closest('.desktop-shell') && !target.closest('.desktop-window,.system-bar,.desktop-bottom,.canvas-navigation,[role=dialog],input,textarea,select,[contenteditable=true]');
+  };
   const wheel = (event:WheelEvent) => {
-    if (event.defaultPrevented || blocked()) {swipe.reset(); return;}
+    if (event.defaultPrevented || blocked() || !eligible(event.target)) {swipe.reset(); return;}
     const result = swipe.wheel(event, performance.now());
     if (result.consume) {event.preventDefault(); event.stopPropagation();}
     if (result.step) step(result.step);
   };
-  switcher.addEventListener('wheel', wheel, {passive:false});
+  window.addEventListener('wheel', wheel, {passive:false,capture:true});
   const unsubscribe = window.inkDesktopGestures?.onSwipe(direction => {
     swipe.reset();
     step(direction === 'left' ? 1 : -1);
@@ -40,7 +45,7 @@ export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compos
   const reset = () => swipe.reset();
   window.addEventListener('blur', reset);
   const dispose = () => {
-    switcher.removeEventListener('wheel', wheel);
+    window.removeEventListener('wheel', wheel, true);
     window.removeEventListener('blur', reset);
     window.removeEventListener('pagehide', dispose);
     unsubscribe?.();

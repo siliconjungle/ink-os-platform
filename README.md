@@ -8,7 +8,7 @@ Finder, Preview and Ink Environment are ordinary isolated apps. Their exact publ
 
 To reproduce the bundled defaults, check out the three app repositories beside Platform at the exact commits in `default-apps/lock.json`, then run `npm run bundle:default-apps`. Deliberate app upgrades require updating the reviewed source pins before rebundling.
 
-Swipe horizontally with two fingers over the desktop switcher to move to the adjacent desktop. A gesture switches once, including its momentum tail, and stops at the first or last desktop. Normal scrolling inside apps is unchanged. Pinch zoom, vertical scrolling, dialogs, quick previews and active window drags do not switch desktops. The desktop wrapper can also forward native three-finger swipes on macOS. Ctrl Alt Left/Right remains the keyboard alternative.
+Swipe horizontally with two fingers over the desktop background, desktop switcher or a window title bar to move to the adjacent desktop. A gesture switches once, including its momentum tail, and stops at the first or last desktop. Normal scrolling inside apps is unchanged. Pinch zoom, vertical scrolling, dialogs, quick previews and active window drags do not switch desktops. The desktop wrapper can also forward native three-finger swipes on macOS. Ctrl Alt Left/Right remains the keyboard alternative.
 
 Requires Node.js 24+ and Git.
 
