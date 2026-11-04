@@ -1,7 +1,9 @@
-import type{WorldObject}from'../src/types';import type{DeskWindow}from'../src/window-model';
-export function fileType(file:WorldObject):string;
-export function fileApps(objects:WorldObject[],file:WorldObject):WorldObject[];
-export function fileLaunch(app:WorldObject,file:WorldObject):{appId:string;route:{app:string;id:string}};
+import type{WorldObject,Route}from'../src/types';import type{DeskWindow}from'../src/window-model';
+export function fileType(file:WorldObject,action?:'open'|'preview'):string;
+export function fileApps(objects:WorldObject[],file:WorldObject,action?:'open'|'preview'):WorldObject[];
+export function fileLaunch(app:WorldObject,file:WorldObject,action?:'open'|'preview'):{appId:string;route:Route};
 export function applicationWindow(objects:WorldObject[],window:DeskWindow):DeskWindow|undefined;
-export function preferredFileApp(objects:WorldObject[],file:WorldObject,defaults?:Record<string,string>):WorldObject|undefined;
-export function firstFileApp(objects:WorldObject[],file:WorldObject):WorldObject|undefined;
+export function preferredFileApp(objects:WorldObject[],file:WorldObject,defaults?:Record<string,string>,action?:'open'|'preview'):WorldObject|undefined;
+export function firstFileApp(objects:WorldObject[],file:WorldObject,action?:'open'|'preview'):WorldObject|undefined;
+export function fileActionTypes(app:WorldObject,action?:'open'|'preview'):string[];
+export function previewableObject(object?:WorldObject|null):boolean;

@@ -13,6 +13,11 @@ export function desktopManifest(input={}){
  if(input.fileTypes!==undefined){if(!Array.isArray(input.fileTypes)||input.fileTypes.length>64||input.fileTypes.some(type=>typeof type!=='string'||! /^(\*|[a-z][a-z0-9-]{0,63}|\.[a-z0-9][a-z0-9.+_-]{0,20}|[a-z0-9.+-]+\/(?:[a-z0-9.+-]+|\*))$/.test(type)))throw Error('App file types must be kinds, MIME types, extensions or *');result.fileTypes=[...new Set(input.fileTypes)];}
  if(input.dropTypes!==undefined){if(!Array.isArray(input.dropTypes)||input.dropTypes.length>64||input.dropTypes.some(type=>typeof type!=='string'||! /^(\*|[a-z][a-z0-9-]{0,63}|\.[a-z0-9][a-z0-9.+_-]{0,20}|[a-z0-9.+-]+\/(?:[a-z0-9.+-]+|\*))$/.test(type)))throw Error('App file types must be kinds, MIME types, extensions or *');result.dropTypes=[...new Set(input.dropTypes)];}
  if(input.window!==undefined)result.window=dimensions(input.window);
+ if(input.preview!==undefined){
+  const preview=input.preview;if(!preview||typeof preview!=='object'||Array.isArray(preview)||!Array.isArray(preview.fileTypes)||!preview.fileTypes.length)throw Error('App preview must declare its supported file types');
+  const parsed=desktopManifest({fileTypes:preview.fileTypes,...(preview.window?{window:preview.window}:{})});
+  result.preview={fileTypes:parsed.fileTypes,...(parsed.window?{window:parsed.window}:{})};
+ }
  return result;
 }
 export const isAppRegistration=object=>!!object&&object.kind==='app'&&object.namespace==='os'&&!object.archived;
