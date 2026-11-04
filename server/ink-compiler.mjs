@@ -46,19 +46,34 @@ export async function compileInk(source) {
 export async function compileInkModules(input) {
   const graph = inkModuleGraph(input, { sources: true });
   const artifact = await compilerRequest({ op: 'compileModules', graph });
+  return verifyGraphArtifact(graph, artifact);
+}
+function verifyGraphArtifact(graph, artifact) {
   const provenance = { version: 1, root: graph.root, modules: graph.modules.map(({ source, ...module }) => ({ ...module, sha256: sha(source) })) };
-  const graphHash = sha(canonical(provenance)), coreHash = sha(artifact.core);
+  const graphHash = sha(canonical(provenance)), coreHash = artifact.original_core_sha256 || sha(artifact.core);
   const identity = sha(canonical({ graph_sha256: graphHash, core_sha256: coreHash }));
   const expected = { ...provenance, root_exports: graph.modules.find(module => module.path === graph.root).exports, graph_sha256: graphHash, core_sha256: coreHash, identity };
-  if (canonical(artifact.module_graph) !== canonical(expected) || artifact.manifest.core_sha256 !== coreHash) throw Error('Ink compiler module graph identity mismatch.');
+  if (canonical(artifact.module_graph) !== canonical(expected) || artifact.manifest.core_sha256 !== sha(artifact.core)) throw Error('Ink compiler module graph identity mismatch.');
   return artifact;
 }
 /** The source form is explicit; object inputs are bounded module graphs, never import URLs. */
-export function compileInkProgram(source) { return typeof source === 'string' ? compileInk(source) : compileInkModules(source); }
+export async function compileInkProgram(source) {
+  source = normalizeInkProgram(source);
+  if (source?.kind === 'ink-os-planned-v1') {
+    const artifact = await compilerRequest({ op: 'compilePlan', ...(typeof source.source === 'string' ? { source: source.source } : { graph: source.source }), plan: source.plan });
+    return typeof source.source === 'string' ? artifact : verifyGraphArtifact(source.source, artifact);
+  }
+  return typeof source === 'string' ? compileInk(source) : compileInkModules(source);
+}
 export function normalizeInkProgram(source) {
   if (typeof source === 'string') return source;
+  if (source?.kind === 'ink-os-planned-v1') {
+    if (Object.keys(source).sort().join(',') !== 'kind,plan,source' || typeof source.plan !== 'string' || Buffer.byteLength(source.plan) > 6 * 1024 * 1024 || source.source?.kind) throw Error('Invalid bounded Ink implementation packet.');
+    return { kind: source.kind, source: normalizeInkProgram(source.source), plan: source.plan };
+  }
   return inkModuleGraph(source, { sources: true });
 }
+export const inkOriginalSource = source => source?.kind === 'ink-os-planned-v1' ? source.source : source;
 export function inkProgramKey(source) { return sha(typeof source === 'string' ? source : canonical(normalizeInkProgram(source))); }
 export function inkProgramIdentity(artifact) {
   return artifact.module_graph ? { version: 1, identity: artifact.module_graph.identity, graphHash: artifact.module_graph.graph_sha256, coreHash: artifact.module_graph.core_sha256 } : null;

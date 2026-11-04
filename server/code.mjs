@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { hash } from './world.mjs';
 import { stateObjectId } from './app-data.mjs';
-import { compileInkProgram, compilerRequest, isolatedWorker, normalizeInkProgram, inkProgramKey, inkProgramIdentity } from './ink-compiler.mjs';
+import { compileInkProgram, compilerRequest, isolatedWorker, normalizeInkProgram, inkProgramKey, inkProgramIdentity, inkOriginalSource } from './ink-compiler.mjs';
 import { inkEntries } from '../shared/ink-app.mjs';
 import { stringifyExactJSON } from '../shared/exact-json.mjs';
 
@@ -17,7 +17,7 @@ export class Code {
     const key = inkProgramKey(source);
     if (!this.compilations.has(key)) {
       const task = compileInkProgram(source).then(artifact => ({
-        digest: artifact.module_graph?.identity || key, artifact, source, sourceIdentity: inkProgramIdentity(artifact),
+        digest: artifact.module_graph?.identity || inkProgramKey(inkOriginalSource(source)), artifact, source, sourceIdentity: inkProgramIdentity(artifact),
         entries: inkEntries(artifact.manifest, artifact.module_graph),
       }));
       this.compilations.set(key, task);

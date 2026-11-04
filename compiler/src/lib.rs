@@ -747,6 +747,65 @@ fn emit_checked(checked: &CheckedModule) -> Result<Value, String> {
 
 pub fn handle(request: &Value) -> Result<Value, String> {
     match text(request, "op")? {
+        "compilePlan" => {
+            let fields = request.as_object().ok_or("plan request must be an object")?;
+            if fields.len() != 3 || fields.keys().any(|key| !["op", "source", "graph", "plan"].contains(&key.as_str())) {
+                return Err("compilePlan accepts only op, source/graph and plan".into());
+            }
+            // Search is external. Reconstruct the original checked source and replay
+            // the entire supplied proof closure before any selected emission.
+            let (original, graph) = if request.get("graph").is_some() {
+                if request.get("source").is_some() { return Err("Select source or graph".into()); }
+                let (module, graph) = modules::assemble(&request["graph"])?;
+                (module, Some(graph))
+            } else {
+                let source = text(request, "source")?;
+                if source.len() > MAX_SOURCE { return Err("Source exceeds 128 KiB.".into()); }
+                (CheckedModule::from_source(syntax::parse(source)?)?, None)
+            };
+            let packet = ink_core::planning::from_bytes(text(request, "plan")?.as_bytes())?;
+            let plan = ink_core::planning::check(&original, &packet)?;
+            // These require a different host ABI. Never silently erase an admitted
+            // physical/placement/resource choice by emitting only its source module.
+            if plan.representation().is_some() || plan.route().is_some() || plan.resources().is_some() {
+                return Err("OS planned execution does not support representation, routing or resource host plans".into());
+            }
+            if let Some(p) = plan.physical() {
+                let p = p.plan();
+                use ink_core::physical::{Buffers, Definitions, Tables};
+                if !p.columns.is_empty() || p.column_maps.is_some() || p.bounds.is_some()
+                    || p.buffers != Buffers::Scoped || p.tables != Tables::Ordered
+                    || !p.borrow_reads.is_empty() || !p.borrow_rows.is_empty()
+                    || p.definitions != Definitions::Shared || !p.reservations.is_empty()
+                    || !p.inline_functions.is_empty() {
+                    return Err("OS JavaScript baseline does not support this physical plan".into());
+                }
+            }
+            let mut emission = ink_lowering_js::lower_planned(&plan)?;
+            if emission.javascript.len() > MAX_REQUEST { return Err("Generated JavaScript exceeds 8 MiB.".into()); }
+            // Added implementation helpers are not new public OS entrypoints.
+            if let Some(functions) = emission.manifest["functions"].as_array_mut() {
+                for function in functions {
+                    if !original.program().functions.iter().any(|f| Some(f.name.as_str()) == function["name"].as_str()) {
+                        function["internal"] = json!(true);
+                    }
+                }
+            }
+            let (rust, rust_reason) = match ink_lowering_rust::state_native::emit_planned(&plan) {
+                Ok(source) => (json!(source), Value::Null),
+                Err(reason) => (Value::Null, json!(reason)),
+            };
+            let mut output = json!({"javascript":emission.javascript,"manifest":emission.manifest,
+                "rust":rust,"rust_reason":rust_reason,"bundle":null,
+                "host_reason":"OS planned execution uses JavaScript/native CPU hosts; GPU plan execution is unavailable",
+                "core":String::from_utf8(plan.module().bytes()?).map_err(|e|e.to_string())?,
+                "original_core_sha256":original.identity()?,
+                "compiled_plan":{"schema":1,"input":original.identity()?,"selected":plan.module().identity()?,
+                    "plan":ink_core::planning::identity(&packet)?,"steps":packet.steps.len()},
+                "plan":String::from_utf8(ink_core::planning::canonical(&packet)?).map_err(|e|e.to_string())?});
+            if let Some(graph) = graph { output["module_graph"] = graph; }
+            Ok(output)
+        }
         "compile" => {
             let source = text(request, "source")?;
             if source.len() > MAX_SOURCE {
@@ -940,6 +999,20 @@ pub extern "C" fn ink_env_response_len() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn release_plans_replay_proofs_and_retain_original_snapshot_identity() {
+        let source = include_str!("../../tests/fixtures/planned-counter.ink");
+        let plan = include_str!("../../tests/fixtures/planned-counter.plan.json");
+        let artifact = handle(&json!({"op":"compilePlan","source":source,"plan":plan})).unwrap();
+        assert_ne!(artifact["compiled_plan"]["input"], artifact["compiled_plan"]["selected"]);
+        assert_eq!(artifact["compiled_plan"]["steps"], 1);
+        assert!(artifact["rust"].is_string());
+        let mut packet: Value = serde_json::from_str(plan).unwrap();
+        packet["steps"][0]["package"]["proofs"] = json!({});
+        assert!(handle(&json!({"op":"compilePlan","source":source,"plan":packet.to_string()})).is_err());
+        assert!(handle(&json!({"op":"compilePlan","source":source.replace("module planned_counter", "module foreign"),"plan":plan})).is_err());
+        assert!(handle(&json!({"op":"compilePlan","source":source,"plan":plan,"unchecked":true})).is_err());
+    }
     fn compile(source: &str) -> Value {
         handle(&json!({"op":"compile","source":source})).unwrap()
     }

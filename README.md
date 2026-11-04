@@ -65,6 +65,8 @@ Module backends keep the selected release's custom runtime image when their sour
 
 An Ink manifest declares `language: "ink"`, a source file, `ui.entry`, and exported function/query/change names. A view returns records using `kind` values `column`, `row`, `panel`, `heading`, `text`, `value`, `button`, or `field`. Buttons name an exported `entry` and an `args` JSON array string. Fields have a `name`; argument templates can reference them with `{"$field":"name"}`. The generated interface uses the SDK styles. App code needs no JavaScript.
 
+New Ink releases also include a [checked implementation plan](docs/checked-implementations.md), target artifacts and selection provenance. Build hosts can use pinned knowledge for bounded offline planning; deployment replays the evidence and verifies emitted artifacts. Installed calls execute the selected implementation without runtime search. The original source continues to identify portable checkpoints.
+
 Exports also become commands such as `ink.add`, available through the command launcher, API, SDK and workflows. Command arguments use JSON **text**, preserving exact integers and structured values. For example:
 
 ```sh

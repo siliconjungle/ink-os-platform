@@ -34,15 +34,17 @@ export function inkModuleGraph(input, { sources = false, paths, privatePaths = f
 
 export function inkSpec(input, paths) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) fail('Provide an Ink application contract.');
-  if (input.version !== undefined && ![1,2].includes(input.version)) fail('Unsupported Ink application contract version.');
-  if ((input.host !== undefined) !== (input.version === 2)) fail('Host bindings require Ink application contract version 2.');
+  if (input.version !== undefined && ![1,2,3].includes(input.version)) fail('Unsupported Ink application contract version.');
+  if (input.version !== 3 && (input.host !== undefined) !== (input.version === 2)) fail('Host bindings require Ink application contract version 2.');
+  if ((input.version === 3) !== (input.implementation !== undefined)) fail('Checked implementations require Ink application contract version 3.');
+  if (input.implementation !== undefined && (!keys(input.implementation,['version','path']) || input.implementation.version !== 1 || input.implementation.path !== 'server/implementation.json' || paths && !paths.has(input.implementation.path))) fail('A private checked implementation file is required.');
   if (typeof input.source !== 'string' || !/^server\/[A-Za-z0-9_./-]+\.ink$/.test(input.source) || input.source.split('/').some(part => part === '..' || part === '.' || !part) || paths && !paths.has(input.source)) fail('Ink source must be a private server/*.ink release file.');
   if (input.view !== undefined && input.view !== null && !entryName(input.view)) fail('Choose a valid Ink view entry.');
   if (!Array.isArray(input.exports) || input.exports.length > 63 || input.exports.some(name => !entryName(name)) || new Set(input.exports).size !== input.exports.length) fail('Declare up to 63 unique Ink exports.');
   const modules = input.modules === undefined ? null : inkModuleGraph(input.modules, { paths, privatePaths: true });
   if (modules && (modules.root !== input.source || [...input.exports, ...(input.view ? [input.view] : [])].some(name => !modules.modules.find(module => module.path === modules.root).exports.includes(name)))) fail('Ink view and app exports must be declared root module exports.');
   const host=input.host===undefined?undefined:inkHost(input.host);
-  return { version: host?2:1, source: input.source, view: input.view || null, exports: [...input.exports], ...(modules ? { modules } : {}),...(host?{host}:{}) };
+  return { version: input.implementation?3:host?2:1, source: input.source, view: input.view || null, exports: [...input.exports], ...(modules ? { modules } : {}),...(host?{host}:{}),...(input.implementation?{implementation:{version:1,path:input.implementation.path}}:{}) };
 }
 
 export function inkHost(input){

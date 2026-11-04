@@ -6,6 +6,7 @@ import { parseEnv } from 'node:util';
 import { sourceFiles } from '../../shared/source-files.mjs';
 import { inkModuleGraph } from '../../shared/ink-app.mjs';
 import{prepareProjectSnapshot}from'./project-checkout.mjs';
+import { planningOptions, planningFiles } from '../../server/ink-planning.mjs';
 
 async function manifestFrom(files, manifestName='ink-app.json') {
   const file = files.find(file => file.path === manifestName);
@@ -50,6 +51,8 @@ export async function buildInk(directory, options = {}) {
   directory = await realpath(resolve(directory));
   const manifest = JSON.parse(await readFile(join(directory, 'ink-app.json'), 'utf8'));
   const names = new Set(manifest.modules !== undefined ? inkModuleGraph(manifest.modules).modules.map(module => module.path) : [manifest.source || 'main.ink']);
+  const planningInputs = new Set(planningFiles(planningOptions(manifest.optimisation)));
+  for (const path of planningInputs) names.add(path);
   const icon = manifest.desktop?.icon;
   if (typeof icon === 'string' && /\.svg$/i.test(icon)) names.add(icon);
   if (typeof icon?.svg === 'string' && !icon.svg.trim().startsWith('<')) names.add(icon.svg);
@@ -59,7 +62,7 @@ export async function buildInk(directory, options = {}) {
     const path = resolve(directory, name), inside = relative(directory, await realpath(path));
     if (inside === '..' || inside.startsWith('..' + sep) || (await lstat(path)).isSymbolicLink()) throw Error('App source must be inside the application directory.');
     const bytes = await readFile(path);
-    if (bytes.length > 128 * 1024) throw Error('Ink source and icons must each be at most 128 KiB.');
+    if (bytes.length > (planningInputs.has(name) ? 6 * 1024 * 1024 : 128 * 1024)) throw Error('Ink source/icon or planning input exceeds its byte limit.');
     files.push({ path: name, base64: bytes.toString('base64') });
   }
   const bundle = await buildInkApp(manifest, files);

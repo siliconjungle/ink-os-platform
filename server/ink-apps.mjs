@@ -4,6 +4,7 @@ import { inkEntries, inkCommands, inkSpec, inkModuleGraph,inkPublicEntries } fro
 import{runInkHostBinding}from'./ink-host-bindings.mjs';
 import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
 import { sourceFiles } from '../shared/source-files.mjs';
+import { buildImplementation, verifyImplementation, implementationSummary } from './ink-planning.mjs';
 
 const encode = (path, bytes) => ({ path, base64: Buffer.from(bytes).toString('base64') });
 const fail = (status, message) => { throw Object.assign(Error(message), { status }); };
@@ -27,6 +28,17 @@ export function inkSource(input, files) {
   return inkModuleGraph({ ...spec.modules, modules: spec.modules.modules.map(module => ({ ...module, source: sourceText(byPath.get(module.path)) })) }, { sources: true });
 }
 
+/** Private release implementations are replayed against the complete original closure. */
+export async function inkExecutionSource(input, files) {
+  const source = inkSource(input, files);
+  if (!input.implementation) return source;
+  const file = files.find(file => file.path === input.implementation.path);
+  if (!file || Buffer.from(file.base64, 'base64').toString('base64') !== file.base64) fail(400, 'Missing or invalid Ink implementation bytes.');
+  const bytes = Buffer.from(file.base64, 'base64'), text = bytes.toString('utf8');
+  if (!Buffer.from(text).equals(bytes)) fail(400, 'Ink implementation must be exact UTF-8.');
+  return (await verifyImplementation(source, text)).execution;
+}
+
 export async function buildInkApp(manifest, files, { source } = {}) {
   if (!manifest || manifest.language !== 'ink') fail(400, 'Set language to ink in ink-app.json.');
   files = sourceFiles(files);
@@ -44,13 +56,16 @@ export async function buildInkApp(manifest, files, { source } = {}) {
     sourceRelease = [encode(sourcePath, sourceText(files.find(file => file.path === sourceFile)))];
   }
   const candidate = { source: sourcePath, exports: [], ...(graph ? { modules: graph } : {}),...(manifest.host!==undefined?{version:2,host:manifest.host}:{}) };
-  const program = inkSource(candidate, sourceRelease), artifact = await compileInkProgram(program), entries = inkEntries(artifact.manifest, artifact.module_graph);
-  const spec = inkSpec({ ...candidate, view: manifest.ui?.entry ?? null, exports: manifest.exports || entries.filter(entry => entry.name !== manifest.ui?.entry).map(entry => entry.name) });
+  const program = inkSource(candidate, sourceRelease);
+  const { implementation, artifact } = await buildImplementation(program, files, manifest.optimisation);
+  const entries = inkEntries(artifact.manifest, artifact.module_graph);
+  const spec = inkSpec({ ...candidate, version: 3, implementation: { version: 1, path: 'server/implementation.json' }, view: manifest.ui?.entry ?? null, exports: manifest.exports || entries.filter(entry => entry.name !== manifest.ui?.entry).map(entry => entry.name) });
   const commands = inkCommands(spec, entries);
   const visibleEntries = inkPublicEntries(spec,entries).filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name);
-  const metadata = { title: manifest.title || manifest.slug, ink: spec, entries: visibleEntries, namedTypes: artifact.manifest.named_types, compiler: await compilerInfo(), ...(artifact.module_graph ? { moduleGraph: artifact.module_graph } : {}) };
+  const metadata = { title: manifest.title || manifest.slug, ink: spec, entries: visibleEntries, namedTypes: artifact.manifest.named_types, compiler: await compilerInfo(), implementation: implementationSummary(implementation), ...(artifact.module_graph ? { moduleGraph: artifact.module_graph } : {}) };
   const release = [
     ...sourceRelease,
+    encode('server/implementation.json', JSON.stringify(implementation)),
     encode('app.json', JSON.stringify(metadata)),
     encode('index.html', '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles/ink.css"><link rel="stylesheet" href="/app.css"><title>Ink app</title></head><body><main id="app" aria-busy="true"></main><p id="status" role="status"></p><script src="/sdk.js"></script><script type="module" src="/app.mjs"></script></body></html>'),
   ];
@@ -77,7 +92,7 @@ export async function validateInkBundle(bundle) {
     return;
   }
   const spec = inkSpec(bundle.ink, new Set(bundle.files.map(file => file.path)));
-  const artifact = await compileInkProgram(inkSource(spec, bundle.files));
+  const artifact = await compileInkProgram(await inkExecutionSource(spec, bundle.files));
   const expected = inkCommands(spec, inkEntries(artifact.manifest, artifact.module_graph));
   if (JSON.stringify(bundle.commands) !== JSON.stringify((await import('../shared/app-commands.mjs')).validateCommands(expected))) fail(400, 'Ink commands must match the checked source exports and effects.');
 }
@@ -124,10 +139,11 @@ export async function installedInk(platform, appId, releaseId) {
   const bundle = await platform.bundle(selected);
   if (!bundle.ink) fail(400, 'This app has no Ink source contract.');
   const spec = inkSpec(bundle.ink, new Set(bundle.files.map(file => file.path)));
-  const source = inkSource(spec, bundle.files);
+  const source = await inkExecutionSource(spec, bundle.files);
   const compiled = await platform.code.compile(source);
   inkCommands(spec, compiled.entries);
-  return { source, spec, entries: inkPublicEntries(spec,compiled.entries).filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name), namedTypes: compiled.artifact.manifest.named_types, releaseId: selected, ...(compiled.sourceIdentity ? { sourceIdentity: compiled.sourceIdentity } : {}) };
+  const implementation = spec.implementation ? implementationSummary(JSON.parse(Buffer.from(bundle.files.find(file => file.path === spec.implementation.path).base64, 'base64'))) : null;
+  return { source, spec, entries: inkPublicEntries(spec,compiled.entries).filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name), namedTypes: compiled.artifact.manifest.named_types, releaseId: selected, ...(implementation ? { implementation } : {}), ...(compiled.sourceIdentity ? { sourceIdentity: compiled.sourceIdentity } : {}) };
 }
 
 export async function runInstalledInk(platform, appId, input = {}, principal, releaseId) {
