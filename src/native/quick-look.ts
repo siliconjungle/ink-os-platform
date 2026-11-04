@@ -2,7 +2,7 @@ import { api } from '../api';
 import type { WorldObject } from '../types';
 import type { DeskWindow } from '../window-model';
 import { fileApps, fileLaunch, preferredFileApp, previewableObject } from '../../shared/file-apps.mjs';
-import { appManifest } from '../../shared/app-desktop.mjs';
+import { isAppRegistration, appManifest } from '../../shared/app-desktop.mjs';
 import { desktopFile } from '../../shared/desktop-placements.mjs';
 import type { Desktop } from './desktop';
 import type { Panel } from './contracts';
@@ -17,6 +17,7 @@ export class QuickLook {
  private panel?: Panel;
  private ids: string[] = [];
  private index = 0;
+ private followsDesktop = false;
  private generation = 0;
  private restoreFocus?: HTMLElement;
  private stopWorld?: () => void;
@@ -28,20 +29,22 @@ export class QuickLook {
   if (target.closest('input,textarea,select,[contenteditable]:not([contenteditable=false])')) return;
   if (event.key === ' ' && !target.closest('button,a[href],[role=button],summary')) {
    event.preventDefault(); event.stopImmediatePropagation(); if (!event.repeat) this.close();
-  } else if (['ArrowLeft', 'ArrowRight'].includes(event.key)) {
-   event.preventDefault(); event.stopImmediatePropagation(); void this.move(event.key === 'ArrowRight' ? 1 : -1);
+  } else if (/^Arrow(Left|Right|Up|Down)$/.test(event.key)) {
+   event.preventDefault(); event.stopImmediatePropagation(); void this.direction(event.key,event.shiftKey);
   }
  };
  constructor(private desktop: Desktop) {}
  get active() { return !!this.overlay; }
- async show(ids: string[], items: string[] = ids) {
+ async show(ids: string[], items: string[] = ids, followsDesktop = false) {
   if (this.active) { this.close(); return; }
-  const valid = (id: string) => previewableObject(this.desktop.world.get(id));
+  this.followsDesktop=followsDesktop;
+  const valid = (id: string) => previewableObject(this.desktop.world.get(id))||this.followsDesktop&&isAppRegistration(this.desktop.world.get(id));
   const selected = [...new Set(ids)].filter(valid);
   if (!selected.length) return;
   this.restoreFocus = document.activeElement as HTMLElement;
   this.ids = [...new Set(selected.length > 1 ? selected : [...items, ...selected])].filter(valid);
-  this.index = Math.max(0, this.ids.indexOf(selected[0]));
+  const focused=this.restoreFocus?.closest<HTMLElement>('[data-object-id]')?.dataset.objectId;
+  this.index = Math.max(0, this.ids.indexOf(this.followsDesktop&&focused&&selected.includes(focused)?focused:selected[0]));
   this.overlay = el('div', { class: 'quick-look-backdrop' });
   this.overlay.addEventListener('pointerdown', event => { if (event.target === this.overlay) this.close(); });
   document.body.append(this.overlay);
@@ -57,12 +60,21 @@ export class QuickLook {
   });
   await this.paint();
  }
+ async direction(direction:string,extend=false){
+  if(!this.active)return;
+  if(!this.followsDesktop){await this.move(['ArrowLeft','ArrowUp'].includes(direction)?-1:1);return;}
+  const id=this.desktop.items.navigate(direction,extend,false,this.ids[this.index]);if(!id||id===this.ids[this.index])return;
+  this.ids=[...this.desktop.items.rects.keys()].filter(id=>!this.desktop.items.byId.get(id)?.uploading);this.index=this.ids.indexOf(id);
+  this.restoreFocus=this.desktop.items.nodes.get(id);await this.paint();
+ }
  async move(delta: number) {
   if (!this.active || !this.ids.length) return;
-  this.index = (this.index + delta + this.ids.length) % this.ids.length;
+  if(this.followsDesktop){await this.direction(delta<0?'ArrowLeft':'ArrowRight');return;}
+  const index=Math.max(0,Math.min(this.index+delta,this.ids.length-1));if(index===this.index)return;this.index=index;
   await this.paint();
  }
- async command(command: string) {
+ async command(command: string,extend=false) {
+  if(/^preview\.Arrow(Left|Right|Up|Down)$/.test(command)){await this.direction(command.slice(8),extend);return;}
   if (command === 'preview.dismiss' || command === 'escape') this.close();
   if (command === 'preview.previous') await this.move(-1);
   if (command === 'preview.next') await this.move(1);
@@ -87,11 +99,13 @@ export class QuickLook {
   const content = el('div', { class: 'quick-look-content', role: 'status' }, 'Loading preview…');
   const previous = button('Previous item', 'chevron-left', () => void this.move(-1));
   const next = button('Next item', 'chevron-right', () => void this.move(1));
-  previous.disabled = next.disabled = this.ids.length < 2;
+  previous.disabled=this.followsDesktop?this.desktop.items.neighbor('ArrowLeft',file.id)===file.id:this.index===0;
+  next.disabled=this.followsDesktop?this.desktop.items.neighbor('ArrowRight',file.id)===file.id:this.index===this.ids.length-1;
   const sheet = el('section', { class: 'quick-look', role: 'dialog', 'aria-modal': true, 'aria-label': 'Quick preview', tabIndex: -1 },
    el('header', { class: 'quick-look-header' }, title, previous, el('span', {}, `${this.index + 1} / ${this.ids.length}`), next, provider,
     el('button', { class: 'button', onclick: () => { this.close(); this.desktop.open(file); } }, 'Open'), button('Close preview', 'close', () => this.close())), content);
   overlay.replaceChildren(sheet); sheet.focus({ preventScroll: true });
+  if(isAppRegistration(file)){content.replaceChildren(el('div',{class:'quick-look-metadata'},el('h3',{},file.title),el('p',{},'Application'),el('p',{},file.summary||'Open this app to use it.')));provider.hidden=true;return;}
   try {
    const result = await api<{ defaults: Record<string, string> }>('/v1/preview-defaults/reconcile', { method: 'POST', body: '{}' });
    if (generation !== this.generation || !overlay.isConnected) return;

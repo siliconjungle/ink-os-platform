@@ -1363,11 +1363,12 @@
 							});
 							return;
 						}
-						if (e.key === "Escape" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
+						if (e.key === "Escape" || /^Arrow(Left|Right|Up|Down)$/.test(e.key)) {
 							e.preventDefault();
 							port.postMessage({
 								type: "shortcut",
-								key: e.key === "Escape" ? "preview.dismiss" : e.key === "ArrowLeft" ? "preview.previous" : "preview.next"
+								key: e.key === "Escape" ? "preview.dismiss" : "preview." + e.key,
+								extend: e.shiftKey
 							});
 							return;
 						}
