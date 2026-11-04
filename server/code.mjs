@@ -19,6 +19,7 @@ import { inkFootprints, writeRoots } from './ink-footprints.mjs';
 import { stringifyExactJSON } from '../shared/exact-json.mjs';
 // Generated learn-hole entries (see server/ink-learned.mjs).
 const LEARNED_ENTRY = /^(__learn_get|__learn_set|__objective_[A-Za-z_][A-Za-z0-9_]*)$/;
+const TASK_ENTRY = /^__task_[A-Za-z0-9_]+$/;
 const learnedEntry = (compiled, name) => { const fn = compiled.artifact.manifest.state?.actions?.find(a => a.name === name); return fn && { ...fn, action: true }; };
 
 export class Code {
@@ -290,6 +291,11 @@ export class Code {
     const selected = input.entry
       ? compiled.entries.find((fn) => fn.name === input.entry) ??
         (input.learned === true && LEARNED_ENTRY.test(input.entry)
+          ? learnedEntry(compiled, input.entry)
+          : undefined) ??
+        // Generated task queries are reachable only from the task service
+        // (server/ink-tasks.mjs), which limits calls to the running task's.
+        (input.task === true && TASK_ENTRY.test(input.entry)
           ? learnedEntry(compiled, input.entry)
           : undefined)
       : compiled.entries[0];

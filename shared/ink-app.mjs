@@ -1,5 +1,6 @@
 import {inkUi,inkUiComponents} from './ink-ui.mjs';
 import {inkEffects,inkEffectProtocols} from './ink-effects.mjs';
+import {inkTasks} from './ink-tasks.mjs';
 const fail = message => { throw Object.assign(Error(message), { status: 400 }); };
 const entryName = value => typeof value === 'string' && /^[A-Za-z_][A-Za-z0-9_.]{0,100}$/.test(value);
 const symbol = value => typeof value === 'string' && /^[A-Za-z_][A-Za-z0-9_]{0,99}$/.test(value) && !value.startsWith('__');
@@ -48,7 +49,8 @@ export function inkSpec(input, paths) {
   const ui=input.ui===undefined?undefined:inkUi(input.ui);if(ui&&(input.version!==3||input.view!==ui.entry))fail('Typed UI requires a checked version 3 release and matching view');
   const host=input.host===undefined?undefined:inkHost(input.host);
   const effects=input.effects===undefined?undefined:inkEffects(input.effects);if(effects&&input.version!==3)fail('Typed effects require a checked version 3 release');
-  return { version: input.implementation?3:host?2:1, source: input.source, view: input.view || null, exports: [...input.exports], ...(modules ? { modules } : {}),...(effects?{effects}:{}),...(ui?{ui}:{}),...(host?{host}:{}),...(input.implementation?{implementation:{version:1,path:input.implementation.path}}:{}) };
+  const tasks=input.tasks===undefined?undefined:inkTasks(input.tasks);if(tasks&&input.version!==3)fail('Ink tasks require a checked version 3 release');
+  return { version: input.implementation?3:host?2:1, source: input.source, view: input.view || null, exports: [...input.exports], ...(modules ? { modules } : {}),...(effects?{effects}:{}),...(tasks?{tasks}:{}),...(ui?{ui}:{}),...(host?{host}:{}),...(input.implementation?{implementation:{version:1,path:input.implementation.path}}:{}) };
 }
 
 export function inkHost(input){

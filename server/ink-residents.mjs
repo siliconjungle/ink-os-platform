@@ -17,7 +17,7 @@ export async function javascriptResident(
         entries: [
           ...compiled.entries,
           ...(compiled.artifact.manifest.state?.actions || [])
-            .filter((a) => /^(__learn_get|__learn_set|__objective_[A-Za-z_][A-Za-z0-9_]*)$/.test(a.name))
+            .filter((a) => /^(__learn_get|__learn_set|__objective_[A-Za-z_][A-Za-z0-9_]*|__task_[A-Za-z0-9_]+)$/.test(a.name))
             .map((a) => ({ ...a, action: true })),
         ],
         compiler: (await compilerModule()).module,

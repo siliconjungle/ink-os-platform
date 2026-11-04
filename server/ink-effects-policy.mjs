@@ -25,7 +25,7 @@ export async function effectPolicy(
     if (
       !name(id) ||
       !value ||
-      !['http', 'process'].includes(value.kind) ||
+      !['http', 'process', 'model'].includes(value.kind) ||
       !Array.isArray(value.namespaces) ||
       !value.namespaces.length ||
       value.namespaces.some(
@@ -33,6 +33,26 @@ export async function effectPolicy(
       )
     )
       fail('Effect resources require an explicit namespace allowlist');
+    if (value.kind === 'model') {
+      // A language model behind the Anthropic Messages API, for Ink task
+      // effects (server/ink-tasks.mjs). The key never leaves this process.
+      if (Object.keys(value).some((key) => !['kind', 'namespaces', 'origin', 'model', 'maxTokens', 'apiKeyFromEnv'].includes(key)))
+        fail('Unknown model policy field');
+      const origin = new URL(value.origin);
+      if (
+        !['https:', ...(allowHttp ? ['http:'] : [])].includes(origin.protocol) ||
+        origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash ||
+        typeof value.model !== 'string' || !/^[A-Za-z0-9._:-]{1,100}$/.test(value.model) ||
+        !Number.isInteger(value.maxTokens) || value.maxTokens < 1 || value.maxTokens > 8192 ||
+        (value.apiKeyFromEnv !== undefined &&
+          (typeof value.apiKeyFromEnv !== 'string' || !/^[A-Z_][A-Z0-9_]{0,99}$/.test(value.apiKeyFromEnv) ||
+            typeof environment[value.apiKeyFromEnv] !== 'string' || /[\r\n]/.test(environment[value.apiKeyFromEnv])))
+      )
+        fail('Model resources require a fixed secure origin, model name, token bound and optional key variable');
+      const { apiKeyFromEnv, ...rest } = value;
+      resources.set(id, { ...rest, origin: origin.origin, headers: apiKeyFromEnv ? { 'x-api-key': environment[apiKeyFromEnv] } : {} });
+      continue;
+    }
     if (value.kind === 'http') {
       if (
         Object.keys(value).some(
