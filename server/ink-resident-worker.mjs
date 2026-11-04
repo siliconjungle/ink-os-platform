@@ -45,20 +45,25 @@ function prepare(entry, input) {
     api.ink_env_free(pointer, bytes.length);
   }
 }
-async function call({ entry, input }) {
+function measure(spans, name, run) {
+  if (!spans) return run();
+  const start = performance.timeOrigin + performance.now();
+  try { return run(); } finally { spans.push({ name, start, end: performance.timeOrigin + performance.now() }); }
+}
+async function call({ entry, input }, spans) {
   const selected = entries.find((candidate) => candidate.name === entry);
   if (!selected) throw Error('Select an exported Ink entry.');
-  const canonical = prepare(entry, input);
-  const args = parseExactJSON(canonical).map((value, index) =>
+  const canonical = measure(spans, "worker.prepare", () => prepare(entry, input));
+  const args = measure(spans, "worker.decode", () => parseExactJSON(canonical).map((value, index) =>
     native(value, selected.params[index].type, module.metadata.named_types),
-  );
+  ));
   let result;
   if (selected.action) {
     if (!state) throw Error('Resident Ink state was not loaded.');
     if (!bindings.has(entry)) bindings.set(entry, state.bind(entry));
-    result = bindings.get(entry)(...args);
-  } else result = module.callOwned(entry, args);
-  const visible = publicResult(result, selected, artifact.manifest);
+    result = measure(spans, "worker.compute", () => bindings.get(entry)(...args));
+  } else result = measure(spans, "worker.compute", () => module.callOwned(entry, args));
+  const visible = measure(spans, "worker.encode", () => publicResult(result, selected, artifact.manifest));
   if (Buffer.byteLength(visible.wire) > 8 * 1024 * 1024)
     throw Error('Ink output exceeds 8 MiB.');
   return {
@@ -68,6 +73,7 @@ async function call({ entry, input }) {
 }
 parentPort.on('message', async (message) => {
   try {
+    const spans = message.trace ? [] : undefined;
     let result;
     if (message.op === 'load') {
       state = module.createState();
@@ -82,11 +88,11 @@ parentPort.on('message', async (message) => {
           throw Error('Ink application journal replay mismatch.');
       }
       result = true;
-    } else if (message.op === 'call') result = await call(message);
+    } else if (message.op === 'call') result = await call(message, spans);
     else if (message.op === 'checkpoint')
       result = Buffer.from(await state.checkpoint()).toString('base64');
     else throw Error('Unknown resident Ink operation.');
-    parentPort.postMessage({ value: result });
+    parentPort.postMessage({ value: result, ...(spans ? { trace: spans } : {}) });
   } catch (error) {
     parentPort.postMessage({ error: error.message });
   }

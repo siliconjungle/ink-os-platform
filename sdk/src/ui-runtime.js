@@ -16,6 +16,7 @@ export async function mountInkUi({
   onError = () => {},
   onStatus = () => {},
   onLifecycle = () => {},
+  onTrace,
 }) {
   let closed = false,
     hidden = false,
@@ -28,10 +29,19 @@ export async function mountInkUi({
     pending = null,
     draining = false,
     drainScheduled = false;
+  // Optional local timing observer. Observer failures cannot alter interaction.
+  const trace = (name, start, detail = {}) => {
+    if (!onTrace) return;
+    try { onTrace({ name, start, end: performance.now(), detail }); } catch {}
+  };
   const queue = [];
   const renderer = createDomUi(element, { onEvent: enqueue, onLifecycle });
   function serial(run) {
-    const task = tail.catch(() => {}).then(run);
+    const queued = onTrace ? performance.now() : 0;
+    const task = tail.catch(() => {}).then(() => {
+      trace("ui.queue", queued);
+      return run();
+    });
     tail = task;
     task.catch((error) => {
       if (!closed) onError(error);
@@ -40,6 +50,7 @@ export async function mountInkUi({
   }
   function apply(value) {
     if (closed) return;
+    const started = onTrace ? performance.now() : 0;
     if (!frame || value.id !== frame.id) {
       renderer.rebase(value);
       sequence = 0;
@@ -51,6 +62,7 @@ export async function mountInkUi({
     else dirty = true;
     frame = { ...value, revision: renderer.revision };
     element.setAttribute('aria-busy', 'false');
+    trace('ui.apply', started, { revision: renderer.revision, operations: value.patch?.operations.length ?? null });
   }
   async function open() {
     const value = await transport.open({ target: 'dom' });
@@ -80,7 +92,10 @@ export async function mountInkUi({
   function invalidate() {
     dirty = true;
     if (closed || hidden || timer !== undefined) return;
+    const started = onTrace ? performance.now() : 0;
+    trace("ui.invalidate", started, { delayMs: 32 });
     timer = setTimeout(() => {
+      trace("ui.coalesce", started);
       timer = undefined;
       void serial(read);
     }, 32);

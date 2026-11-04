@@ -760,15 +760,30 @@
 		validateUiTree: () => validateUiTree
 	});
 	/** A serialized, bounded event lane; keystrokes update their local controls first. */
-	async function mountInkUi({ element, transport, subscribe = () => () => {}, onError = () => {}, onStatus = () => {}, onLifecycle = () => {} }) {
+	async function mountInkUi({ element, transport, subscribe = () => () => {}, onError = () => {}, onStatus = () => {}, onLifecycle = () => {}, onTrace }) {
 		let closed = false, hidden = false, frame, sequence = 0, tail = Promise.resolve(), dirty = false, timer, heartbeat, pending = null, draining = false, drainScheduled = false;
+		const trace = (name, start, detail = {}) => {
+			if (!onTrace) return;
+			try {
+				onTrace({
+					name,
+					start,
+					end: performance.now(),
+					detail
+				});
+			} catch {}
+		};
 		const queue = [];
 		const renderer = createDomUi(element, {
 			onEvent: enqueue,
 			onLifecycle
 		});
 		function serial(run) {
-			const task = tail.catch(() => {}).then(run);
+			const queued = onTrace ? performance.now() : 0;
+			const task = tail.catch(() => {}).then(() => {
+				trace("ui.queue", queued);
+				return run();
+			});
 			tail = task;
 			task.catch((error) => {
 				if (!closed) onError(error);
@@ -777,6 +792,7 @@
 		}
 		function apply(value) {
 			if (closed) return;
+			const started = onTrace ? performance.now() : 0;
 			if (!frame || value.id !== frame.id) {
 				renderer.rebase(value);
 				sequence = 0;
@@ -787,6 +803,10 @@
 				revision: renderer.revision
 			};
 			element.setAttribute("aria-busy", "false");
+			trace("ui.apply", started, {
+				revision: renderer.revision,
+				operations: value.patch?.operations.length ?? null
+			});
 		}
 		async function open() {
 			const value = await transport.open({ target: "dom" });
@@ -816,7 +836,10 @@
 		function invalidate() {
 			dirty = true;
 			if (closed || hidden || timer !== void 0) return;
+			const started = onTrace ? performance.now() : 0;
+			trace("ui.invalidate", started, { delayMs: 32 });
 			timer = setTimeout(() => {
+				trace("ui.coalesce", started);
 				timer = void 0;
 				serial(read);
 			}, 32);

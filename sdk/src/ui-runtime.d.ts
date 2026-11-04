@@ -179,6 +179,7 @@ export function mountInkUi(options: {
     reopen?: () => Promise<void>;
   }) => void;
   onLifecycle?: (event: UiLifecycle) => void;
+  onTrace?: (event: { name: string; start: number; end: number; detail: Record<string, unknown> }) => void;
 }): Promise<{
   readonly renderer: DomUi;
   readonly pending: boolean;

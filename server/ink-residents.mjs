@@ -41,6 +41,8 @@ export async function javascriptResident(compiled, { timeout = 30000 } = {}) {
     pending = null;
     clearTimeout(current.timer);
     worker.unref();
+    // Private, opt-in benchmark telemetry never enters the Ink result or journal.
+    try { current.diagnostic?.(message.trace || []); } catch {}
     message.error
       ? current.reject(Error(message.error))
       : current.resolve(message.value);
@@ -59,8 +61,8 @@ export async function javascriptResident(compiled, { timeout = 30000 } = {}) {
           fail(Error('Ink operation exceeded its execution time limit.'));
           void worker.terminate();
         }, timeout);
-        pending = { resolve, reject, timer };
-        worker.postMessage(message);
+        pending = { resolve, reject, timer, diagnostic: this.onDiagnostic };
+        worker.postMessage(this.onDiagnostic ? { ...message, trace: true } : message);
       });
     },
     close() {

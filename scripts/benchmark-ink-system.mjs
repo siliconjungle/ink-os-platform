@@ -1,3 +1,4 @@
+import { SystemProfile, jsonBytes } from './lib/ink-system-profile.mjs';
 import { chromium } from 'playwright-core';
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
@@ -17,20 +18,25 @@ const execute = promisify(execFile),
     const i = args.indexOf(name);
     return i < 0 ? fallback : args[i + 1];
   },
-  mode = option('--mode');
+  mode = option('--mode'),
+  tracing = args.includes('--trace'),
+  edits = Number(option('--edits', '16')),
+  rowCounts = option('--rows', '64').split(',').map(Number);
+if (!Number.isInteger(edits) || edits < 1 || edits > 64 || !rowCounts.length || rowCounts.some(n => !Number.isInteger(n) || n < 20 || n > 4096)) throw Error('Use 20–4096 rows and 1–64 edits');
 if (!mode) {
   const runs = [];
-  for (const target of ['baseline-javascript', 'javascript', 'native']) {
+  for (const rows of rowCounts) for (const target of option('--modes', 'baseline-javascript,javascript,native').split(',')) {
     const result = await execute(
       process.execPath,
-      [fileURLToPath(import.meta.url), '--mode', target],
+      [fileURLToPath(import.meta.url), '--mode', target, '--rows', String(rows), '--edits', String(edits), ...(tracing ? ['--trace'] : [])],
       { env: process.env, maxBuffer: 8 * 1024 * 1024 },
     );
     runs.push(JSON.parse(result.stdout));
   }
   const report = {
-      schema: 1,
+      schema: tracing ? 2 : 1,
       recordedAt: new Date().toISOString(),
+      source: { commit: (await execute('git', ['rev-parse','HEAD'])).stdout.trim(), trackedChanges: (await execute('git', ['status','--porcelain','--untracked-files=no'])).stdout.trim() },
       host: {
         platform: platform(),
         arch: arch(),
@@ -39,7 +45,7 @@ if (!mode) {
         logicalCpus: cpus().length,
       },
       scope:
-        'Fresh Node/browser process per mode; loopback owner HTTP fixture, typed UI runtime and actual DOM paint in two panes. Explicit replay, exploratory measurements; no automatic profitability claim. Excludes production authentication, desktop MessagePort and Electron/window-compositor coverage. Lost reply is a deliberately discarded completed application reply.',
+        'Fresh Node/browser process per mode; loopback owner HTTP fixture, typed UI runtime, DOM updates in two panes and an animation-frame proxy; physical paint is not measured. Explicit replay, exploratory measurements; no automatic profitability claim. Excludes production authentication, desktop MessagePort and Electron/window-compositor coverage. Lost reply is a deliberately discarded completed application reply.',
       runs,
     },
     path = resolve(option('--output', 'docs/benchmarks/tables-system.json'));
@@ -50,6 +56,7 @@ if (!mode) {
       output: path,
       runs: runs.map((r) => ({
         mode: r.mode,
+        rows: r.workload.seedRows,
         editToPaint: r.editToPaint,
         concurrency: r.concurrency,
         recoveryMs: r.recoveryMs,
@@ -69,6 +76,8 @@ const cleanups = [],
       collaborative: true,
     },
   );
+const rows = rowCounts[0], profile = tracing ? new SystemProfile() : null;
+let profiling = tracing;
 let p = f.p,
   version = 0;
 const streams = new Set();
@@ -76,7 +85,7 @@ let received = 0,
   sent = 0,
   requests = 0,
   loseReply = false;
-for (let id = 1; id <= 64; id++) {
+for (let id = 1; id <= rows; id++) {
   await f.call(
     'put',
     [version, { id, title: 'Item ' + id, amount: id, open: true }],
@@ -91,7 +100,11 @@ let stop = p.world.subscribe((event) => {
       event.object.kind === 'state' &&
       event.object.title === 'ink-app:state')
   )
-    for (const stream of streams) stream.write('data: {}\n\n');
+    for (const stream of streams) {
+      const data = 'data: ' + JSON.stringify({ trace: profile?.current?.trace ?? null, type: event.type }) + '\n\n';
+      profile?.mark('sse.send', { bytes: Buffer.byteLength(data), type: event.type });
+      stream.write(data);
+    }
 });
 const server = createServer(async (req, res) => {
   try {
@@ -109,12 +122,18 @@ const server = createServer(async (req, res) => {
       res.on('close', () => streams.delete(res));
       return;
     }
+    if (req.url === '/clock') { res.end(String(performance.timeOrigin + performance.now())); return; }
     if (req.url === '/rpc') {
+      const requestDetail = {};
+      const dispatch = async () => {
       let text = '';
       for await (const b of req) text += b;
       received += Buffer.byteLength(text);
       requests++;
-      const { action, name, id, input } = JSON.parse(text);
+      const request = profile ? profile.span('http.decode', {}, () => JSON.parse(text)) : JSON.parse(text);
+      const { action, name, id, input } = request;
+      if (profiling) req.profileRequest = request;
+      Object.assign(requestDetail, { action, name });
       let value;
       if (action === 'put')
         value = await runInstalledInk(
@@ -141,18 +160,25 @@ const server = createServer(async (req, res) => {
         loseReply = false;
         res.setHeader('X-Ink-Benchmark-Lost-Reply', '1');
       }
-      const body = JSON.stringify(value);
+      const body = profile ? profile.span('http.encode', {}, () => JSON.stringify(value)) : JSON.stringify(value);
       sent += Buffer.byteLength(body);
       res.setHeader('Content-Type', 'application/json');
       res.end(body);
-      return;
+      if (profiling) profile.span('profile.accounting', {}, () => {
+        profile.rpc.push({ trace: profile.current.trace, action, name, received: jsonBytes(request), sent: jsonBytes(value) });
+      });
+      };
+      return await (profiling ? profile.run(req.headers['x-ink-profile'] || 'background', 'http.server', requestDetail, dispatch) : dispatch());
     }
     res.setHeader('Content-Type', 'text/html');
     res.end('<main id="tables"></main><main id="dashboard"></main>');
   } catch (error) {
     res.statusCode = error.status || 500;
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ error: error.message, current: error.current }));
+    const value = { error: error.message, current: error.current }, text = JSON.stringify(value);
+    sent += Buffer.byteLength(text);
+    if (profiling && req.profileRequest) profile.rpc.push({ trace: req.headers['x-ink-profile'] || 'background', action: req.profileRequest.action, name: req.profileRequest.name, status: res.statusCode, received: jsonBytes(req.profileRequest), sent: jsonBytes(value) });
+    res.end(text);
   }
 });
 await new Promise((done) => server.listen(0, '127.0.0.1', done));
@@ -184,18 +210,40 @@ const rss = async () => {
 try {
   const startup = performance.now();
   await page.goto('http://127.0.0.1:' + server.address().port);
-  await page.evaluate(async () => {
+  await page.evaluate(async (tracing) => {
     const { mountInkUi } = await import('/sdk/ui-runtime.js');
     globalThis.uiErrors = [];
+    globalThis.profileTrace = null;
+    globalThis.profileEvents = [];
+    globalThis.profileMark = (name, start, end, detail = {}) => {
+      if (tracing && profileTrace && profileEvents.length < 20000) profileEvents.push({ trace: profileTrace, name, start, end, detail });
+    };
+    globalThis.clockSamples = [];
+    if (tracing) for (let i = 0; i < 9; i++) {
+      const start = performance.timeOrigin + performance.now();
+      const server = Number(await (await fetch('/clock')).text());
+      const end = performance.timeOrigin + performance.now();
+      clockSamples.push({ offset: (start + end) / 2 - server, uncertainty: (end - start) / 2 });
+    }
     const listeners = new Set(),
       stream = new EventSource('/events');
-    stream.onmessage = () => listeners.forEach((fn) => fn());
+    stream.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      profileMark('sse.received', performance.now(), performance.now(), data);
+      listeners.forEach((fn) => fn());
+    };
     globalThis.rpc = async (action, name, id, input) => {
+      const started = performance.now();
       const r = await fetch('/rpc', {
           method: 'POST',
+          headers: tracing && profileTrace ? { 'X-Ink-Profile': profileTrace } : {},
           body: JSON.stringify({ action, name, id, input }),
         }),
-        value = await r.json();
+        headersAt = performance.now(), text = await r.text(), readAt = performance.now(), value = JSON.parse(text), parsedAt = performance.now();
+      profileMark('http.client.headers', started, headersAt, { action, name });
+      profileMark('http.client.body', headersAt, readAt, { action, name });
+      profileMark('http.client.decode', readAt, parsedAt, { action, name });
+      profileMark('http.client', started, parsedAt, { action, name });
       if (r.headers.get('X-Ink-Benchmark-Lost-Reply'))
         throw Error('Deliberately discarded reply');
       if (!r.ok)
@@ -220,8 +268,9 @@ try {
           return () => listeners.delete(fn);
         },
         onError: (error) => uiErrors.push(error.message),
+        ...(tracing ? { onTrace: event => profileMark(event.name, event.start, event.end, { ...event.detail, name }) } : {}),
       });
-  });
+  }, tracing);
   await page.waitForFunction(
     () => document.querySelectorAll('li').length === 40,
   );
@@ -235,12 +284,15 @@ try {
       return bytes;
     },
     appJournalBefore = await docBytes(),
-    networkBefore = { received, sent, requests };
-  for (let i = 0; i < 16; i++) {
+    networkBefore = { received, sent, requests }, editSamples = [], profileRpcStart = profile?.rpc.length ?? 0, profileSpanStart = profile?.spans.length ?? 0;
+  if (profile) await profile.attach(p);
+  for (let i = 0; i < edits; i++) {
     const label = 'Edit ' + i,
       latency = await page.evaluate(
         async ({ version, label, i }) => {
+          globalThis.profileTrace = 'edit-' + i;
           const start = performance.now();
+          profileMark('edit.start', start, start);
           await rpc('put', null, null, {
             args: [
               version,
@@ -254,13 +306,20 @@ try {
             ).length !== 2
           )
             await new Promise(requestAnimationFrame);
+          const observed = performance.now();
+          profileMark('dom.observed', observed, observed);
           await new Promise(requestAnimationFrame);
-          return performance.now() - start;
+          const end = performance.now();
+          profileMark('frame.tail', observed, end);
+          const result = { trace: profileTrace, start, end, origin: performance.timeOrigin };
+          globalThis.profileTrace = null;
+          return result;
         },
         { version, label, i },
       );
     version++;
-    latencies.push(latency);
+    latencies.push(latency.end - latency.start);
+    editSamples.push(latency);
   }
   const journalBytes = p.world.journal.bytes - journalBefore,
     appJournalBytes = (await docBytes()) - appJournalBefore,
@@ -269,6 +328,24 @@ try {
       sent: sent - networkBefore.sent,
       requests: requests - networkBefore.requests,
     };
+  const profileResult = profile ? {
+    clock: await page.evaluate(() => clockSamples.sort((a,b) => a.uncertainty - b.uncertainty)[0]),
+    browserOrigin: editSamples[0].origin, edits: editSamples,
+    browser: await page.evaluate(() => profileEvents),
+    server: profile.spans.slice(profileSpanStart),
+    rpc: profile.rpc.slice(profileRpcStart),
+    checkpoints: profile.checkpoints.filter(s => s.trace.startsWith('edit-')),
+    wal: profile.wal.filter(s => s.trace.startsWith('edit-')), dropped: profile.dropped,
+    workerScope: 'JavaScript worker timings split checked preparation, decoding, compute and result encoding. Native resident spans include computation, codecs and IPC.',
+    presentationScope: 'DOM mutation completion and next animation-frame opportunity; physical presentation and compositor paint are not measured.',
+  } : undefined;
+  if (profileResult) {
+    assert.equal(profileResult.rpc.reduce((n,r) => n + r.received.bytes + r.sent.bytes, 0), wire.received + wire.sent, 'RPC body accounting must reconcile');
+    assert.equal(profileResult.wal.reduce((n,r) => n + r.bytes, 0), appJournalBytes, 'WAL write accounting must reconcile');
+    assert.equal(profileResult.dropped, 0);
+  }
+  profiling = false;
+  profile?.close();
   const wireRpc = async (action, args, requestId) => {
     const response = await fetch(
       'http://127.0.0.1:' + server.address().port + '/rpc',
@@ -429,16 +506,16 @@ try {
         startupMs,
       },
       workload: {
-        seedRows: 64,
-        edits: 16,
+        seedRows: rows,
+        edits,
         pageRows: 20,
         apps: 2,
         concurrentRequests: 16,
       },
       editToPaint: {
         samplesMs: latencies,
-        p50Ms: latencies[7],
-        p95Ms: latencies[15],
+        p50Ms: latencies[Math.ceil(edits * .5) - 1],
+        p95Ms: latencies[Math.ceil(edits * .95) - 1],
       },
       concurrency: {
         durationMs: concurrencyMs,
@@ -456,13 +533,13 @@ try {
       persisted: {
         worldJournalBytes: journalBytes,
         appJournalBytes,
-        bytesPerEdit: (journalBytes + appJournalBytes) / 16,
+        bytesPerEdit: (journalBytes + appJournalBytes) / edits,
         scope:
           'Authoritative collaboration WAL plus World projection WAL; includes Ink transaction payloads/receipts; excludes checkpoint replacement and filesystem metadata',
       },
       transferred: {
         ...wire,
-        bytesPerEdit: (wire.received + wire.sent) / 16,
+        bytesPerEdit: (wire.received + wire.sent) / edits,
         scope:
           'HTTP RPC request/response bodies; excludes headers, SSE notifications and initial source/assets',
       },
@@ -473,6 +550,7 @@ try {
           'RSS sum of this Node process and its descendants at one steady-state sample; shared pages may be counted more than once',
         browserHeap,
       },
+      profile: profileResult,
       sharedQueries: { reads: queryReads, hits: queryHits },
       recoveryMs,
       validation: {
@@ -486,6 +564,7 @@ try {
     }),
   );
 } finally {
+  profile?.close();
   clearInterval(memoryTimer);
   stop();
   await page
