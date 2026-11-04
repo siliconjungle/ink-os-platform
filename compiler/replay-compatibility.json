@@ -1,18 +1,18 @@
 {
   "schema": 1,
-  "dependencyLockSHA256": "b656f0d7cb3f802d35f90d1e7151a574c0f5085ca2e4165ac8eae17a8a574ac2",
+  "dependencyLockSHA256": "ab0893fd5567bc3298ad39c7dda2d4b967c48855259236a884d05446cf1577c6",
   "compatibleCompilerSHA256": [
     "a5f02fb3bc2223d5436831640b6111773a3cf32e969faec28f1c6187e3d66993",
     "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
     "29475ee79ddab3ac5ea036f9463f5833ce0338631ecb95b0739b2322a5cc61bd"
   ],
   "proofReplayRequired": true,
-  "scope": "Eligibility for current full proof, source-summary, artifact and target-byte replay only. The OS compatibility lowering revisions preserve the previously pinned src trees; checked proof units add no source equality premise.",
+  "scope": "Eligibility for current full proof, source-summary, artifact and target-byte replay only. The Rust, Wasm and GPU compatibility lowering revisions preserve the previously pinned src trees (the GPU revision changes only its JavaScript lowering pin). The JavaScript lowering now maintains filtered table views, reports changed state paths and writes snapshots faster (same bytes) and keeps F32 list captures under 1024 elements in packed arrays, so its emitted modules differ: packets that bind JavaScript artifact bytes from an older compiler fail replay and must be rebuilt. Checked proof units add no source equality premise.",
   "core": "6229997ba04f3e00068583e3ca225b88da1373e0",
   "lowerings": {
-    "js": "99f86436902b5cd040fdd9e8079cf361159520da",
+    "js": "f20d2855ee68bb372f303c98941edd3122426b97",
     "rust": "6e24285eef441011fe8a304ae4d5f973ec7c68f6",
     "wasm": "8f78c9f9bd29be6dad37e28183a1fcd3aedfe4c1",
-    "gpu": "b0ed46654086aa42542a4a7447a68963564980b0"
+    "gpu": "0fc0d952882b9c0b62a347a82ecd342aea2320d9"
   }
 }

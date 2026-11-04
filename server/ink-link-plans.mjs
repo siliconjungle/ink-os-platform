@@ -62,6 +62,39 @@ export function functionIdentity(core, name) {
 }
 
 /**
+ * Fields of a function's single parameter that its result can depend on, or
+ * null when the whole value may (it is passed on, returned or rebound). A pure
+ * function returns the same result for rows that agree on these fields, so
+ * link workers reuse its results row by row.
+ */
+export function paramFields(core, name) {
+  const program = (typeof core === 'string' ? JSON.parse(core) : core).program,
+    fn = program.functions.find((f) => f.name === name);
+  if (!fn || fn.params.length !== 1) return null;
+  const param = fn.params[0][0],
+    fields = new Set();
+  let whole = false;
+  const visit = (e, shadowed) => {
+    if (whole || !e || typeof e !== 'object') return;
+    if (Array.isArray(e)) {
+      for (const x of e) visit(x, shadowed);
+      return;
+    }
+    for (const [kind, v] of Object.entries(e)) {
+      if (kind === 'Var') whole ||= v === param && !shadowed;
+      else if (kind === 'Field' && Array.isArray(v) && v[0]?.Var === param && !shadowed) fields.add(v[1]);
+      else if (kind === 'Let' && Array.isArray(v)) {
+        visit(v[2], shadowed);
+        visit(v[3], shadowed || v[0] === param);
+      } else if (kind === 'Lambda' && Array.isArray(v)) visit(v[1], shadowed || v[0] === param);
+      else visit(v, shadowed);
+    }
+  };
+  visit(fn.body, false);
+  return whole ? null : [...fields].sort();
+}
+
+/**
  * Derive and check a plan's footprint. `data` is the consumer port's resolved
  * UiData type; `provider`/`consumer` carry each release's compiled program,
  * IR footprints and declared capabilities.

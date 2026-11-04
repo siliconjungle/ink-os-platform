@@ -2,6 +2,7 @@ import { parentPort, workerData } from 'node:worker_threads';
 import { parseExactJSON } from '../shared/exact-json.mjs';
 import { publicResult } from '../shared/ink-values.mjs';
 import { native } from './ink-input.mjs';
+import { changedPaths } from '../shared/ink-state-paths.mjs';
 
 const { artifact, entries } = workerData;
 const module = await import(
@@ -14,7 +15,8 @@ module.setParallelism?.(1);
 const api = (await WebAssembly.instantiate(workerData.compiler, {})).exports;
 let checked = false,
   state,
-  bindings;
+  bindings,
+  tracking = false;
 function prepare(entry, input) {
   const bytes = Buffer.from(
     JSON.stringify({
@@ -66,10 +68,10 @@ async function call({ entry, input }, spans) {
   const visible = measure(spans, "worker.encode", () => publicResult(result, selected, artifact.manifest));
   if (Buffer.byteLength(visible.wire) > 8 * 1024 * 1024)
     throw Error('Ink output exceeds 8 MiB.');
-  return {
-    ...visible,
-    committed: !!selected.action && result.committed === true,
-  };
+  const committed = !!selected.action && result.committed === true,
+    // The state paths this commit changed, when the runtime reports them.
+    paths = committed && tracking ? changedPaths(state.takeChanges(), artifact.manifest.state) : null;
+  return { ...visible, committed, ...(paths ? { paths } : {}) };
 }
 parentPort.on('message', async (message) => {
   try {
@@ -78,6 +80,7 @@ parentPort.on('message', async (message) => {
     if (message.op === 'load') {
       state = module.createState();
       bindings = new Map();
+      tracking = false;
       if (message.snapshot)
         await state.restore(
           new Uint8Array(Buffer.from(message.snapshot, 'base64')),
@@ -87,6 +90,7 @@ parentPort.on('message', async (message) => {
         if (!result.committed || result.wire !== record.wire)
           throw Error('Ink application journal replay mismatch.');
       }
+      tracking = !!state.trackChanges?.();
       result = true;
     } else if (message.op === 'call') result = await call(message, spans);
     else if (message.op === 'checkpoint')

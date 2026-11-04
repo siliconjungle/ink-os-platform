@@ -9,11 +9,12 @@
 // - reads neither queue behind the provider's writes nor enter its worker, and
 //   no provider handle is present where consumer code runs;
 // - one result per plan code and binding serves every consumer, and it is
-//   recomputed after a commit writes a root the provider query reads.
+//   recomputed after a commit changes a state path the provider query reads
+//   (docs/state-paths.md).
 //
-// The copy follows the provider by replaying each committed record, the same
-// deterministic replay recovery performs, and reloads from the journal after
-// any gap. Worker memory is leased from the shared resident pool and charged
+// The copy follows the provider by replaying committed records (several at
+// once when they queue up), the same deterministic replay recovery performs,
+// and reloads from the journal after any gap. Worker memory is leased from the shared resident pool and charged
 // to the consumer whose read started it; each evaluation is charged to the
 // consumer it runs for. Results live only in this bounded cache, never in
 // either app's state, and leave with the consumer or provider.
@@ -21,8 +22,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { installedInk } from './ink-apps.mjs';
 import { InkAppJournal, appJournalFormat } from './ink-app-journal.mjs';
 import { javascriptResident } from './ink-residents.mjs';
-import { admitLinkPlan } from './ink-link-plans.mjs';
-import { readRoots } from './ink-footprints.mjs';
+import { admitLinkPlan, paramFields } from './ink-link-plans.mjs';
+import { readPaths } from './ink-footprints.mjs';
 import { inkProgramKey } from './ink-compiler.mjs';
 import { hostBudget } from './execution-budget.mjs';
 import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
@@ -65,7 +66,7 @@ export class InkLinks {
     this.plans = new Map();
     this.results = new Map();
     this.bytes = 0;
-    this.counts = { admitted: 0, evaluations: 0, hits: 0, reused: 0, loads: 0, applies: 0, refreshed: 0 };
+    this.counts = { admitted: 0, evaluations: 0, hits: 0, reused: 0, loads: 0, applies: 0, batches: 0, refreshed: 0, calls: 0, rowsReused: 0 };
     this.listener = (commit) => this.onCommit(commit);
     platform.code.commitListeners?.add(this.listener);
   }
@@ -103,7 +104,7 @@ export class InkLinks {
           functions = Object.fromEntries(
             plan.code.map(({ function: name }) => {
               const fn = cCompiled.artifact.manifest.functions.find((f) => f.name === name);
-              return [name, { param: fn.params[0].type, result: fn.result }];
+              return [name, { param: fn.params[0].type, result: fn.result, fields: paramFields(cCompiled.artifact.core, name) }];
             }),
           );
         this.counts.admitted++;
@@ -111,7 +112,7 @@ export class InkLinks {
           plan,
           binding,
           compiled: pCompiled,
-          roots: readRoots(pFootprints, pCompiled, pCompiled.entries.find((e) => e.name === binding.entry)),
+          roots: readPaths(pFootprints, pCompiled, pCompiled.entries.find((e) => e.name === binding.entry), binding.input),
           consumerCode: plan.code.length
             ? { id: sha(canonical([cCompiled.artifact.manifest.core_sha256, plan.code])), javascript: cCompiled.artifact.javascript, functions, named }
             : null,
@@ -246,6 +247,9 @@ export class InkLinks {
         for (let attempt = 0; attempt < 3; attempt++) {
           snapshot.precise = this.reads.precise(admitted.binding.appId, admitted.binding.releaseId, admitted.roots);
           const result = await this.evaluate(admitted, owner, signal);
+          // Consumer function calls made, and rows answered from earlier ones.
+          this.counts.calls += result.calls || 0;
+          this.counts.rowsReused += result.reused || 0;
           if (Buffer.byteLength(result.wire) > RESULT_LIMIT) fail(413, 'Linked UI data exceeds 128 KiB');
           if (!this.reads.current(snapshot)) continue;
           const previous = entry.snapshot;
@@ -304,34 +308,17 @@ export class InkLinks {
     }
     return this.compute(entry, consumer.appId, signal);
   }
-  /** Follow a provider commit on its copies and refresh results that read a written root. */
-  onCommit({ namespace, stateKey, before, after, record, source, roots }) {
+  /** Follow a provider commit on its copies and refresh results that read a changed path. */
+  onCommit({ namespace, stateKey, before, after, header, record, source, roots }) {
     if (stateKey !== STATE) return;
-    const residents = this.platform.code.residents;
     for (const link of this.links.values()) {
       if (link.appId !== namespace || link.source !== source) continue;
-      const session = link.session;
-      this.serial(link, async () => {
-        // Apply only to the live copy that is exactly one commit behind. A
-        // copy that already caught up from the journal tail, or that is
-        // further behind, is left to the next read's sync.
-        if (!session || link.session !== session || link.revision !== before || residents.sessions.get(link.key) !== session || session.busy)
-          return;
-        await residents.acquire(link.key, () => fail(500, 'Link worker was evicted'));
-        try {
-          await session.endpoint.request({ op: 'apply', records: [record] });
-          this.counts.applies++;
-          // The commit may have compacted the journal onto a new base that
-          // already contains this record; follow the header either way.
-          const saved = await this.journal(link).read();
-          if (saved.revision === after) this.mark(link, saved);
-          else link.revision = null;
-        } catch {
-          link.revision = null;
-        } finally {
-          residents.release(session);
-        }
-      });
+      // Commits that arrive while the copy is busy are applied together.
+      (link.queue ||= []).push({ before, after, header, record });
+      if (!link.flushing) {
+        link.flushing = true;
+        this.serial(link, () => this.follow(link));
+      }
     }
     // Keep recently used results of this provider current.
     const written = roots ? new Set(roots) : null,
@@ -347,6 +334,42 @@ export class InkLinks {
         this.counts.refreshed++;
         this.compute(entry, entry.owner).catch(() => {});
       }
+  }
+  /**
+   * Apply queued commits to the live copy in one replay, when they continue
+   * exactly from the copy's revision. A copy that already caught up from the
+   * journal tail, or that missed a commit, is left to the next read's sync.
+   */
+  async follow(link) {
+    link.flushing = false;
+    const queue = link.queue || [],
+      residents = this.platform.code.residents,
+      session = link.session;
+    link.queue = [];
+    let start = queue.findIndex((c) => c.before === link.revision);
+    if (start < 0 || !session || residents.sessions.get(link.key) !== session || session.busy) return;
+    let end = start + 1;
+    while (end < queue.length && queue[end].before === queue[end - 1].after) end++;
+    const run = queue.slice(start, end),
+      last = run.at(-1);
+    await residents.acquire(link.key, () => fail(500, 'Link worker was evicted'));
+    try {
+      await session.endpoint.request({ op: 'apply', records: run.map((c) => c.record) });
+      this.counts.applies += run.length;
+      this.counts.batches = (this.counts.batches || 0) + 1;
+      // The commit's own header says where the copy now stands; a commit that
+      // compacted the journal names the new base, which already holds the run.
+      if (last.header) this.mark(link, { revision: last.after, value: last.header });
+      else {
+        const saved = await this.journal(link).read();
+        if (saved.revision === last.after) this.mark(link, saved);
+        else link.revision = null;
+      }
+    } catch {
+      link.revision = null;
+    } finally {
+      residents.release(session);
+    }
   }
   observe(event) {
     if (event.type !== 'deleted') return;

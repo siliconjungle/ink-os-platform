@@ -24,13 +24,16 @@ manifest's touched roots, which over-approximate.
 
 ## Precise invalidation
 
-- **Commit hints.** Each commit's hint lists the change's IR write roots.
+- **Commit hints.** Each commit's hint lists the [state paths](state-paths.md)
+  it changed, as the runtime reports them: roots, filtered views and keyed
+  rows. Without a report (an older compiler, a native artifact, a replayed
+  receipt) it lists every path of the change's IR write roots.
 - **Root versions.** `RootVersions` keeps per-root versions of each tracked
   provider. A hinted commit advances only its roots. Any unexplained state
   change advances every root: a restore, a migration, a replicated commit,
   or a missed event.
 - **Currency.** A cross-app snapshot, retained or not, is current until a
-  commit writes a root its exported query reads. Its `stateRevision` then
+  commit changes a state path its exported query reads. Its `stateRevision` then
   names the commit it was computed at; the value is unchanged since.
 - **Identical results.** A recomputed result with identical exact bytes keeps
   its snapshot identity. Consumers do not recompute their views, and
@@ -42,8 +45,9 @@ manifest's touched roots, which over-approximate.
   every commit of every app. Own-app commits still notify the app's own
   frames.
 
-Granularity is the state root. Rows and fields within a table are not
-tracked.
+Granularity is the [state path](state-paths.md): a whole root, the rows a
+filtered view admits, or the row a query parameter names. Fields within a row
+are not tracked.
 
 ## Link plans
 
@@ -95,10 +99,12 @@ Plans run in a **link worker** (`server/ink-link-worker.mjs`) that holds a
 read-only copy of the provider release's state.
 
 - **Loading.** The copy is restored from the provider's journal.
-- **Following.** It replays each committed record, the same deterministic
-  replay recovery uses. When a read arrives before a commit's announcement,
-  the copy catches up from the journal tail instead. It follows compactions
-  onto a new base, and any mismatch reloads it.
+- **Following.** It replays committed records, the same deterministic replay
+  recovery uses. Commits that arrive while the copy is busy are replayed
+  together, and the commit's own journal header says where the copy stands.
+  When a read arrives before a commit's announcement, the copy catches up
+  from the journal tail instead. It follows compactions onto a new base, and
+  any mismatch reloads it.
 - **No provider authority.** The worker has no World, storage, host-binding
   or effect access. Consumer modules are loaded only to call the admitted
   pure functions.
@@ -108,8 +114,14 @@ read-only copy of the provider release's state.
 - **Sharing.** One result per binding and plan code serves every consumer
   whose plan code is identical. The code identity is its call closure and
   types.
+- **Rows stay native.** Exported rows are not converted wholesale: consumer
+  functions see only the fields they read, and only the selected page is
+  converted to exact JSON.
+- **Row-level reuse.** A consumer function's result is reused for every row
+  that agrees on the parameter fields it reads (`paramFields`, from the
+  consumer's checked core). Purity, proved at admission, makes this exact.
 - **Freshness.** Recently used results are recomputed after a commit that
-  writes a root the provider query reads, so they are current before the
+  changes a path the provider query reads, so they are current before the
   next read.
 - **Delivery.** Plan snapshots carry the same fields as retained queries:
   `id`, `sequence`, `stateRevision`, `versionWire`, `delta`.
@@ -121,10 +133,11 @@ read-only copy of the provider release's state.
   either app's state. They are dropped when their consumers or provider are
   deleted.
 
-Aggregates are recomputed on each relevant commit; they are not maintained
-row by row. The provider query still scans what it scans, and indexed
-placement is separate work. Running two apps in one process and fusing writes
-across apps are deliberately not done.
+Aggregates are still summed over the matching rows on each relevant commit,
+from reused per-row results. The provider query reads maintained filtered
+views where its filters are closed ([state paths](state-paths.md)); it still
+builds every row it returns. Running two apps in one process and fusing
+writes across apps are deliberately not done.
 
 ## Ink tasks
 
@@ -201,7 +214,9 @@ effects of these changes are therefore:
 - far fewer bytes cross the link;
 - consumers can filter and aggregate at all.
 
-The query itself is not faster.
+The query itself was not faster in this run. [State paths](state-paths.md)
+records the later work that made it so: maintained filtered views, row-level
+reuse and faster snapshots.
 
 ## Validation
 
@@ -215,6 +230,8 @@ The query itself is not faster.
   - plans checked against their definition;
   - sharing between two consumers;
   - follow-by-replay with eager refresh;
+  - reads that depend on filtered views and keyed rows stay current through
+    commits that change neither (skipped when the compiler predates them);
   - undeclared plans refused;
   - impure or mistyped plans rejected at system build.
 - `tests/ink-tasks.test.mjs`:

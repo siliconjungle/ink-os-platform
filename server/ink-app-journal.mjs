@@ -297,7 +297,7 @@ export class InkAppJournal {
     };
     const committed = await this.batch(saved.revision, [{ key: this.key, value: root }]);
     if (compact || saved.value?.format !== appJournalFormat) await this.collect(committed);
-    return { ...committed, receipts, compacted: compact, chunksWritten: written };
+    return { ...committed, header: root, receipts, compacted: compact, chunksWritten: written };
   }
   /** Delete payloads the current journal no longer references. */
   async collect(saved) {

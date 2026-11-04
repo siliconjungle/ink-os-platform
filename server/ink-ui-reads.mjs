@@ -4,7 +4,7 @@ import { resolveEffectType, effectTypeEqual } from '../shared/ink-effects.mjs';
 import { randomBytes } from 'node:crypto';
 import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
 import { RootVersions } from './ink-root-versions.mjs';
-import { readRoots } from './ink-footprints.mjs';
+import { readPaths } from './ink-footprints.mjs';
 import { InkLinks } from './ink-links.mjs';
 const fail = (status, message) => {
   throw Object.assign(Error(message), { status });
@@ -147,7 +147,7 @@ export class InkUiReads {
       entry = compiled.entries.find((entry) => entry.name === binding.entry);
     return {
       provider,
-      roots: entry ? readRoots(await this.platform.code.footprints(compiled), compiled, entry) : null,
+      roots: entry ? readPaths(await this.platform.code.footprints(compiled), compiled, entry, binding.input) : null,
     };
   }
   trim() {

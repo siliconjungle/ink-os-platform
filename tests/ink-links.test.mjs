@@ -54,9 +54,20 @@ test('cross-app reads refresh only when a commit writes a state root the exporte
   await f.call('touch', [row]);
   const same = await refresh(changed);
   assert.deepEqual(same.computed, []);
-  // The query ran again, but no new snapshot (or delivery sequence) was made.
-  assert.equal(p.inkViews.reads.reads, reads + 1);
-  assert.equal(p.inkViews.reads.reused, 1);
+  const tables = await p.inkViews.program(
+    { appId: deployed.apps.tables.appId, releaseId: JSON.parse(p.app(deployed.apps.tables.appId).body).releaseId },
+    owner,
+  );
+  if (tables.compiled.artifact.manifest.state.filters) {
+    // The runtime reports that the commit changed no row: nothing re-runs.
+    assert.equal(p.inkViews.reads.reads, reads + 1);
+    assert.equal(p.inkViews.reads.reused, 0);
+  } else {
+    // From IR write roots alone the query runs again, but its identical result
+    // makes no new snapshot (or delivery sequence).
+    assert.equal(p.inkViews.reads.reads, reads + 1);
+    assert.equal(p.inkViews.reads.reused, 1);
+  }
 });
 
 const PLAN = { version: 1, where: 'big', limit: 1, aggregate: { op: 'sum', value: 'amount' } };
@@ -174,4 +185,54 @@ test('the provider copy follows commits by replay and keeps used results current
   // A commit that writes no root the query reads leaves the result as it is.
   await f.call('abort_edit', [{ id: 10, title: 'x', amount: 1, open: true }]);
   assert.equal(await port.read(), next);
+});
+
+// Filtered views and keyed rows (compilers whose JavaScript lowering reports
+// state paths): a commit that changes Rows but no row the reader can see
+// leaves the reader current.
+const KEYED = `
+query item(id:u64)->UiData<Item> reads(Rows){let row=Rows.get(id).unwrap_or(Row{id:0,title:"",amount:0,open:false});return UiData<Item>{rows:[Item{id:row.id,title:row.title,amount:row.amount,aggregate:0,revision:0}],total:None,version:0};}
+`;
+test('reads depend on the filtered views and keyed rows they use, not whole tables', async (t) => {
+  const f = await systemFixture(t, {
+      baseline: true,
+      edit: (input) => extendTables(input, `${'\n'}state Notes:u64=0;
+change note(x:u64)->Result<Unit,String> reads(Notes) writes(Notes){Notes=x;return Ok(());}
+change touch(row:Row)->Result<Unit,String> reads(Rows) writes(Rows){Rows.put(row.id,row);return Ok(());}` + KEYED, ['note', 'touch', 'item']),
+    }),
+    { p, deployed } = f,
+    tables = { appId: deployed.apps.tables.appId, releaseId: JSON.parse(p.app(deployed.apps.tables.appId).body).releaseId },
+    program = await p.inkViews.program(tables, owner),
+    direct = program.components.get('results');
+  if (!program.compiled.artifact.manifest.state.filters)
+    return t.skip('the compiler predates filtered views and change reports');
+  const reads = p.inkViews.reads,
+    dashboard = { ...direct.read, ...tables },
+    item = (id) => ({ ...direct.read, ...tables, entry: 'item', input: JSON.stringify([id]) }),
+    read = (binding) => reads.read(binding, direct.data, undefined, tables);
+  const row = (id, open) => ({ id, title: 'Row ' + id, amount: id, open });
+  await f.call('touch', [row(1, true)]);
+  await f.call('touch', [row(2, false)]);
+  const first = await read(dashboard),
+    three = await read(item(3)),
+    evaluated = reads.reads;
+
+  // A closed row changes Rows but not the open view the dashboard reads.
+  await f.call('touch', [row(4, false)]);
+  assert.equal(await read(dashboard), first);
+  // A write to another key leaves a keyed read current.
+  assert.equal(await read(item(3)), three);
+  assert.equal(reads.reads, evaluated);
+
+  // Writing the key, or a row the view admits, re-runs the read.
+  await f.call('touch', [row(3, false)]);
+  assert.equal(await read(dashboard), first);
+  const changed = await read(item(3));
+  assert.notEqual(changed, three);
+  assert.equal(changed.value.rows[0].title, 'Row 3');
+  await f.call('touch', [row(5, true)]);
+  const opened = await read(dashboard);
+  assert.notEqual(opened, first);
+  assert.ok(opened.value.rows.some((r) => Number(r.id) === 5));
+  assert.equal(reads.reads, evaluated + 2);
 });
