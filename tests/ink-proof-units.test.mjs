@@ -248,3 +248,170 @@ test('a different compiler module cannot inherit another module’s checked unit
   assert.equal(after.checked - before.checked, 180);
   assert.equal(after.reused - before.reused, 0);
 });
+
+test('descriptor property order reuses the same checked facts without a new compiler session', async (t) => {
+  t.after(closeProofCompiler);
+  await closeProofCompiler();
+  const source = await program();
+  await compilerRequest(request(source, packed));
+  const before = proofAdmissionStats(),
+    envelope = JSON.parse(packed);
+  envelope.units = Object.fromEntries(
+    Object.entries(envelope.units).map(([id, unit]) => [
+      id,
+      {
+        brotli: unit.brotli,
+        dependencies: unit.dependencies,
+        bytes: unit.bytes,
+      },
+    ]),
+  );
+  await compilerRequest(
+    request(changedSource(source), JSON.stringify(envelope)),
+  );
+  const after = proofAdmissionStats();
+  assert.equal(after.sessions, before.sessions);
+  assert.equal(after.checked, before.checked);
+  assert.equal(after.reused - before.reused, 180);
+});
+
+test('a rejected application still accounts for checked dependencies and phase work', async (t) => {
+  const { ProofCompiler } = await import('../server/ink-proof-compiler.mjs'),
+    { ExecutionBudget } = await import('../server/execution-budget.mjs'),
+    { compilerModule } = await import('../server/ink-compiler.mjs');
+  const pool = new ProofCompiler({
+    budget: new ExecutionBudget({ limits: { cpu: 1, memoryMB: 1024 } }),
+  });
+  t.after(() => pool.close());
+  const source = await program(),
+    { module } = await compilerModule(),
+    bad = JSON.parse(packed),
+    header = parseExactJSON(bad.plan);
+  header.steps[0].package.views[0].factorisation = { Refl: { U64: 7 } };
+  bad.plan = stringifyExactJSON(header);
+  await assert.rejects(
+    pool.compile(module, request(source, JSON.stringify(bad))),
+  );
+  const failed = pool.stats();
+  assert.equal(failed.checked, 180);
+  assert.equal(failed.requests, 0);
+  assert.equal(failed.failedRequests, 1);
+  assert.equal(failed.last.outcome, 'rejected');
+  assert.ok(failed.workerNS.admit > 0);
+  assert.ok(failed.workerNS.compose > 0);
+  assert.ok(failed.kernelRequestBytes > 7 * 1024 * 1024);
+  const { total, ...parts } = failed.workerNS;
+  assert.ok(Object.values(parts).reduce((a, b) => a + b, 0) <= total);
+  await pool.compile(module, request(source, packed));
+  const success = pool.stats();
+  assert.equal(success.checked, 180);
+  assert.equal(success.reused, 180);
+  assert.equal(success.requests, 1);
+  assert.equal(success.failedRequests, 1);
+});
+
+test(
+  'the admission deadline includes memory waiting and CPU waiting without bootstrapping a guest',
+  { timeout: 10000 },
+  async (t) => {
+    const { ProofCompiler } = await import('../server/ink-proof-compiler.mjs'),
+      { ExecutionBudget } = await import('../server/execution-budget.mjs'),
+      { compilerModule } = await import('../server/ink-compiler.mjs');
+    const source = await program(),
+      { module } = await compilerModule();
+    for (const resources of [{ memoryMB: 1024 }, { cpu: 1 }]) {
+      const budget = new ExecutionBudget({
+          limits: { cpu: 1, memoryMB: 1024 },
+        }),
+        hold = await budget.acquire({ owner: 'contention-fixture', resources }),
+        pool = new ProofCompiler({ budget });
+      t.after(async () => {
+        hold.release();
+        await pool.close();
+      });
+      await assert.rejects(
+        pool.compile(module, request(source, packed), { timeout: 30 }),
+        { status: 408 },
+      );
+      assert.equal(pool.stats().sessions, 0);
+      assert.equal(pool.stats().queued, 0);
+      assert.equal(budget.snapshot().queued, 0);
+      assert.equal(budget.snapshot().used.memoryMB, resources.memoryMB || 0);
+      assert.equal(budget.snapshot().used.cpu, resources.cpu || 0);
+      hold.release();
+      await pool.close();
+    }
+  },
+);
+
+test(
+  'expired FIFO requests release their payload slots without cancelling the live head',
+  { timeout: 10000 },
+  async (t) => {
+    const { ProofCompiler } = await import('../server/ink-proof-compiler.mjs'),
+      { ExecutionBudget } = await import('../server/execution-budget.mjs'),
+      { compilerModule } = await import('../server/ink-compiler.mjs');
+    const source = await program(),
+      { module } = await compilerModule(),
+      budget = new ExecutionBudget({ limits: { cpu: 1, memoryMB: 1024 } }),
+      hold = await budget.acquire({
+        owner: 'contention-fixture',
+        resources: { cpu: 1 },
+      }),
+      pool = new ProofCompiler({ budget });
+    t.after(async () => {
+      hold.release();
+      await pool.close();
+    });
+    const head = pool.compile(module, request(source, packed), {
+        timeout: 5000,
+      }),
+      waiting = Array.from({ length: 15 }, () =>
+        pool.compile(module, request(source, packed), { timeout: 30 }),
+      );
+    await assert.rejects(
+      pool.compile(module, request(source, packed)),
+      /queue is full/,
+    );
+    const results = await Promise.allSettled(waiting);
+    assert.ok(
+      results.every((r) => r.status === 'rejected' && r.reason.status === 408),
+    );
+    assert.equal(pool.stats().queued, 1);
+    assert.equal(pool.queue.length, 0);
+    assert.equal(pool.stats().sessions, 0);
+    hold.release();
+    await head;
+    assert.equal(pool.stats().checked, 180);
+    assert.equal(pool.stats().requests, 1);
+    assert.equal(pool.stats().failedRequests, 15);
+    assert.equal(pool.stats().timeouts, 15);
+    assert.equal(pool.stats().queued, 0);
+  },
+);
+
+test(
+  'a delayed timer cannot start a guest or deliver an artifact after its monotonic deadline',
+  { timeout: 10000 },
+  async (t) => {
+    const { ProofCompiler } = await import('../server/ink-proof-compiler.mjs'),
+      { ExecutionBudget } = await import('../server/execution-budget.mjs'),
+      { compilerModule } = await import('../server/ink-compiler.mjs');
+    const source = await program(),
+      { module } = await compilerModule(),
+      budget = new ExecutionBudget({ limits: { cpu: 1, memoryMB: 1024 } }),
+      pool = new ProofCompiler({ budget });
+    t.after(() => pool.close());
+    const pending = pool.compile(module, request(source, packed), {
+        timeout: 10,
+      }),
+      until = performance.now() + 30;
+    // Keep timers from running while the resource-admission microtasks become due.
+    while (performance.now() < until) {}
+    await assert.rejects(pending, { status: 408 });
+    assert.equal(pool.stats().sessions, 0);
+    assert.equal(pool.stats().timeouts, 1);
+    assert.equal(budget.snapshot().used.memoryMB, 0);
+    assert.equal(budget.snapshot().used.cpu, 0);
+  },
+);

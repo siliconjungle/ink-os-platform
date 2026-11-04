@@ -86,13 +86,13 @@ test('an admitted native enqueue remains durable when source preflight crosses e
   await f.adapter.quiescePool(request);assert.equal(f.platform.nativeJobs.accepting,false);f.adapter.continueDraining();assert.equal(f.platform.nativeJobs.accepting,true);assert.equal(f.gate.closed,true);
 });
 
-test('already accepted queued workflows are pumped to completion after scheduler timers stop',async t=>{
+test('already accepted queued workflows are pumped to completion after scheduler timers stop',{timeout:10000},async t=>{
   const f=await setup(t),held=deferred();f.owners.push(held.resolve);const app=await f.platform.createApp({slug:'maintenance-workflow',title:'Fixture workflow'}),commands=validateCommands([{id:'run',title:'Run',handler:{type:'backend',path:'/run'},effect:'write'}]);
   await f.world.update(app.id,{body:JSON.stringify({...JSON.parse(app.body),releaseId,commands})},{writer:'os'});
   const definition=await f.platform.workflows.save({owner:true,accountId:'owner'},{definition:{title:'Accepted work',steps:[{id:'one',appId:app.id,commandId:'run',bindings:{}}]}});
   const preview=f.platform.workflows.preview({owner:true,accountId:'owner'},{id:definition.id});f.platform.workflows.pumping=true;f.platform.workflows.invoke=async()=>{await held.promise;return{data:{done:true}};};
   await f.platform.workflows.run({owner:true,accountId:'owner'},{id:definition.id,fingerprint:preview.fingerprint,requestId:'accepted-maintenance-run',approved:true});assert.equal(f.platform.workflows.runs[0].status,'queued');f.platform.workflows.pumping=false;
-  await close(f);assert.ok((await f.adapter.activity()).workflows>0);held.resolve();for(let i=0;i<100&&f.platform.workflows.runs[0].status!=='succeeded';i++)await new Promise(resolve=>setTimeout(resolve,5));assert.equal(f.platform.workflows.runs[0].status,'succeeded');assert.equal(f.platform.workflows.timer,null);
+  await close(f);assert.ok((await f.adapter.activity()).workflows>0);const running=f.platform.workflows.active.get(f.platform.workflows.runs[0].id);assert.ok(running?.promise);held.resolve();await running.promise;assert.equal(f.platform.workflows.runs[0].status,'succeeded');assert.equal(f.platform.workflows.timer,null);
 });
 
 test('pool pending/admission/request work is measured and continueDraining reopens only the pool under a closed external gate',async t=>{

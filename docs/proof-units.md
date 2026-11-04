@@ -16,9 +16,9 @@ The kernel API and independently validated package are documented in [Ink's proo
 
 One serialized compiler worker retains the checked unit session. It holds at most 16,384 units and 32 MiB of original canonical declaration provenance; proof bodies are not retained in the kernel. Each admitted OS closure remains bounded to 12 MiB expanded unit data. Compressed transport is also bounded, canonical base64 is checked, and Brotli expansion has an explicit output limit. Unit loading hints never replace the actual dependency checks in the kernel.
 
-The host permits sixteen outstanding requests, one active CPU lane, a 256 MiB worker old-generation limit and the existing 512 MiB maximum Wasm memory. Its conservative **1 GiB host memory reservation remains unchanged** from large complete-plan admission. Idle sessions expire after ten seconds and can be reclaimed earlier by the shared resource budget. Deadlines stop the worker before releasing active resource claims. Resource retirement failures close further host admission. Eviction, compiler replacement or process restart loses all unit witnesses; the next uncached compilation must replay its complete closure. Ordinary checked compilation/artifact caches can still reuse their own immutable results.
+The host permits sixteen outstanding requests, one active CPU lane (including worker bootstrap), a 256 MiB worker old-generation limit and the existing 512 MiB maximum Wasm memory. Its conservative **1 GiB host memory reservation remains unchanged** from large complete-plan admission. Idle sessions expire after ten seconds and can be reclaimed earlier by the shared resource budget. One deadline starts at FIFO admission and covers queueing, memory/CPU waits, bootstrap, checking and any retry. Queued expiration removes the retained payload immediately without cancelling a live predecessor. Monotonic deadline checks also run at dispatch, before guest startup and before returning an artifact, so a busy event loop cannot defer timeout enforcement until after admission. Active deadlines stop the worker before releasing resource claims. Resource retirement failures close further host admission. Eviction, compiler replacement or process restart loses all unit witnesses; the next uncached compilation must replay its complete closure. Ordinary checked compilation/artifact caches can still reuse their own immutable results.
 
-Malformed proofs and source-specific failures do not authorize a fallback to unchecked code. They reject admission. Valid units checked before a later failure remain valid dependencies; a failed declaration is never installed. Changed wire encodings replay in a fresh session. No serialized “already checked” flag is accepted.
+Malformed proofs and source-specific failures do not authorize a fallback to unchecked code. They reject admission. Valid units checked before a later failure remain valid dependencies; a failed declaration is never installed. For an already-loaded unit ID, changing its compressed payload or dependency metadata requires a fresh session; newly named units are checked independently. Reordering JSON descriptor properties preserves the same facts and does not invalidate their cache. No serialized “already checked” flag is accepted.
 
 ## Authoring and reproduction
 
@@ -53,3 +53,20 @@ INK_TEST_NATIVE=1 node --test tests/native-system.test.mjs
 ```
 
 Tests cover exact transport, cold replay, cross-release reuse, semantic view edits, incompatible keeps, corrupt units, rehashed false theorems, bad membership, forged equations, fresh-session recovery and deadline/resource release. Existing system histories preserve conflicts, rollback, duplicate/lost replies, events and recovery. The actual Chrome retained-query demonstration passes with JavaScript and compiled native execution.
+
+## Follow-up from the admission measurements
+
+[The three-form follow-up](benchmarks/proof-admission-followup-2026-11-04.json) compares complete replay, the previous unit implementation at `b468214`, and the updated host. Compiler bytes, generated JavaScript/Rust, fixtures and target checks match. Three fresh processes per form consume an initial release, a changed view and an equivalent descriptor-order variant. The previous unit host checked 362 units across two sessions; the updated host checked 181 across one. Median descriptor-order admission was 571 ms versus 268 ms; cold admission was 661 versus 656 ms and changed-view admission 274 versus 272 ms. The cold/changed-view differences are small local observations, not a statistical speedup claim. The material mechanism is eliminating a redundant full proof replay.
+
+The worker now retains immutable descriptor fields directly, avoiding an extra serialized copy of every compressed payload. Equality still compares byte counts, dependency identities and the exact compressed string; it never substitutes a producer-supplied hash for a checked fact. The existing substitution, wrong-source, changed-keep and false-theorem tests still reject.
+
+Admission statistics now separate FIFO, memory and CPU waiting from worker phases: envelope validation, cache lookup, descriptor comparison, decompression, kernel declaration admission and application composition/emission. ABI request/response byte counts describe local encoded Wasm traffic, not network RPCs. Worker phase counters include completed work returned with rejected applications; compiler-request outcomes are recorded separately. Release artifact comparison and publication retain their own later checks. A terminated worker cannot supply a complete internal breakdown, so its timeout and parent elapsed time are recorded without inventing missing kernel work. These metrics never participate in proof validity or implementation selection.
+
+Reproduce the previous-host comparison with a checkout of `b468214`:
+
+```sh
+git worktree add --detach ../proof-followup-baseline b468214
+node scripts/benchmark-proof-admission.mjs --baseline-directory ../proof-followup-baseline
+```
+
+The same kernel and emitted compiler are used. Resource-contention tests hold the memory or CPU budget exhausted and verify deadline rejection before any guest starts. FIFO tests expire fifteen queued requests, preserve the active head and check that retained queue slots are released. Rejected application tests verify that admitted dependencies remain accounted for and reusable.
