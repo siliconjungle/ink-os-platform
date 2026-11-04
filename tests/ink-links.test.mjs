@@ -54,7 +54,8 @@ test('cross-app reads refresh only when a commit writes a state root the exporte
   await f.call('touch', [row]);
   const same = await refresh(changed);
   assert.deepEqual(same.computed, []);
-  assert.equal(p.inkViews.reads.reads, reads + 2);
+  // The query ran again, but no new snapshot (or delivery sequence) was made.
+  assert.equal(p.inkViews.reads.reads, reads + 1);
   assert.equal(p.inkViews.reads.reused, 1);
 });
 

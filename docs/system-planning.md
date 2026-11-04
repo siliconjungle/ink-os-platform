@@ -82,3 +82,5 @@ The recorded Apple M4 Pro run produced:
 All modes persisted about 4.8 KiB and exchanged about 14.0 KiB of RPC bodies per measured edit. At this small workload, maintained computation does not improve complete latency; durable commit, invalidation coalescing, frame cadence and optimistic retry contention remain substantial costs. Selected plans also increase admission memory and build time. These results establish the connected execution and recovery path, while leaving large-table placement and proof/admission memory as measurable next improvements.
 
 [Full timing and byte profile](benchmarks/tables-profile-2026-11-04.md) separates DOM completion from the frame proxy, accounts for the repeated entry descriptors, and measures larger tables and periodic checkpoint replacement.
+
+[Retained exported queries](retained-queries.md) keep one live result across both apps and deliver versioned, replayable view patches. The existing source example activates this path through the current host and UI runtime.

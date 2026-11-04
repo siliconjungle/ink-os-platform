@@ -1,0 +1,470 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-11-04T08:36:59.483Z",
+  "source": {
+    "commit": "40eb81816ca588f21b99618f474307c3258e85cc",
+    "trackedChanges": ""
+  },
+  "host": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "v24.22.2",
+    "cpu": "Apple M4 Pro",
+    "logicalCpus": 14
+  },
+  "scope": "Fresh Node/browser process per mode; loopback owner HTTP fixture, typed UI runtime, DOM updates in two panes and an animation-frame proxy; physical paint is not measured. Explicit replay, exploratory measurements; no automatic profitability claim. Excludes production authentication, desktop MessagePort and Electron/window-compositor coverage. Lost reply is a deliberately discarded completed application reply.",
+  "runs": [
+    {
+      "mode": "javascript",
+      "delivery": "retained",
+      "measuredQueryReads": 32,
+      "measuredEntries": {
+        "put": 32,
+        "dashboard": 32,
+        "results": 64
+      },
+      "measuredRpcActions": {
+        "put": 32,
+        "watch": 64
+      },
+      "system": "ff29ce0208abf86f21606333a983c2116ad3c937147730bc437b448623437163",
+      "compiler": "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
+      "planSteps": 1,
+      "setup": {
+        "buildMs": 4810.339709,
+        "deployMs": 342.5564170000007,
+        "nativeBuildMs": 0,
+        "startupMs": 98.80933400000049
+      },
+      "workload": {
+        "seedRows": 64,
+        "edits": 32,
+        "pageRows": 20,
+        "apps": 2,
+        "concurrentRequests": 16
+      },
+      "editToPaint": {
+        "samplesMs": [
+          32.5,
+          32.59999996423721,
+          32.700000047683716,
+          48.39999997615814,
+          48.39999997615814,
+          48.60000002384186,
+          48.60000002384186,
+          48.60000002384186,
+          48.60000002384186,
+          48.69999998807907,
+          48.69999998807907,
+          48.700000047683716,
+          48.80000001192093,
+          48.80000001192093,
+          48.80000001192093,
+          48.80000001192093,
+          48.89999997615814,
+          48.89999997615814,
+          48.89999997615814,
+          48.89999997615814,
+          48.90000003576279,
+          49,
+          49.09999996423721,
+          49.10000002384186,
+          49.200000047683716,
+          60.69999998807907,
+          62.59999996423721,
+          62.89999997615814,
+          62.90000003576279,
+          63.39999997615814,
+          64.80000001192093,
+          99.10000002384186
+        ],
+        "p50Ms": 48.80000001192093,
+        "p95Ms": 64.80000001192093
+      },
+      "concurrency": {
+        "durationMs": 49.858916999999565,
+        "requestsPerSecond": 320.9054861741209,
+        "committed": 1,
+        "conflicts": 15,
+        "includeHttp": true,
+        "successful": {
+          "commits": 16,
+          "attempts": 136,
+          "durationMs": 337.25883299999987,
+          "commitsPerSecond": 47.44130748978784
+        }
+      },
+      "persisted": {
+        "worldJournalBytes": 0,
+        "appJournalBytes": 287467,
+        "bytesPerEdit": 8983.34375,
+        "scope": "Authoritative collaboration WAL plus World projection WAL; includes Ink transaction payloads/receipts; excludes checkpoint replacement and filesystem metadata"
+      },
+      "transferred": {
+        "received": 14310,
+        "sent": 454488,
+        "requests": 96,
+        "bytesPerEdit": 14649.9375,
+        "scope": "RPC request/response body pairs completed during measurement; includes watch requests begun before the window; excludes pending next-watch requests, headers, SSE and initial assets"
+      },
+      "memory": {
+        "peakNodeRss": 815726592,
+        "processTreeRss": 1729347584,
+        "scope": "RSS sum of this Node process and its descendants at one steady-state sample; shared pages may be counted more than once",
+        "browserHeap": 7156908
+      },
+      "sharedQueries": {
+        "reads": 51,
+        "hits": 104
+      },
+      "recoveryMs": 134.92045900000085,
+      "validation": {
+        "conflicts": true,
+        "abortedChanges": true,
+        "lostReply": true,
+        "duplicateReceipt": true,
+        "restoredWire": true,
+        "uiErrors": []
+      }
+    },
+    {
+      "mode": "native",
+      "delivery": "retained",
+      "measuredQueryReads": 32,
+      "measuredEntries": {
+        "put": 32,
+        "dashboard": 32,
+        "results": 64
+      },
+      "measuredRpcActions": {
+        "put": 32,
+        "watch": 64
+      },
+      "system": "ff29ce0208abf86f21606333a983c2116ad3c937147730bc437b448623437163",
+      "compiler": "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
+      "planSteps": 1,
+      "setup": {
+        "buildMs": 4868.954208,
+        "deployMs": 317.0220840000002,
+        "nativeBuildMs": 24442.874,
+        "startupMs": 582.5361250000024
+      },
+      "workload": {
+        "seedRows": 64,
+        "edits": 32,
+        "pageRows": 20,
+        "apps": 2,
+        "concurrentRequests": 16
+      },
+      "editToPaint": {
+        "samplesMs": [
+          44.60000002384186,
+          45.59999996423721,
+          46.5,
+          47.69999998807907,
+          47.80000001192093,
+          48.10000002384186,
+          48.19999998807907,
+          48.299999952316284,
+          48.39999997615814,
+          48.5,
+          48.60000002384186,
+          48.69999998807907,
+          48.69999998807907,
+          48.69999998807907,
+          48.69999998807907,
+          48.69999998807907,
+          48.799999952316284,
+          48.799999952316284,
+          48.80000001192093,
+          48.89999997615814,
+          48.89999997615814,
+          49,
+          49,
+          49,
+          49,
+          49,
+          49.10000002384186,
+          49.10000002384186,
+          54.59999996423721,
+          63.39999997615814,
+          65.19999998807907,
+          82.29999995231628
+        ],
+        "p50Ms": 48.69999998807907,
+        "p95Ms": 65.19999998807907
+      },
+      "concurrency": {
+        "durationMs": 50.20812499999738,
+        "requestsPerSecond": 318.6735214669107,
+        "committed": 1,
+        "conflicts": 15,
+        "includeHttp": true,
+        "successful": {
+          "commits": 16,
+          "attempts": 136,
+          "durationMs": 335.5173750000031,
+          "commitsPerSecond": 47.68754524262671
+        }
+      },
+      "persisted": {
+        "worldJournalBytes": 0,
+        "appJournalBytes": 287467,
+        "bytesPerEdit": 8983.34375,
+        "scope": "Authoritative collaboration WAL plus World projection WAL; includes Ink transaction payloads/receipts; excludes checkpoint replacement and filesystem metadata"
+      },
+      "transferred": {
+        "received": 14310,
+        "sent": 454360,
+        "requests": 96,
+        "bytesPerEdit": 14645.9375,
+        "scope": "RPC request/response body pairs completed during measurement; includes watch requests begun before the window; excludes pending next-watch requests, headers, SSE and initial assets"
+      },
+      "memory": {
+        "peakNodeRss": 807026688,
+        "processTreeRss": 1675984896,
+        "scope": "RSS sum of this Node process and its descendants at one steady-state sample; shared pages may be counted more than once",
+        "browserHeap": 7578744
+      },
+      "sharedQueries": {
+        "reads": 51,
+        "hits": 104
+      },
+      "recoveryMs": 101.77704100000119,
+      "validation": {
+        "conflicts": true,
+        "abortedChanges": true,
+        "lostReply": true,
+        "duplicateReceipt": true,
+        "restoredWire": true,
+        "uiErrors": []
+      }
+    },
+    {
+      "mode": "javascript",
+      "delivery": "retained",
+      "measuredQueryReads": 32,
+      "measuredEntries": {
+        "put": 32,
+        "dashboard": 32,
+        "results": 64
+      },
+      "measuredRpcActions": {
+        "put": 32,
+        "watch": 64
+      },
+      "system": "ff29ce0208abf86f21606333a983c2116ad3c937147730bc437b448623437163",
+      "compiler": "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
+      "planSteps": 1,
+      "setup": {
+        "buildMs": 4917.6215,
+        "deployMs": 317.34958300000017,
+        "nativeBuildMs": 0,
+        "startupMs": 109.078042000001
+      },
+      "workload": {
+        "seedRows": 2048,
+        "edits": 32,
+        "pageRows": 20,
+        "apps": 2,
+        "concurrentRequests": 16
+      },
+      "editToPaint": {
+        "samplesMs": [
+          31.80000001192093,
+          31.80000001192093,
+          31.900000035762787,
+          32.299999952316284,
+          32.39999997615814,
+          32.40000003576279,
+          32.40000003576279,
+          32.5,
+          32.69999998807907,
+          32.69999998807907,
+          32.700000047683716,
+          32.799999952316284,
+          32.89999997615814,
+          32.90000003576279,
+          33.200000047683716,
+          44.10000002384186,
+          46.90000003576279,
+          48.30000001192093,
+          48.39999997615814,
+          48.5,
+          48.60000002384186,
+          48.60000002384186,
+          48.80000001192093,
+          48.80000001192093,
+          48.90000003576279,
+          49,
+          49.09999996423721,
+          49.40000003576279,
+          49.60000002384186,
+          49.69999998807907,
+          49.80000001192093,
+          129.10000002384186
+        ],
+        "p50Ms": 44.10000002384186,
+        "p95Ms": 49.80000001192093
+      },
+      "concurrency": {
+        "durationMs": 30.003791999995883,
+        "requestsPerSecond": 533.2659285200416,
+        "committed": 1,
+        "conflicts": 15,
+        "includeHttp": true,
+        "successful": {
+          "commits": 16,
+          "attempts": 136,
+          "durationMs": 331.51349999999366,
+          "commitsPerSecond": 48.26349454848839
+        }
+      },
+      "persisted": {
+        "worldJournalBytes": 0,
+        "appJournalBytes": 475961,
+        "bytesPerEdit": 14873.78125,
+        "scope": "Authoritative collaboration WAL plus World projection WAL; includes Ink transaction payloads/receipts; excludes checkpoint replacement and filesystem metadata"
+      },
+      "transferred": {
+        "received": 14374,
+        "sent": 455508,
+        "requests": 96,
+        "bytesPerEdit": 14683.8125,
+        "scope": "RPC request/response body pairs completed during measurement; includes watch requests begun before the window; excludes pending next-watch requests, headers, SSE and initial assets"
+      },
+      "memory": {
+        "peakNodeRss": 1049182208,
+        "processTreeRss": 1953497088,
+        "scope": "RSS sum of this Node process and its descendants at one steady-state sample; shared pages may be counted more than once",
+        "browserHeap": 7168905
+      },
+      "sharedQueries": {
+        "reads": 51,
+        "hits": 104
+      },
+      "recoveryMs": 231.31979199999478,
+      "validation": {
+        "conflicts": true,
+        "abortedChanges": true,
+        "lostReply": true,
+        "duplicateReceipt": true,
+        "restoredWire": true,
+        "uiErrors": []
+      }
+    },
+    {
+      "mode": "native",
+      "delivery": "retained",
+      "measuredQueryReads": 32,
+      "measuredEntries": {
+        "put": 32,
+        "dashboard": 32,
+        "results": 64
+      },
+      "measuredRpcActions": {
+        "put": 32,
+        "watch": 64
+      },
+      "system": "ff29ce0208abf86f21606333a983c2116ad3c937147730bc437b448623437163",
+      "compiler": "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
+      "planSteps": 1,
+      "setup": {
+        "buildMs": 4995.699208,
+        "deployMs": 306.23329099999955,
+        "nativeBuildMs": 26094.677041000003,
+        "startupMs": 600.8924590000097
+      },
+      "workload": {
+        "seedRows": 2048,
+        "edits": 32,
+        "pageRows": 20,
+        "apps": 2,
+        "concurrentRequests": 16
+      },
+      "editToPaint": {
+        "samplesMs": [
+          47.19999998807907,
+          47.89999997615814,
+          47.89999997615814,
+          47.89999997615814,
+          47.89999997615814,
+          48,
+          48.09999996423721,
+          48.19999998807907,
+          48.200000047683716,
+          48.200000047683716,
+          48.30000001192093,
+          48.39999997615814,
+          48.39999997615814,
+          48.40000003576279,
+          48.5,
+          48.5,
+          48.80000001192093,
+          49,
+          49,
+          49.09999996423721,
+          49.09999996423721,
+          49.19999998807907,
+          49.19999998807907,
+          49.299999952316284,
+          49.299999952316284,
+          49.30000001192093,
+          49.5,
+          49.5,
+          49.60000002384186,
+          49.89999997615814,
+          59.799999952316284,
+          115
+        ],
+        "p50Ms": 48.5,
+        "p95Ms": 59.799999952316284
+      },
+      "concurrency": {
+        "durationMs": 28.22941699999501,
+        "requestsPerSecond": 566.7846417091373,
+        "committed": 1,
+        "conflicts": 15,
+        "includeHttp": true,
+        "successful": {
+          "commits": 16,
+          "attempts": 136,
+          "durationMs": 346.43620799999917,
+          "commitsPerSecond": 46.18454893144437
+        }
+      },
+      "persisted": {
+        "worldJournalBytes": 0,
+        "appJournalBytes": 475851,
+        "bytesPerEdit": 14870.34375,
+        "scope": "Authoritative collaboration WAL plus World projection WAL; includes Ink transaction payloads/receipts; excludes checkpoint replacement and filesystem metadata"
+      },
+      "transferred": {
+        "received": 14374,
+        "sent": 455392,
+        "requests": 96,
+        "bytesPerEdit": 14680.1875,
+        "scope": "RPC request/response body pairs completed during measurement; includes watch requests begun before the window; excludes pending next-watch requests, headers, SSE and initial assets"
+      },
+      "memory": {
+        "peakNodeRss": 966066176,
+        "processTreeRss": 1912963072,
+        "scope": "RSS sum of this Node process and its descendants at one steady-state sample; shared pages may be counted more than once",
+        "browserHeap": 7179858
+      },
+      "sharedQueries": {
+        "reads": 51,
+        "hits": 104
+      },
+      "recoveryMs": 183.10550000000512,
+      "validation": {
+        "conflicts": true,
+        "abortedChanges": true,
+        "lostReply": true,
+        "duplicateReceipt": true,
+        "restoredWire": true,
+        "uiErrors": []
+      }
+    }
+  ]
+}

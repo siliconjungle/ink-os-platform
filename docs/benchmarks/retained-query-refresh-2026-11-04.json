@@ -1,0 +1,470 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-11-04T08:34:17.548Z",
+  "source": {
+    "commit": "40eb81816ca588f21b99618f474307c3258e85cc",
+    "trackedChanges": ""
+  },
+  "host": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "v24.22.2",
+    "cpu": "Apple M4 Pro",
+    "logicalCpus": 14
+  },
+  "scope": "Fresh Node/browser process per mode; loopback owner HTTP fixture, typed UI runtime, DOM updates in two panes and an animation-frame proxy; physical paint is not measured. Explicit replay, exploratory measurements; no automatic profitability claim. Excludes production authentication, desktop MessagePort and Electron/window-compositor coverage. Lost reply is a deliberately discarded completed application reply.",
+  "runs": [
+    {
+      "mode": "javascript",
+      "delivery": "refresh",
+      "measuredQueryReads": 32,
+      "measuredEntries": {
+        "put": 32,
+        "dashboard": 32,
+        "results": 64
+      },
+      "measuredRpcActions": {
+        "put": 32,
+        "refresh": 64
+      },
+      "system": "ff29ce0208abf86f21606333a983c2116ad3c937147730bc437b448623437163",
+      "compiler": "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
+      "planSteps": 1,
+      "setup": {
+        "buildMs": 5162.927833,
+        "deployMs": 325.05983300000025,
+        "nativeBuildMs": 0,
+        "startupMs": 97.67966700000034
+      },
+      "workload": {
+        "seedRows": 64,
+        "edits": 32,
+        "pageRows": 20,
+        "apps": 2,
+        "concurrentRequests": 16
+      },
+      "editToPaint": {
+        "samplesMs": [
+          65.5,
+          65.80000001192093,
+          79,
+          80.5,
+          81.30000001192093,
+          81.5,
+          81.5,
+          81.5,
+          81.59999996423721,
+          81.69999998807907,
+          81.69999998807907,
+          81.69999998807907,
+          81.79999995231628,
+          81.89999997615814,
+          82,
+          82.19999998807907,
+          82.19999998807907,
+          82.30000001192093,
+          82.39999997615814,
+          82.5,
+          82.60000002384186,
+          82.70000004768372,
+          82.79999995231628,
+          82.90000003576279,
+          83.09999996423721,
+          83.69999998807907,
+          92.60000002384186,
+          96.09999996423721,
+          97.09999996423721,
+          97.39999997615814,
+          98,
+          98.30000001192093
+        ],
+        "p50Ms": 82.19999998807907,
+        "p95Ms": 98
+      },
+      "concurrency": {
+        "durationMs": 34.96904099999847,
+        "requestsPerSecond": 457.5475775844325,
+        "committed": 1,
+        "conflicts": 15,
+        "includeHttp": true,
+        "successful": {
+          "commits": 16,
+          "attempts": 136,
+          "durationMs": 328.57683299999917,
+          "commitsPerSecond": 48.69485122829716
+        }
+      },
+      "persisted": {
+        "worldJournalBytes": 0,
+        "appJournalBytes": 287467,
+        "bytesPerEdit": 8983.34375,
+        "scope": "Authoritative collaboration WAL plus World projection WAL; includes Ink transaction payloads/receipts; excludes checkpoint replacement and filesystem metadata"
+      },
+      "transferred": {
+        "received": 10746,
+        "sent": 454384,
+        "requests": 96,
+        "bytesPerEdit": 14535.3125,
+        "scope": "HTTP RPC request/response bodies; excludes headers, SSE notifications and initial source/assets"
+      },
+      "memory": {
+        "peakNodeRss": 843055104,
+        "processTreeRss": 1761918976,
+        "scope": "RSS sum of this Node process and its descendants at one steady-state sample; shared pages may be counted more than once",
+        "browserHeap": 6478607
+      },
+      "sharedQueries": {
+        "reads": 49,
+        "hits": 49
+      },
+      "recoveryMs": 138.80141700000058,
+      "validation": {
+        "conflicts": true,
+        "abortedChanges": true,
+        "lostReply": true,
+        "duplicateReceipt": true,
+        "restoredWire": true,
+        "uiErrors": []
+      }
+    },
+    {
+      "mode": "native",
+      "delivery": "refresh",
+      "measuredQueryReads": 32,
+      "measuredEntries": {
+        "put": 32,
+        "dashboard": 32,
+        "results": 64
+      },
+      "measuredRpcActions": {
+        "put": 32,
+        "refresh": 64
+      },
+      "system": "ff29ce0208abf86f21606333a983c2116ad3c937147730bc437b448623437163",
+      "compiler": "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
+      "planSteps": 1,
+      "setup": {
+        "buildMs": 5295.631375000001,
+        "deployMs": 320.8652920000004,
+        "nativeBuildMs": 22634.083125,
+        "startupMs": 207.476832999997
+      },
+      "workload": {
+        "seedRows": 64,
+        "edits": 32,
+        "pageRows": 20,
+        "apps": 2,
+        "concurrentRequests": 16
+      },
+      "editToPaint": {
+        "samplesMs": [
+          65.69999998807907,
+          66.80000001192093,
+          80.69999998807907,
+          81.09999996423721,
+          81.60000002384186,
+          81.80000001192093,
+          81.80000001192093,
+          82,
+          82.5,
+          82.5,
+          89.40000003576279,
+          95.69999998807907,
+          95.80000001192093,
+          96.30000001192093,
+          96.5,
+          96.59999996423721,
+          97,
+          97.19999998807907,
+          97.59999996423721,
+          97.89999997615814,
+          98,
+          98.09999996423721,
+          98.19999998807907,
+          98.19999998807907,
+          98.60000002384186,
+          98.69999998807907,
+          99.09999996423721,
+          99.39999997615814,
+          112.69999998807907,
+          112.89999997615814,
+          113,
+          113.69999998807907
+        ],
+        "p50Ms": 96.59999996423721,
+        "p95Ms": 113
+      },
+      "concurrency": {
+        "durationMs": 49.3081250000032,
+        "requestsPerSecond": 324.490132204357,
+        "committed": 1,
+        "conflicts": 15,
+        "includeHttp": true,
+        "successful": {
+          "commits": 16,
+          "attempts": 136,
+          "durationMs": 316.6756250000035,
+          "commitsPerSecond": 50.524886467027024
+        }
+      },
+      "persisted": {
+        "worldJournalBytes": 0,
+        "appJournalBytes": 287369,
+        "bytesPerEdit": 8980.28125,
+        "scope": "Authoritative collaboration WAL plus World projection WAL; includes Ink transaction payloads/receipts; excludes checkpoint replacement and filesystem metadata"
+      },
+      "transferred": {
+        "received": 10746,
+        "sent": 454267,
+        "requests": 96,
+        "bytesPerEdit": 14531.65625,
+        "scope": "HTTP RPC request/response bodies; excludes headers, SSE notifications and initial source/assets"
+      },
+      "memory": {
+        "peakNodeRss": 756645888,
+        "processTreeRss": 1649049600,
+        "scope": "RSS sum of this Node process and its descendants at one steady-state sample; shared pages may be counted more than once",
+        "browserHeap": 7179784
+      },
+      "sharedQueries": {
+        "reads": 47,
+        "hits": 50
+      },
+      "recoveryMs": 94.61220899999898,
+      "validation": {
+        "conflicts": true,
+        "abortedChanges": true,
+        "lostReply": true,
+        "duplicateReceipt": true,
+        "restoredWire": true,
+        "uiErrors": []
+      }
+    },
+    {
+      "mode": "javascript",
+      "delivery": "refresh",
+      "measuredQueryReads": 32,
+      "measuredEntries": {
+        "put": 32,
+        "dashboard": 32,
+        "results": 64
+      },
+      "measuredRpcActions": {
+        "put": 32,
+        "refresh": 64
+      },
+      "system": "ff29ce0208abf86f21606333a983c2116ad3c937147730bc437b448623437163",
+      "compiler": "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
+      "planSteps": 1,
+      "setup": {
+        "buildMs": 4930.280250000001,
+        "deployMs": 332.9297919999999,
+        "nativeBuildMs": 0,
+        "startupMs": 100.40066600000137
+      },
+      "workload": {
+        "seedRows": 2048,
+        "edits": 32,
+        "pageRows": 20,
+        "apps": 2,
+        "concurrentRequests": 16
+      },
+      "editToPaint": {
+        "samplesMs": [
+          74,
+          79.30000001192093,
+          80.60000002384186,
+          81.19999998807907,
+          81.69999998807907,
+          82,
+          82.09999996423721,
+          82.10000002384186,
+          82.19999998807907,
+          82.30000001192093,
+          82.39999997615814,
+          82.5,
+          82.5,
+          82.59999996423721,
+          93,
+          96.10000002384186,
+          96.29999995231628,
+          96.30000001192093,
+          96.39999997615814,
+          96.80000001192093,
+          97.30000001192093,
+          97.39999997615814,
+          97.5,
+          97.79999995231628,
+          97.90000003576279,
+          98.39999997615814,
+          98.40000003576279,
+          99,
+          99.19999998807907,
+          99.30000001192093,
+          113.30000001192093,
+          146.19999998807907
+        ],
+        "p50Ms": 96.10000002384186,
+        "p95Ms": 113.30000001192093
+      },
+      "concurrency": {
+        "durationMs": 31.524250000002212,
+        "requestsPerSecond": 507.54577825004174,
+        "committed": 1,
+        "conflicts": 15,
+        "includeHttp": true,
+        "successful": {
+          "commits": 16,
+          "attempts": 136,
+          "durationMs": 292.55225000000064,
+          "commitsPerSecond": 54.691085096764645
+        }
+      },
+      "persisted": {
+        "worldJournalBytes": 0,
+        "appJournalBytes": 475851,
+        "bytesPerEdit": 14870.34375,
+        "scope": "Authoritative collaboration WAL plus World projection WAL; includes Ink transaction payloads/receipts; excludes checkpoint replacement and filesystem metadata"
+      },
+      "transferred": {
+        "received": 10810,
+        "sent": 455428,
+        "requests": 96,
+        "bytesPerEdit": 14569.9375,
+        "scope": "HTTP RPC request/response bodies; excludes headers, SSE notifications and initial source/assets"
+      },
+      "memory": {
+        "peakNodeRss": 1146961920,
+        "processTreeRss": 2060156928,
+        "scope": "RSS sum of this Node process and its descendants at one steady-state sample; shared pages may be counted more than once",
+        "browserHeap": 7214014
+      },
+      "sharedQueries": {
+        "reads": 48,
+        "hits": 50
+      },
+      "recoveryMs": 206.43962499999907,
+      "validation": {
+        "conflicts": true,
+        "abortedChanges": true,
+        "lostReply": true,
+        "duplicateReceipt": true,
+        "restoredWire": true,
+        "uiErrors": []
+      }
+    },
+    {
+      "mode": "native",
+      "delivery": "refresh",
+      "measuredQueryReads": 32,
+      "measuredEntries": {
+        "put": 32,
+        "dashboard": 32,
+        "results": 64
+      },
+      "measuredRpcActions": {
+        "put": 32,
+        "refresh": 64
+      },
+      "system": "ff29ce0208abf86f21606333a983c2116ad3c937147730bc437b448623437163",
+      "compiler": "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
+      "planSteps": 1,
+      "setup": {
+        "buildMs": 4980.7269160000005,
+        "deployMs": 321.2279579999995,
+        "nativeBuildMs": 21289.611375,
+        "startupMs": 431.692375000006
+      },
+      "workload": {
+        "seedRows": 2048,
+        "edits": 32,
+        "pageRows": 20,
+        "apps": 2,
+        "concurrentRequests": 16
+      },
+      "editToPaint": {
+        "samplesMs": [
+          80.5,
+          81.40000003576279,
+          82.30000001192093,
+          82.60000002384186,
+          82.70000004768372,
+          83.10000002384186,
+          94.40000003576279,
+          95.5,
+          95.5,
+          95.69999998807907,
+          95.69999998807907,
+          95.69999998807907,
+          96.39999997615814,
+          96.70000004768372,
+          97.20000004768372,
+          97.20000004768372,
+          98.19999998807907,
+          98.19999998807907,
+          98.29999995231628,
+          98.40000003576279,
+          98.79999995231628,
+          98.89999997615814,
+          98.89999997615814,
+          99.10000002384186,
+          99.30000001192093,
+          99.30000001192093,
+          99.30000001192093,
+          100.89999997615814,
+          113.09999996423721,
+          113.10000002384186,
+          113.30000001192093,
+          148
+        ],
+        "p50Ms": 97.20000004768372,
+        "p95Ms": 113.30000001192093
+      },
+      "concurrency": {
+        "durationMs": 34.21774999999616,
+        "requestsPerSecond": 467.5935735108766,
+        "committed": 1,
+        "conflicts": 15,
+        "includeHttp": true,
+        "successful": {
+          "commits": 16,
+          "attempts": 136,
+          "durationMs": 334.13108400000783,
+          "commitsPerSecond": 47.88539817504565
+        }
+      },
+      "persisted": {
+        "worldJournalBytes": 0,
+        "appJournalBytes": 475961,
+        "bytesPerEdit": 14873.78125,
+        "scope": "Authoritative collaboration WAL plus World projection WAL; includes Ink transaction payloads/receipts; excludes checkpoint replacement and filesystem metadata"
+      },
+      "transferred": {
+        "received": 10810,
+        "sent": 455298,
+        "requests": 96,
+        "bytesPerEdit": 14565.875,
+        "scope": "HTTP RPC request/response bodies; excludes headers, SSE notifications and initial source/assets"
+      },
+      "memory": {
+        "peakNodeRss": 938311680,
+        "processTreeRss": 1857896448,
+        "scope": "RSS sum of this Node process and its descendants at one steady-state sample; shared pages may be counted more than once",
+        "browserHeap": 6160186
+      },
+      "sharedQueries": {
+        "reads": 45,
+        "hits": 54
+      },
+      "recoveryMs": 162.6349579999951,
+      "validation": {
+        "conflicts": true,
+        "abortedChanges": true,
+        "lostReply": true,
+        "duplicateReceipt": true,
+        "restoredWire": true,
+        "uiErrors": []
+      }
+    }
+  ]
+}

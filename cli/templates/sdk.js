@@ -27,6 +27,10 @@
 				id,
 				...input
 			}),
+			watch: (id, input) => request("watch", {
+				id,
+				...input
+			}),
 			event: (id, input) => request("event", {
 				id,
 				...input

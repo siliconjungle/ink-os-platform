@@ -167,14 +167,15 @@ test(
     assert.equal(system.status, 'deployed');
     const queryUi = sdk.apps.ink.ui(system.apps.dashboard.appId),
       queryFrame = await queryUi.open();
+    const update = queryUi.watch(queryFrame.id, { ...queryFrame.updates, revision:queryFrame.revision });
     await sdk.apps.ink.run(
       system.apps.tables.appId,
       'put',
       '[0,{"id":1,"title":"Connected API","amount":7,"open":true}]',
     );
-    const changed = await queryUi.refresh(queryFrame.id, {
-      revision: queryFrame.revision,
-    });
+    const changed = await update;
+    assert.equal(changed.snapshots[0].versionWire,"1");
+    await assert.rejects(readClient.apps.ink.ui(system.apps.dashboard.appId).watch(queryFrame.id,{...queryFrame.updates,revision:queryFrame.revision}),{status:403});
     assert.deepEqual(changed.computed, ['results']);
     assert.ok(
       changed.patch.operations.some(

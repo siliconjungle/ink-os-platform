@@ -17,16 +17,16 @@
 // to the consumer whose read started it; each evaluation is charged to the
 // consumer it runs for. Results live only in this bounded cache, never in
 // either app's state, and leave with the consumer or provider.
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { installedInk } from './ink-apps.mjs';
-import { InkAppJournal } from './ink-app-journal.mjs';
+import { InkAppJournal, appJournalFormat } from './ink-app-journal.mjs';
 import { javascriptResident } from './ink-residents.mjs';
 import { admitLinkPlan } from './ink-link-plans.mjs';
 import { readRoots } from './ink-footprints.mjs';
 import { inkProgramKey } from './ink-compiler.mjs';
 import { hostBudget } from './execution-budget.mjs';
-import { parseExactJSON } from '../shared/exact-json.mjs';
-import { checkUiRead } from './ink-ui-reads.mjs';
+import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
+import { checkUiRead, queryPageDelta } from './ink-ui-reads.mjs';
 
 const STATE = 'ink-app:state',
   WORKER = new URL('./ink-link-worker.mjs', import.meta.url),
@@ -156,18 +156,50 @@ export class InkLinks {
   request(session, owner, message, signal) {
     return hostBudget.run({ owner, resources: { cpu: 1 }, signal, label: 'link plan' }, () => session.endpoint.request(message));
   }
-  /** Bring the copy to the provider's committed journal revision. */
+  journal(link) {
+    const authority = this.platform.runtime.bind({ owner: false, appId: link.appId, namespace: link.appId, releaseId: link.releaseId });
+    return new InkAppJournal(this.platform.code.storage, link.appId, STATE, authority);
+  }
+  /** Where the copy stands in the provider's journal: base, applied tail records, head. */
+  mark(link, saved) {
+    const root = saved.value;
+    Object.assign(link, {
+      revision: saved.revision,
+      base: root?.format === appJournalFormat ? root.base.hash : null,
+      applied: root?.format === appJournalFormat ? root.records.length : 0,
+      head: root?.format === appJournalFormat ? root.head : null,
+    });
+  }
+  /**
+   * Bring the copy to the provider's committed journal revision: replay only
+   * the new tail records when the base is unchanged, otherwise reload.
+   */
   async sync(link, session, owner, signal) {
-    const authority = this.platform.runtime.bind({ owner: false, appId: link.appId, namespace: link.appId, releaseId: link.releaseId }),
-      journal = new InkAppJournal(this.platform.code.storage, link.appId, STATE, authority),
-      saved = await journal.read();
+    const journal = this.journal(link),
+      saved = await journal.read(),
+      root = saved.value;
     if (link.revision === saved.revision) return;
-    if (saved.value && saved.value.digest !== link.compiled.digest)
+    if (root && root.digest !== link.compiled.digest)
       fail(409, 'The provider state belongs to another source revision');
-    const recovery = saved.value ? await journal.recover(saved) : { snapshot: null, records: [] };
+    if (
+      link.revision !== null &&
+      root?.format === appJournalFormat &&
+      root.base.hash === link.base &&
+      root.records.length >= link.applied &&
+      (root.records.length === link.applied || root.records[link.applied].previous === link.head)
+    ) {
+      const fresh = root.records.slice(link.applied),
+        records = [];
+      for (const descriptor of fresh) records.push(await journal.payload(descriptor));
+      if (records.length) await this.request(session, owner, { op: 'apply', records }, signal);
+      this.counts.applies += records.length;
+      this.mark(link, saved);
+      return;
+    }
+    const recovery = root ? await journal.recover(saved) : { snapshot: null, records: [] };
     link.revision = null;
     await this.request(session, owner, { op: 'load', snapshot: recovery.snapshot, records: recovery.records }, signal);
-    link.revision = saved.revision;
+    this.mark(link, saved);
     this.counts.loads++;
   }
   evaluate(admitted, owner, signal) {
@@ -183,12 +215,13 @@ export class InkLinks {
           link.consumers.add(c.id);
         }
         this.counts.evaluations++;
-        return await this.request(
+        const revision = link.revision;
+        return { ...(await this.request(
           session,
           owner,
           { op: 'evaluate', entry: admitted.binding.entry, input: admitted.binding.input || '[]', plan: admitted.plan.plan, consumer: c?.id },
           signal,
-        );
+        )), revision };
       } catch (error) {
         // An evaluation error with a status (overflow, size) keeps the copy.
         if (!error.status) {
@@ -208,17 +241,32 @@ export class InkLinks {
     snapshot.promise = (async () => {
       try {
         for (let attempt = 0; attempt < 3; attempt++) {
-          snapshot.stamp = this.reads.stamp(admitted.binding.appId, admitted.binding.releaseId, admitted.roots);
+          snapshot.precise = this.reads.precise(admitted.binding.appId, admitted.binding.releaseId, admitted.roots);
           const result = await this.evaluate(admitted, owner, signal);
           if (Buffer.byteLength(result.wire) > RESULT_LIMIT) fail(413, 'Linked UI data exceeds 128 KiB');
           if (!this.reads.current(snapshot)) continue;
           const previous = entry.snapshot;
           if (previous && previous.wire === result.wire) {
-            previous.stamp = snapshot.stamp;
+            previous.precise = snapshot.precise;
             this.counts.reused++;
             return previous;
           }
-          Object.assign(snapshot, { wire: result.wire, value: parseExactJSON(result.wire), scanned: result.scanned, matched: result.matched });
+          const value = parseExactJSON(result.wire);
+          // The same delivery fields as retained query snapshots.
+          entry.id ||= randomBytes(16).toString('hex');
+          Object.assign(snapshot, {
+            wire: result.wire,
+            value,
+            scanned: result.scanned,
+            matched: result.matched,
+            id: entry.id,
+            sequence: (entry.sequence = (entry.sequence || 0) + 1),
+            stateRevision: result.revision,
+            versionWire: stringifyExactJSON(value.version),
+            delta: queryPageDelta(previous?.value, value),
+            bytes: Buffer.byteLength(result.wire),
+            settled: true,
+          });
           this.bytes += Buffer.byteLength(result.wire) - (entry.bytes || 0);
           entry.bytes = Buffer.byteLength(result.wire);
           entry.snapshot = snapshot;
@@ -261,17 +309,20 @@ export class InkLinks {
       if (link.appId !== namespace || link.source !== source) continue;
       const session = link.session;
       this.serial(link, async () => {
-        // Apply only to the live copy that is exactly one commit behind;
-        // anything else reloads from the journal on its next read.
-        if (!session || link.session !== session || link.revision !== before || residents.sessions.get(link.key) !== session || session.busy) {
-          link.revision = null;
+        // Apply only to the live copy that is exactly one commit behind. A
+        // copy that already caught up from the journal tail, or that is
+        // further behind, is left to the next read's sync.
+        if (!session || link.session !== session || link.revision !== before || residents.sessions.get(link.key) !== session || session.busy)
           return;
-        }
         await residents.acquire(link.key, () => fail(500, 'Link worker was evicted'));
         try {
           await session.endpoint.request({ op: 'apply', records: [record] });
-          link.revision = after;
           this.counts.applies++;
+          // The commit may have compacted the journal onto a new base that
+          // already contains this record; follow the header either way.
+          const saved = await this.journal(link).read();
+          if (saved.revision === after) this.mark(link, saved);
+          else link.revision = null;
         } catch {
           link.revision = null;
         } finally {
@@ -287,6 +338,7 @@ export class InkLinks {
         entry.admitted.binding.appId === namespace &&
         now - entry.used < WARM_MS &&
         !entry.pending &&
+        !(entry.snapshot && this.reads.current(entry.snapshot)) &&
         (!written || entry.admitted.roots.some((root) => written.has(root)))
       ) {
         this.counts.refreshed++;

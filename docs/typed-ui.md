@@ -106,3 +106,5 @@ INK_TEST_UI_BROWSER=1 INK_UI_BROWSER_EXECUTABLE=/path/to/chrome node --test test
 The native test uses actual compiled Rust and shared checkpoints. The optional browser test uses an existing Chrome/Chromium installation through `playwright-core`; it does not download a browser. It exercises Ink-authored forms, keyed lists, focus/caret retention, remote draft conflicts, option reordering, composition, lost event acknowledgements and balanced disposal. Legacy record views remain supported; existing apps opt into this contract explicitly.
 
 Connected systems can bind a `UiData<Row>` component to a pinned exported readonly entry in another app, with exact checked types and shared snapshots. See [system planning](system-planning.md) for data ports, release fences and deployment.
+
+Typed app interfaces can use [retained query and view delivery](retained-queries.md), including ordered cursors, bounded replay, snapshot resynchronization and exact source versions.

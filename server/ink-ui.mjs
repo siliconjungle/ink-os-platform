@@ -30,6 +30,8 @@ export class InkViews {
     this.mounts = new Map();
     this.tasks = new Set();
     this.bytes = 0;
+    this.deliveryBytes = 0;
+    this.deliveryTick = 0;
     this.queries = new UiQueries(platform.world);
     this.reads = new InkUiReads(platform);
     this.accepting = true;
@@ -46,6 +48,12 @@ export class InkViews {
   }
   closeAdmission() {
     this.accepting = false;
+    this.reads.pause();
+    for (const mount of this.mounts.values())
+      this.wake(
+        mount,
+        Object.assign(Error('Interface admission is closed'), { status: 503 }),
+      );
   }
   disposePreview(id) {
     for (const mount of this.mounts.values())
@@ -53,6 +61,7 @@ export class InkViews {
   }
   resumeAdmission() {
     this.accepting = true;
+    this.reads.resume();
   }
   actor(principal) {
     if (principal?.owner) return 'account:' + (principal.accountId || 'owner');
@@ -200,6 +209,11 @@ export class InkViews {
             ? JSON.parse(this.platform.app(target.appId).body).releaseId
             : null),
         revision: 0,
+        stream: randomBytes(16).toString('hex'),
+        deliverySequence: 0,
+        history: [],
+        waiters: new Set(),
+        subscriptions: new Map(),
         sequence: 0,
         receipts: new Map(),
         cache: new Map(),
@@ -232,11 +246,17 @@ export class InkViews {
   }
   invalidate(event) {
     if (event.type === 'ink-reads') return;
-    const provider = this.reads.observe(event),
+    const provider = this.reads.invalidate(event),
       readers = new Set();
     for (const mount of this.mounts.values()) {
       if (mount.disposed || mount.previewId) continue;
-      let changed = false;
+      let changed = false,
+        needsRender = false;
+      if (event.type === 'object' && event.object.id === mount.appId) {
+        mount.all = true;
+        changed = true;
+        needsRender = true;
+      }
       if (
         (event.type === 'ink-state' && event.appId === mount.appId) ||
         (event.type === 'object' &&
@@ -253,37 +273,54 @@ export class InkViews {
         );
         if (hint?.source === mount.source) {
           for (const root of hint.roots) mount.dirty.add(root);
-        } else mount.all = true;
+          // Use the same compiler-checked dependencies as component caching.
+          // Input-backed pure components wait for their retained result instead
+          // of computing once before it is ready and then computing again.
+          needsRender ||= [...mount.cache.values()].some(
+            (entry) =>
+              !entry.roots ||
+              entry.roots.some((root) => hint.roots.includes(root)),
+          );
+        } else {
+          mount.all = true;
+          needsRender = true;
+        }
         changed = true;
       }
-      for (const entry of mount.cache.values())
+      for (const [name, entry] of mount.cache) {
         if (
-          (entry.querySnapshot &&
-            !currentUiQuery(this.platform.world, entry.querySnapshot)) ||
-          (entry.readSnapshot && !this.reads.current(entry.readSnapshot))
+          entry.querySnapshot &&
+          !currentUiQuery(this.platform.world, entry.querySnapshot)
         ) {
           entry.dataDirty = true;
           changed = true;
-          if (entry.readSnapshot && entry.readSnapshot.binding.appId !== mount.appId)
-            readers.add(mount.appId);
+          needsRender = true;
         }
+        if (entry.readSnapshot && !this.reads.current(entry.readSnapshot)) {
+          entry.dataDirty = true;
+          changed = true;
+          if (entry.readSnapshot.binding.appId !== mount.appId)
+            readers.add(mount.appId);
+          if (!mount.subscriptions.has(name)) needsRender = true;
+        }
+      }
       if (event.type === 'deleted' && event.ids.includes(mount.appId)) {
         mount.all = true;
         changed = true;
+        needsRender = true;
       }
-      if (changed) mount.epoch++;
+      if (changed) {
+        mount.epoch++;
+        if (needsRender) this.schedule(mount);
+      }
     }
     // Tell desktops which apps read the changed provider, so only their frames
     // refresh; other apps holding apps.invoke are not woken by this commit.
     if (provider && readers.size)
       for (const listener of [...this.platform.world.listeners])
-        listener({
-          type: 'ink-reads',
-          provider: provider.appId,
-          apps: [...readers].sort(),
-        });
+        listener({ type: 'ink-reads', provider: provider.appId, apps: [...readers].sort() });
   }
-  async render(mount, principal, provided) {
+  async render(mount, principal, provided, { passive = false } = {}) {
     if (mount.disposed) fail(410, 'Interface was disposed');
     const program = provided || (await this.program(mount, principal)),
       code = this.platform.code,
@@ -427,6 +464,7 @@ export class InkViews {
             querySnapshot,
             readSnapshot,
             dataDirty: false,
+            roots: component.roots,
           };
           cache.set(name, entry);
           computed.push(name);
@@ -463,7 +501,10 @@ export class InkViews {
         ),
         bytes =
           [...retained.values()].reduce(
-            (n, entry) => n + Buffer.byteLength(entry.wire),
+            (n, entry) =>
+              n +
+              Buffer.byteLength(entry.wire) +
+              (entry.readSnapshot?.bytes || 0),
             0,
           ) + Buffer.byteLength(JSON.stringify(frame.tree));
       if (bytes > 4 * 1024 * 1024 || this.bytes - mount.bytes + bytes > LIMIT)
@@ -473,6 +514,9 @@ export class InkViews {
       mount.cache = retained;
       mount.frame = frame;
       mount.computed = computed;
+      const previousTree = mount.tree,
+        previousRevision = mount.revision,
+        previousSnapshots = mount.snapshotKey;
       const changed =
         !mount.tree ||
         diffUiTree(mount.tree, frame.tree).operations.length ||
@@ -481,7 +525,10 @@ export class InkViews {
       mount.tree = frame.tree;
       mount.all = false;
       mount.dirty.clear();
-      this.touch(mount);
+      mount.snapshotKey = JSON.stringify(this.snapshots(mount));
+      if (!passive) this.touch(mount);
+      if (mount.live && (changed || previousSnapshots !== mount.snapshotKey))
+        this.publish(mount, previousRevision, previousTree);
       return;
     }
     fail(409, 'State changed during interface computation; refresh again', {
@@ -499,6 +546,12 @@ export class InkViews {
       expiresAt: mount.expiresAt,
       target: 'dom',
       computed: mount.computed || [],
+      ...(!mount.previewId
+        ? {
+            updates: { stream: mount.stream, sequence: mount.deliverySequence },
+            snapshots: this.snapshots(mount),
+          }
+        : {}),
       ...(previous
         ? { patch: diffUiTree(previous, mount.tree) }
         : { tree: mount.tree }),
@@ -507,16 +560,270 @@ export class InkViews {
   refresh(id, principal, input = {}) {
     const mount = this.get(id, principal);
     if (
-      !fields(input, ['revision']) ||
+      !fields(input, ['revision', 'reset']) ||
+      (input.reset !== undefined && typeof input.reset !== 'boolean') ||
       !Number.isSafeInteger(input.revision) ||
       input.revision < 0 ||
       input.revision > mount.revision
     )
       fail(409, 'Interface revision changed', { notApplied: true });
     return this.serial(mount, async () => {
-      const previous = input.revision === mount.revision ? mount.tree : null;
+      const previous =
+        !input.reset && input.revision === mount.revision ? mount.tree : null;
       await this.render(mount, principal);
-      return this.frame(mount, input.revision, previous);
+      const value = this.frame(mount, input.revision, previous);
+      return input.reset
+        ? { ...value, updates: { ...value.updates, reset: true } }
+        : value;
+    });
+  }
+  snapshots(mount) {
+    return [...mount.cache]
+      .filter(([, entry]) => entry.readSnapshot)
+      .map(([component, entry]) => {
+        const snapshot = entry.readSnapshot;
+        return {
+          component,
+          id: snapshot.id,
+          sequence: snapshot.sequence,
+          appId: snapshot.binding.appId,
+          releaseId: snapshot.binding.releaseId,
+          stateRevision: snapshot.stateRevision,
+          versionWire: snapshot.versionWire,
+        };
+      })
+      .sort((a, b) =>
+        a.component < b.component ? -1 : a.component > b.component ? 1 : 0,
+      );
+  }
+  async enableLive(mount, principal) {
+    if (mount.live) return;
+    const program = await this.program(mount, principal);
+    mount.live = true;
+    try {
+      for (const component of program.components.values())
+        if (component.read) {
+          const binding =
+            component.read.appId === 'self'
+              ? {
+                  ...component.read,
+                  appId: mount.appId,
+                  releaseId: mount.releaseId,
+                }
+              : component.read;
+          mount.subscriptions.set(
+            component.name,
+            this.reads.retain(
+              binding,
+              component.data,
+              ({ snapshot, error }) => {
+                if (mount.disposed) return;
+                if (error) {
+                  mount.deliveryError = error;
+                  this.wake(mount, error);
+                  return;
+                }
+                mount.deliveryError = null;
+                const entry = mount.cache.get(component.name);
+                if (entry?.readSnapshot !== snapshot) {
+                  if (entry) entry.dataDirty = true;
+                  mount.epoch++;
+                  this.schedule(mount);
+                }
+              },
+              { appId: mount.appId, releaseId: mount.releaseId },
+            ),
+          );
+        }
+      await this.render(mount, principal, program);
+    } catch (error) {
+      for (const release of mount.subscriptions.values()) release();
+      mount.subscriptions.clear();
+      mount.live = false;
+      throw error;
+    }
+  }
+  schedule(mount) {
+    if (!mount.live || mount.disposed || mount.scheduled || !this.accepting)
+      return;
+    mount.scheduled = true;
+    queueMicrotask(() => {
+      if (mount.disposed || !this.accepting) {
+        mount.scheduled = false;
+        return;
+      }
+      this.serial(mount, async () => {
+        mount.scheduled = false;
+        try {
+          await this.render(mount, undefined, undefined, { passive: true });
+          mount.deliveryError = null;
+        } catch (error) {
+          if (error.current?.uiRetry) {
+            mount.updateTimer = setTimeout(() => this.schedule(mount), 10);
+            mount.updateTimer.unref();
+          } else {
+            mount.deliveryError = error;
+            this.wake(mount, error);
+          }
+        }
+      }).catch((error) => {
+        mount.scheduled = false;
+        this.wake(mount, error);
+      });
+    });
+  }
+  publish(mount, baseRevision, previous) {
+    mount.deliverySequence++;
+    const value = this.frame(mount, baseRevision, previous),
+      bytes = Buffer.byteLength(JSON.stringify(value));
+    mount.history.push({
+      sequence: mount.deliverySequence,
+      value,
+      bytes,
+      tick: ++this.deliveryTick,
+    });
+    this.deliveryBytes += bytes;
+    const discard = (target) => {
+      const first = target.history.shift();
+      if (first) this.deliveryBytes -= first.bytes;
+    };
+    while (
+      mount.history.length > 32 ||
+      mount.history.reduce((n, r) => n + r.bytes, 0) > 1024 * 1024
+    )
+      discard(mount);
+    while (this.deliveryBytes > 8 * 1024 * 1024) {
+      const oldest = [...this.mounts.values()]
+        .filter((m) => m.history.length)
+        .sort((a, b) => a.history[0].tick - b.history[0].tick)[0];
+      if (!oldest) break;
+      discard(oldest);
+    }
+    this.wake(mount);
+  }
+  available(mount, input) {
+    const meta = JSON.parse(this.platform.app(mount.appId).body);
+    if (meta.releaseId !== mount.releaseId)
+      fail(409, 'Interface release changed; reopen it');
+    if (!meta.capabilities?.includes('code.execute'))
+      fail(403, 'This app does not declare code.execute');
+    for (const entry of mount.cache.values())
+      if (entry.readSnapshot) {
+        const binding = entry.readSnapshot.binding;
+        if (
+          binding.appId !== mount.appId &&
+          !meta.capabilities?.includes('apps.invoke')
+        )
+          fail(403, 'Cross-app UI reads require apps.invoke');
+        this.reads.stamp(binding.appId, binding.releaseId);
+      }
+    if (mount.deliveryError) throw mount.deliveryError;
+    if (input.sequence < mount.deliverySequence) {
+      const next = mount.history.find(
+        (entry) => entry.sequence === input.sequence + 1,
+      );
+      if (next) return next.value;
+      return {
+        ...this.frame(mount, input.revision, null),
+        updates: {
+          stream: mount.stream,
+          sequence: mount.deliverySequence,
+          reset: true,
+        },
+      };
+    }
+    if (input.revision !== mount.revision)
+      return {
+        ...this.frame(mount, input.revision, null),
+        updates: {
+          stream: mount.stream,
+          sequence: mount.deliverySequence,
+          reset: true,
+        },
+      };
+    return null;
+  }
+  wake(mount, error) {
+    for (const notify of [...mount.waiters]) notify(error);
+  }
+  async watch(id, principal, input = {}, { signal } = {}) {
+    const mount = this.get(id, principal);
+    if (mount.previewId) fail(501, 'Preview interfaces use explicit refresh');
+    if (
+      !fields(input, ['stream', 'sequence', 'revision']) ||
+      input.stream !== mount.stream ||
+      !Number.isSafeInteger(input.sequence) ||
+      input.sequence < 0 ||
+      input.sequence > mount.deliverySequence ||
+      !Number.isSafeInteger(input.revision) ||
+      input.revision < 0 ||
+      input.revision > mount.revision
+    )
+      fail(409, 'Interface subscription cursor changed', {
+        notApplied: true,
+        uiReset: true,
+      });
+    if (!this.accepting) fail(503, 'Interface admission is closed');
+    if (mount.waiters.size >= 2)
+      fail(429, 'Interface already has active delivery requests');
+    await this.serial(mount, () => this.enableLive(mount, principal));
+    const program = await this.program(mount, principal);
+    for (const component of program.components.values())
+      if (component.read) {
+        const binding =
+          component.read.appId === 'self'
+            ? {
+                ...component.read,
+                appId: mount.appId,
+                releaseId: mount.releaseId,
+              }
+            : component.read;
+        this.reads.stamp(binding.appId, binding.releaseId);
+      }
+    this.touch(mount);
+    const ready = this.available(mount, input);
+    if (ready) return ready;
+    if (mount.waiters.size >= 2)
+      fail(429, 'Interface already has active delivery requests');
+    return new Promise((resolve, reject) => {
+      let timer,
+        done = false;
+      const finish = (error, value) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        mount.waiters.delete(notify);
+        signal?.removeEventListener('abort', abort);
+        error ? reject(error) : resolve(value);
+      };
+      const notify = (error) => {
+        try {
+          if (error) return finish(error);
+          const value = this.available(mount, input);
+          if (value) finish(null, value);
+        } catch (error) {
+          finish(error);
+        }
+      };
+      const abort = () =>
+        finish(
+          Object.assign(Error('Interface delivery cancelled'), { status: 499 }),
+        );
+      mount.waiters.add(notify);
+      timer = setTimeout(() => {
+        notify();
+        if (!done)
+          finish(null, {
+            heartbeat: true,
+            id: mount.id,
+            revision: input.revision,
+            updates: { stream: mount.stream, sequence: input.sequence },
+          });
+      }, 15000);
+      timer.unref();
+      signal?.addEventListener('abort', abort, { once: true });
+      if (signal?.aborted) abort();
+      else notify();
     });
   }
   event(id, principal, input) {
@@ -679,6 +986,17 @@ export class InkViews {
   drop(mount) {
     if (mount.disposed) return;
     mount.disposed = true;
+    clearTimeout(mount.updateTimer);
+    this.wake(
+      mount,
+      Object.assign(Error('Interface session expired; reopen it'), {
+        status: 410,
+      }),
+    );
+    for (const release of mount.subscriptions.values()) release();
+    mount.subscriptions.clear();
+    for (const entry of mount.history) this.deliveryBytes -= entry.bytes;
+    mount.history.length = 0;
     this.mounts.delete(mount.id);
     this.bytes -= mount.bytes;
     mount.bytes = 0;
@@ -690,13 +1008,14 @@ export class InkViews {
       if (!mount.busy && mount.expiresAt <= this.now()) this.drop(mount);
   }
   async close() {
-    this.accepting = false;
+    this.closeAdmission();
+    this.stop?.();
     await Promise.allSettled([...this.tasks]);
     clearInterval(this.timer);
     this.stop?.();
     for (const mount of this.mounts.values()) this.drop(mount);
     this.queries.close();
-    this.reads.close();
+    await this.reads.close();
     this.ready = false;
   }
 }
@@ -722,4 +1041,17 @@ function uiDataValue(value, type) {
     return value.map((item) => uiDataValue(item, type.element));
   }
   return value;
+}
+
+export async function watchInkUi(service, id, principal, input, response) {
+  const controller = new AbortController(),
+    abort = () => controller.abort();
+  response.once('close', abort);
+  try {
+    return await service.watch(id, principal, input, {
+      signal: controller.signal,
+    });
+  } finally {
+    response.removeListener('close', abort);
+  }
 }

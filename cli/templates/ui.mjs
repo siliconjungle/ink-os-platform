@@ -741,6 +741,10 @@
 				id,
 				...input
 			}),
+			watch: (id, input) => request("watch", {
+				id,
+				...input
+			}),
 			event: (id, input) => request("event", {
 				id,
 				...input
@@ -761,7 +765,7 @@
 	});
 	/** A serialized, bounded event lane; keystrokes update their local controls first. */
 	async function mountInkUi({ element, transport, subscribe = () => () => {}, onError = () => {}, onStatus = () => {}, onLifecycle = () => {}, onTrace }) {
-		let closed = false, hidden = false, frame, sequence = 0, tail = Promise.resolve(), dirty = false, timer, heartbeat, pending = null, draining = false, drainScheduled = false;
+		let closed = false, hidden = false, frame, sequence = 0, tail = Promise.resolve(), dirty = false, timer, heartbeat, pending = null, draining = false, drainScheduled = false, watching = false, live = false, watchWake, watchStopped = false;
 		const trace = (name, start, detail = {}) => {
 			if (!onTrace) return;
 			try {
@@ -793,11 +797,20 @@
 		function apply(value) {
 			if (closed) return;
 			const started = onTrace ? performance.now() : 0;
+			if (value.updates && (!/^[a-f0-9]{32}$/.test(value.updates.stream || "") || !Number.isSafeInteger(value.updates.sequence) || value.updates.sequence < 0)) throw Error("Invalid interface delivery cursor");
 			if (!frame || value.id !== frame.id) {
 				renderer.rebase(value);
 				sequence = 0;
-			} else if (value.revision >= renderer.revision && value.baseRevision === renderer.revision) renderer.apply(value);
-			else dirty = true;
+			} else if (value.updates?.reset && value.tree) renderer.rebase({
+				...value,
+				baseRevision: 0
+			});
+			else if (value.revision >= renderer.revision && value.baseRevision === renderer.revision) renderer.apply(value);
+			else {
+				dirty = true;
+				return false;
+			}
+			dirty = false;
 			frame = {
 				...value,
 				revision: renderer.revision
@@ -807,6 +820,7 @@
 				revision: renderer.revision,
 				operations: value.patch?.operations.length ?? null
 			});
+			return true;
 		}
 		async function open() {
 			const value = await transport.open({ target: "dom" });
@@ -816,11 +830,14 @@
 			}
 			apply(value);
 		}
-		async function read() {
+		async function read(reset = false) {
 			if (closed || hidden || pending) return;
 			dirty = false;
 			try {
-				apply(await transport.refresh(frame.id, { revision: renderer.revision }));
+				apply(await transport.refresh(frame.id, {
+					revision: renderer.revision,
+					...reset ? { reset: true } : {}
+				}));
 			} catch (error) {
 				if (error.status === 409 && error.current?.uiRetry) {
 					invalidate();
@@ -834,6 +851,7 @@
 			}
 		}
 		function invalidate() {
+			if (live) return;
 			dirty = true;
 			if (closed || hidden || timer !== void 0) return;
 			const started = onTrace ? performance.now() : 0;
@@ -844,10 +862,104 @@
 				serial(read);
 			}, 32);
 		}
+		async function receive(value, requestedId) {
+			if (closed || frame?.id !== requestedId || value.id !== requestedId) return;
+			if (pending || hidden) return false;
+			const cursor = value.updates;
+			if (!cursor || cursor.stream !== frame.updates?.stream || !Number.isSafeInteger(cursor.sequence)) {
+				await read(true);
+				return true;
+			}
+			if (cursor.sequence < frame.updates.sequence || cursor.sequence === frame.updates.sequence && !cursor.reset) return true;
+			if (cursor.reset && value.revision < renderer.revision) return true;
+			if (value.heartbeat) {
+				await read(true);
+				return true;
+			}
+			if (!cursor.reset && cursor.sequence !== frame.updates.sequence + 1 || !value.tree && value.baseRevision !== renderer.revision) {
+				await read(true);
+				return true;
+			}
+			if (!apply(value)) await read(true);
+			return true;
+		}
+		function beginWatch() {
+			if (watching || closed || watchStopped || !transport.watch || !frame?.updates) return;
+			live = true;
+			watching = true;
+			clearTimeout(timer);
+			timer = void 0;
+			(async () => {
+				let backoff = 50, failures = 0;
+				while (!closed && live && !watchStopped) {
+					if (hidden || pending) {
+						await new Promise((resolve) => {
+							watchWake = resolve;
+						});
+						continue;
+					}
+					const id = frame.id, input = {
+						...frame.updates,
+						revision: renderer.revision
+					};
+					delete input.reset;
+					try {
+						const value = await transport.watch(id, input);
+						if (closed) return;
+						while (!closed && (hidden || pending)) await new Promise((resolve) => {
+							watchWake = resolve;
+						});
+						if (closed) return;
+						await serial(() => receive(value, id));
+						backoff = 50;
+						failures = 0;
+					} catch (error) {
+						if (closed) return;
+						if ([
+							404,
+							405,
+							501
+						].includes(error.status)) {
+							live = false;
+							invalidate();
+							break;
+						}
+						if (error.status === 410) {
+							await serial(open);
+							continue;
+						}
+						if (error.current?.uiReset) {
+							await serial(() => read(true));
+							continue;
+						}
+						if ([
+							401,
+							403,
+							409
+						].includes(error.status) && !error.current?.uiRetry) {
+							watchStopped = true;
+							onError(error);
+							break;
+						}
+						if (++failures === 3 && !error.current?.uiRetry && ![429, 503].includes(error.status)) onError(error);
+						await new Promise((resolve) => setTimeout(resolve, backoff));
+						backoff = Math.min(2e3, backoff * 2);
+					}
+				}
+			})().catch((error) => {
+				if (!closed) onError(error);
+			}).finally(() => {
+				watching = false;
+			});
+		}
 		function status(value) {
 			element.setAttribute("aria-busy", String(value.pending));
 			renderer.setBusy(value.pending);
 			onStatus(value);
+			if (!value.pending) {
+				watchWake?.();
+				watchWake = void 0;
+			}
 		}
 		async function reopen() {
 			if (pending) onError(Error("The previous action may have completed; the refreshed interface shows current state"));
@@ -886,7 +998,12 @@
 						await send();
 						await drain();
 					}),
-					reopen: () => serial(reopen)
+					reopen: () => serial(async () => {
+						await reopen();
+						watchStopped = false;
+						watchWake?.();
+						beginWatch();
+					})
 				});
 				throw error;
 			}
@@ -951,6 +1068,7 @@
 			renderer.dispose();
 			throw error;
 		}
+		beginWatch();
 		heartbeat = setInterval(invalidate, 6e4);
 		return Object.freeze({
 			get renderer() {
@@ -967,6 +1085,10 @@
 			},
 			suspend(value) {
 				hidden = !!value;
+				if (!hidden) {
+					watchWake?.();
+					watchWake = void 0;
+				}
 				if (hidden) {
 					clearTimeout(timer);
 					timer = void 0;
@@ -975,6 +1097,8 @@
 			dispose() {
 				if (closed) return;
 				closed = true;
+				watchWake?.();
+				watchWake = void 0;
 				queue.length = 0;
 				clearTimeout(timer);
 				clearInterval(heartbeat);
