@@ -1,8 +1,9 @@
+import { nativeResident } from './native-resident.mjs';
 import { compileInkProgram, compilerInfo, compilerRequest, normalizeInkProgram, inkProgramKey, inkProgramIdentity } from './ink-compiler.mjs';
 import { inkEntries } from '../shared/ink-app.mjs';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, readFile, writeFile, copyFile, chmod } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, copyFile, chmod, rename } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -43,7 +44,29 @@ unsafe impl std::alloc::GlobalAlloc for InkBudgetAllocator{
  }
 }
 #[global_allocator]static INK_ALLOCATOR:InkBudgetAllocator=InkBudgetAllocator;
+fn resident_main(){
+ use std::io::{BufRead,Write};
+ let stdin=std::io::stdin();let mut reader=stdin.lock();let mut state=State::new();
+ loop{
+  let mut bytes=Vec::new();
+  let read=std::io::Read::take(&mut reader,67108865).read_until(b'\\n',&mut bytes);
+  match read{Ok(0)=>break,Ok(_)=>{},Err(_)=>break}
+  if bytes.len()>67108864||bytes.last()!=Some(&b'\\n'){break;}
+  let result=(||->Result<serde_json::Value,String>{
+   let request:serde_json::Value=serde_json::from_slice(&bytes).map_err(|e|e.to_string())?;
+   match request["op"].as_str().unwrap_or(""){
+    "load"=>{state=if let Some(hex)=request["snapshotHex"].as_str(){if hex.len()%2!=0{return Err("Invalid snapshot hex".into());}let bytes=(0..hex.len()).step_by(2).map(|i|u8::from_str_radix(&hex[i..i+2],16).map_err(|e|e.to_string())).collect::<Result<Vec<_>,_>>()?;State::restore(&bytes)?}else{State::new()};Ok(serde_json::json!(true))},
+    "checkpoint"=>{let bytes=state.checkpoint()?;let text=bytes.iter().map(|b|format!("{:02x}",b)).collect::<String>();Ok(serde_json::json!({"snapshotHex":text}))},
+    "call"=>{let entry=request["entry"].as_str().ok_or("Missing entry")?;let input=request["input"].as_str().ok_or("Missing input")?;if input.len()>1048576{return Err("Input exceeds 1 MiB".into());}let args:serde_json::Value=serde_json::from_str(input).map_err(|e|e.to_string())?;let value=if request["kind"]=="function"{state.call_json(entry,&args)?}else{state.invoke_json(entry,&args)?};Ok(serde_json::json!({"output":value}))},
+    _=>Err("Unknown resident operation".into())
+   }
+  })();
+  let response=match result{Ok(value)=>serde_json::json!({"value":value}),Err(error)=>serde_json::json!({"error":error})};
+  let line=response.to_string();if line.len()>67108864{break;}println!("{}",line);if std::io::stdout().flush().is_err(){break;}
+ }
+}
 fn main(){
+ if std::env::args().nth(1).as_deref()==Some("--resident"){resident_main();return;}
  use std::io::Read;
  let result=(||->Result<serde_json::Value,String>{
   let mut input=String::new();std::io::stdin().take(8388609).read_to_string(&mut input).map_err(|e|e.to_string())?;
@@ -135,8 +158,9 @@ export class NativeInk {
     try { if (task.child?.pid) await onProcess?.({ pid: task.child.pid, artifactId: id, child: task.child }); } catch (error) { notificationError = error; }
     await task;
     if (notificationError) throw notificationError;
-    await copyFile(join(env.CARGO_TARGET_DIR, 'release', process.platform === 'win32' ? 'ink-native-app.exe' : 'ink-native-app'), executable);
-    await chmod(executable, 0o700);
+    await copyFile(join(env.CARGO_TARGET_DIR, 'release', process.platform === 'win32' ? 'ink-native-app.exe' : 'ink-native-app'), executable+'.next');
+    await chmod(executable+'.next', 0o700);
+    await rename(executable+'.next',executable);
     const executableSHA256 = createHash('sha256').update(await readFile(executable)).digest('hex');
     await writeFile(join(directory, 'artifact.json'), JSON.stringify({ id, namespace, source, compiler: info.sha256, toolchain, host, compatibilityKey, executableSHA256, sourceIdentity: artifact.manifest.core_sha256, ...(programIdentity ? { programIdentity } : {}) }), { mode: 0o600 });
     return { id, target: 'native', sourceIdentity: artifact.manifest.core_sha256, ...(programIdentity ? { programIdentity } : {}), cached: false };
@@ -150,6 +174,12 @@ export class NativeInk {
     if (createHash('sha256').update(executable).digest('hex') !== record.executableSHA256) throw Object.assign(Error('Native executable integrity check failed. Rebuild the native target to repair its cache.'), { status: 500, code: 'INK_NATIVE_INTEGRITY' });
     return record;
   }
+  async resident(id,{namespace='preview',compiled,timeout=30000}={}) {
+    const record=await this.record(id,namespace),artifact=compiled.artifact,programIdentity=inkProgramIdentity(artifact);
+    if(record.sourceIdentity!==artifact.manifest.core_sha256||programIdentity&&JSON.stringify(record.programIdentity)!==JSON.stringify(programIdentity))throw Object.assign(Error('Native artifact module/source identity mismatch.'),{status:409});
+    return nativeResident({executable:join(this.directory,id,process.platform==='win32'?'program.exe':'program'),compiled,timeout});
+  }
+
   async run(id, { namespace = 'preview', entry, args = [], input: raw, snapshot } = {}) {
     const record = await this.record(id, namespace), directory = join(this.directory, id);
     const artifact = await this.compile(record.source);

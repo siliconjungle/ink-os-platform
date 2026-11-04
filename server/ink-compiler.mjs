@@ -7,7 +7,7 @@ const sha = value => createHash('sha256').update(value).digest('hex');
 const canonical = value => JSON.stringify(value, (_key, value) => value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value);
 
 let modulePromise;
-async function compilerModule() {
+export async function compilerModule() {
   if (!modulePromise) modulePromise = (async () => {
     let base = new URL('../dist/', import.meta.url);
     let metadata;

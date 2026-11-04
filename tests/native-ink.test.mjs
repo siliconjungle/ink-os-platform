@@ -35,6 +35,25 @@ test('actual compiled Rust preserves browser values and portable state across ta
     const event = await native.run(build.id, { namespace: 'test-app', entry: 'sample', input });
     assert.equal(event.wire, (await code.run({ source, entry: 'sample', input, instance: 'event-' + scalar })).wire);
   }
+  const residentCode=new Code('.',join(directory,'resident'));t.after(()=>residentCode.close());
+  residentCode.nativeJobs={native,readyFor:async()=>build.id};
+  const run=(entry,input,backend='native',requestId)=>residentCode.run({source,namespace:'test-app',stateKey:'native-state',entry,input,backend,requestId});
+  assert.equal((await run('add','[3]','native','once')).output.result,3);
+  assert.equal((await run('add','[3]','native','once')).output.result,3);
+  assert.equal((await run('total','[]')).output.result,3);
+  assert.equal(residentCode.residents.starts,1);
+  assert.equal((await run('add','[4]','javascript')).output.result,7);
+  assert.equal((await run('total','[]')).output.result,7,'native reloads committed JavaScript journal');
+  await assert.rejects(run('add','[true]'));assert.equal((await run('total','[]')).output.result,7);
+  await assert.rejects(run('add','[1.0]'));assert.equal((await run('total','[]')).output.result,7);
+  const eventInput='[{"text":"resident","wide":18446744073709551615,"integer":{"Int":"-7"},"scalar":{"F32Bits":2147483648},"real":{"F64Bits":"9221120237041090561"},"maybe":{"None":null}}]';
+  const eventReply=await run('sample',eventInput);assert.equal(eventReply.output.events.length,1);
+  // Opposite target must deterministically replay exact events and wide values.
+  assert.equal((await run('total','[]','javascript')).output.result,7);
+  await residentCode.residents.close();
+  const {InkResidents}=await import('../server/ink-residents.mjs');residentCode.residents=new InkResidents();
+  assert.equal((await run('sample',eventInput,'native','event')).output.events.length,1);
+  const portable=await residentCode.loadCheckpoint('test-app','native-state');assert.ok(portable.value.snapshot);
   await appendFile(join(directory, build.id, process.platform === 'win32' ? 'program.exe' : 'program'), 'tamper');
   await assert.rejects(native.run(build.id, { namespace: 'test-app', entry: 'total' }), { code: 'INK_NATIVE_INTEGRITY' });
   assert.equal((await native.build(source, { namespace: 'test-app' })).cached, false);

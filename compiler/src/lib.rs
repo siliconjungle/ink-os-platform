@@ -8,6 +8,11 @@ use std::sync::Mutex;
 const MAX_REQUEST: usize = 8 * 1024 * 1024;
 const MAX_SOURCE: usize = 128 * 1024;
 const MAX_INPUT: usize = 1024 * 1024;
+thread_local! {
+    // One immutable checked schema per resident compiler instance. The identity
+    // is still required on every request; a cache miss never trusts caller data.
+    static PREPARED: std::cell::RefCell<Option<(String, std::rc::Rc<CheckedModule>)>> = const { std::cell::RefCell::new(None) };
+}
 static RESPONSE: Mutex<Vec<u8>> = Mutex::new(Vec::new());
 
 /// Version-one source graph: bare imported names, unique global symbols, pure libraries,
@@ -838,11 +843,16 @@ pub fn handle(request: &Value) -> Result<Value, String> {
             Ok(output)
         }
         "prepare" => {
-            let core = text(request, "core")?;
-            let checked = CheckedModule::from_bytes(core.as_bytes())?;
-            if checked.identity()? != text(request, "identity")? {
-                return Err("Compiled program identity mismatch.".into());
-            }
+            let identity = text(request, "identity")?;
+            let checked = if let Some(core) = request.get("core").and_then(Value::as_str) {
+                let checked = std::rc::Rc::new(CheckedModule::from_bytes(core.as_bytes())?);
+                if checked.identity()? != identity { return Err("Compiled program identity mismatch.".into()); }
+                PREPARED.with(|cache| *cache.borrow_mut() = Some((identity.to_owned(), checked.clone())));
+                checked
+            } else {
+                PREPARED.with(|cache| cache.borrow().as_ref().filter(|(id,_)| id == identity).map(|(_,checked)| checked.clone()))
+                    .ok_or("Checked input schema is not resident; provide its core.")?
+            };
             let program = checked.program();
             let input = text(request, "input")?;
             if input.len() > MAX_INPUT {
@@ -1057,6 +1067,19 @@ mod tests {
             assert!(prepare(&c, "word", input).is_err(), "{input}");
         }
         assert!(prepare(&c, "small", "[4294967296]").is_err());
+    }
+    #[test]
+    fn resident_input_schema_requires_its_checked_identity() {
+        let first=compile("module first;fn word(x:u64)->u64{return x;}");
+        prepare(&first,"word","[7]").unwrap();
+        let mut cached=json!({"op":"prepare","identity":first["manifest"]["core_sha256"],"entry":"word","input":"[18446744073709551615]"});
+        assert_eq!(handle(&cached).unwrap()["input"],"[18446744073709551615]");
+        cached["input"]=json!("[true]");assert!(handle(&cached).is_err());
+        cached["identity"]=json!("foreign");assert!(handle(&cached).is_err());
+        let second=compile("module second;fn word(x:Bool)->Bool{return x;}");
+        prepare(&second,"word","[true]").unwrap();
+        cached["identity"]=first["manifest"]["core_sha256"].clone();
+        assert!(handle(&cached).is_err());
     }
     #[test]
     fn scripts_validate_every_command_without_executing_it() {

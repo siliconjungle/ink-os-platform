@@ -206,3 +206,8 @@ Authoritative workflows and schedules can be imported with `migrations automatio
 Hosted upgrades use the administrator-only maintenance API through the deployment CLI. The gate closes external admission, lets admitted work finish, checkpoints data, and holds idle runtime admission. A durable stop authorization binds the source boot and image pair before the deployment client stops the host. Cancellation is allowed before that seal; target-image startup retains the gate until verified completion. The local CLI exposes `maintenance prepare/status/seal/complete/cancel` and the server SDK exposes `maintenance`. Image provenance must come from `INK_OS_IMAGE_PIN` and `INK_OS_RUNTIME_IMAGE`; arbitrary caller image claims are rejected. Unsupported or unmanaged runtimes block automatic quiescence.
 
 Published adapters extend Open with across representations. The core includes no adapters; install them independently from their source workspaces. See [adapter publication and protocol](docs/adapters.md).
+
+Ink applications use bounded resident JavaScript/native execution and recover
+from durable action journals. World appends ordinary writes and checkpoints
+periodically. See [resident execution and recovery](docs/resident-execution.md)
+for retry identities, backup requirements, limits, and validation.

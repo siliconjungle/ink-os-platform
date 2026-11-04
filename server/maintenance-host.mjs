@@ -39,6 +39,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
   };}
   function documents(){const result=[];for(const item of values(platform.collaboration?.documents)){if(promise(item)){const state=observation(item);if(state?.state==='fulfilled')result.push(state.value);}else if(item)result.push(item);}return result;}
   async function healthy(){
+    check(!world.journal?.error,'MAINTENANCE_WORLD_UNREADY','World journal needs recovery');
     for(const service of[platform.namespaceMigrations,platform.automationMigrations])if(service)check(service.ready===true,'MAINTENANCE_MIGRATION_UNREADY','A migration needs recovery before maintenance');
     check(!platform.collaboration?.migrationBlocked?.size&&!platform.workflows?.migrationBlocked&&!platform.schedules?.migrationBlocked,'MAINTENANCE_MIGRATION_BLOCKED','A migration still holds its destination admission gates');
     if(storage?.aliases)check(storage.aliases.ready===true,'MAINTENANCE_ALIASES_UNREADY','Storage aliases need recovery before maintenance');

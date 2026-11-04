@@ -152,7 +152,7 @@ export async function runInstalledInk(platform, appId, input = {}, principal, re
   if (!app.spec.exports.includes(input.entry) && app.spec.view !== input.entry) fail(403, 'The Ink entry is not exported by this app.');
   const hosted=await runInkHostBinding(platform,appId,app,input,principal);if(hosted)return hosted;
   const authority = platform.runtime.bind({ owner: false, appId, namespace: appId, releaseId: app.releaseId });
-  const result = await platform.code.run({ source: app.source, entry: input.entry, input: input.input, args: input.args, backend: input.backend, namespace: appId, stateKey: 'ink-app:state', principal: authority });
+  const result = await platform.code.run({ source: app.source, entry: input.entry, input: input.input, args: input.args, backend: input.backend, requestId: input.requestId, namespace: appId, stateKey: 'ink-app:state', principal: authority });
   if (result.needsArguments) fail(400, 'Provide a JSON argument array for this Ink entry.');
   const entry = app.entries.find(entry => entry.name === input.entry), wire = parseExactJSON(result.wire);
   return { ...result, value: entry.action ? result.output.result : result.output, valueWire: stringifyExactJSON(entry.action ? wire.result : wire), releaseId: app.releaseId };

@@ -11,6 +11,7 @@ export async function drainHost({ server, connections, platform, world, requests
   for (const socket of sockets.clients) socket.close(1001, 'Host is stopping');
   await platform.nativeJobs?.close();
   await platform.provider?.close?.();
+  await platform.code?.close();
   await platform.collaboration.close();
   await world.persist();
   await closed;

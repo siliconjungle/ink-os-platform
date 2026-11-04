@@ -1,16 +1,18 @@
 import{withWriteAccess}from './runtime-credentials.mjs';
 import { createState, metadata } from '../generated/world.mjs';
-import { mkdir, readFile, writeFile, rename, open } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { randomBytes, createHash } from 'node:crypto';
 import { join } from 'node:path';
+import { TransactionJournal, publishFile, durableDirectory } from './transaction-journal.mjs';
 
 export const id = () => randomBytes(16).toString('hex');
 export const plain = value => JSON.parse(JSON.stringify(value, (_, v) => typeof v === 'bigint' ? Number(v) : v));
 export class Conflict extends Error { constructor(current) { super('This object changed in another view. Your draft is still here.'); this.status = 409; this.current = current; } }
 export class World {
-  constructor(directory) { this.directory = directory; this.state = createState(); this.history = []; this.blobRefs={};this.retiredBlobs=new Set();this.deleting=new Set();this.deletingNamespaces=new Set();this.mutations = {}; this.restorations={}; this.purged = new Set(); this.versionOffset = 0; this.tail = Promise.resolve(); this.listeners = new Set(); }
+  constructor(directory) { this.directory = directory; this.state = createState(); this.history = []; this.blobRefs={};this.retiredBlobs=new Set();this.deleting=new Set();this.deletingNamespaces=new Set();this.mutations = {}; this.restorations={}; this.purged = new Set(); this.versionOffset = 0; this.tail = Promise.resolve(); this.listeners = new Set(); this.journal = new TransactionJournal(join(directory,'world.journal'),metadata.core_sha256); this.checkpointSequence=0; }
   async open() {
-    await mkdir(this.directory, { recursive: true });
+    await durableDirectory(this.directory);
+    let journalCheckpoint;
     try {
       const stored = await readFile(join(this.directory, 'world.json'), 'utf8'), record = JSON.parse(stored);
       this.versionOffset = Number.isSafeInteger(record.versionOffset) && record.versionOffset >= 0 ? record.versionOffset : 0;
@@ -49,29 +51,57 @@ export class World {
           this.versionOffset = Math.max(0, Number(legacy.version) - legacy.invoke('all', []).result.length);
         } catch (error) { if (error.code !== 'ENOENT') throw error; }
       }
+      journalCheckpoint=record.journal;
       this.history = record.history || [];
       this.mutations = record.mutations || {};this.restorations=record.restorations||{};
       this.purged = new Set(record.purged || []);this.blobRefs=record.blobRefs||{};this.retiredBlobs=new Set(record.retiredBlobs||[]);
     } catch (e) { if (e.code !== 'ENOENT') throw e; }
     for(const object of [...this.all(),...this.history.flatMap(entry=>[entry.before,entry.after]).filter(Boolean)])this.rememberBlob(object);
+    await this.journal.recover(journalCheckpoint,record=>this.applyRecord(record));
+    this.checkpointSequence=journalCheckpoint?.sequence||0;
     return this;
   }
-  rememberBlob(object){if(!object?.id||!blobDigest(object.location))return;const values=this.blobRefs[object.id]||[];if(!values.includes(object.location))this.blobRefs={...this.blobRefs,[object.id]:[...values,object.location]};}
+  rememberBlob(object){if(!object?.id||!blobDigest(object.location))return;const values=this.blobRefs[object.id]||[];if(!values.includes(object.location))this.blobRefs[object.id]=[...values,object.location];}
   freeze(ids,namespace){if(ids.some(id=>this.deleting.has(id))||namespace&&this.deletingNamespaces.has(namespace))throw Object.assign(Error('Permanent deletion is already in progress'),{status:409});ids.forEach(id=>this.deleting.add(id));if(namespace)this.deletingNamespaces.add(namespace);return()=>{ids.forEach(id=>this.deleting.delete(id));if(namespace)this.deletingNamespaces.delete(namespace);};}
   get version() { return Number(this.state.version) + this.versionOffset; }
-  query(name, args = []) { return plain(this.state.invoke(name, args).result); }
+  query(name, args = []) { this.journal.check(); return plain(this.state.invoke(name, args).result); }
   all() { return this.query('all'); }
   get(key) { return this.query('get', [key]).Some || null; }
   captureVersion() { return this.transact(() => structuredClone({version:this.version,core:metadata.core_sha256,objects:this.all().filter(object=>!(object.namespace==='os'&&object.kind==='os.version')),history:this.history.filter(entry=>!(entry.before?.namespace==='os'&&entry.before?.kind==='os.version')&&!(entry.after?.namespace==='os'&&entry.after?.kind==='os.version')),blobRefs:Object.fromEntries(Object.entries(this.blobRefs).filter(([id])=>this.get(id)?.kind!=='os.version')),mutations:this.mutations,purged:[...this.purged]})); }
+  applyRecord(record) {
+    for(const action of record.actions){
+      const args=action.name==='put'?[{...action.object,created:BigInt(action.object.created),updated:BigInt(action.object.updated)},action.expected,action.writer]:[action.id,action.namespace];
+      const result=this.state.invoke(action.name,args);
+      if(!result.committed||JSON.stringify(plain(result))!==action.outcome)throw Error('World transaction replay mismatch.');
+    }
+    if(record.history)this.history=[...record.history,...this.history].slice(0,300);
+    if(record.mutation)this.mutations[record.mutation.key]=record.mutation.sequence;
+    for(const action of record.actions)if(action.name==='put')this.rememberBlob(action.object);
+    for(const digest of record.unretire||[])this.retiredBlobs.delete(digest);
+    for(const digest of record.retire||[])this.retiredBlobs.add(digest);
+    if(record.purge){const targets=new Set(record.purge);for(const id of targets){this.purged.add(id);delete this.blobRefs[id];}this.history=this.history.filter(entry=>!targets.has(entry.objectId));for(const key of Object.keys(this.mutations))if(targets.has(key.slice(0,32)))delete this.mutations[key];}
+  }
+  validateActions(actions) {
+    this.state.beginTransaction();
+    try { for(const action of actions){const result=this.state.invoke(action.name,action.name==='put'?[{...action.object,created:BigInt(action.object.created),updated:BigInt(action.object.updated)},action.expected,action.writer]:[action.id,action.namespace]);if(!result.committed){if(JSON.stringify(result.result).includes('Forbidden'))throw Object.assign(Error('Only the owning app can write this namespace'),{status:403});throw new Conflict(action.name==='put'?this.get(action.object.id):null);}action.outcome=JSON.stringify(plain(result));} }
+    finally { this.state.rollbackTransaction(); }
+  }
+  async commitRecord(record) {
+    this.journal.check();this.validateActions(record.actions);
+    await this.journal.append(record);
+    try{this.applyRecord(record);}catch(error){this.journal.error=error;throw error;}
+    // Maintenance failure cannot undo an already durable transaction. Fail closed
+    // until reopen; recovery will find the committed record in either log layout.
+    if(this.journal.sequence-this.checkpointSequence>=128||this.journal.bytes>=8*1024*1024)await this.persist();
+  }
   async persist() {
+    this.journal.check();
     const snapshot = Buffer.from(await this.state.checkpoint()).toString('base64');
-    const temp = join(this.directory, 'world.json.next');
-    await writeFile(temp, JSON.stringify({ format: 'ink-os-world-v2', snapshot, history: this.history, mutations: this.mutations, restorations:this.restorations, versionOffset: this.versionOffset, purged: [...this.purged],blobRefs:this.blobRefs,retiredBlobs:[...this.retiredBlobs] }), { mode: 0o600, flush: true });
-    await rename(temp, join(this.directory, 'world.json'));
-    const directory=await open(this.directory,'r');try{await directory.sync();}finally{await directory.close();}
+    try{await publishFile(join(this.directory,'world.json'),JSON.stringify({format:'ink-os-world-v2',snapshot,history:this.history,mutations:this.mutations,restorations:this.restorations,versionOffset:this.versionOffset,purged:[...this.purged],blobRefs:this.blobRefs,retiredBlobs:[...this.retiredBlobs],journal:this.journal.position()}));
+    await this.journal.rotate();this.checkpointSequence=this.journal.sequence;}catch(error){this.journal.error=error;throw error;}
   }
   transact(run) {
-    const next = this.tail.then(async()=>{try{return await run();}finally{this.statsCache=undefined;}}); this.tail = next.catch(() => {}); return next;
+    const next = this.tail.then(async()=>{try{this.journal.check();return await run();}finally{this.statsCache=undefined;}}); this.tail = next.catch(() => {}); return next;
   }
   restoreTransaction(plan,intent,run) {
     return this.transact(async()=>{
@@ -154,17 +184,27 @@ export class World {
       };
       if (!/^[0-9a-f]{32}$/.test(object.id) || !object.spaces.every(s => /^[0-9a-f]{32}$/.test(s))) throw Error('Invalid object identity');
       if ([object.title, object.summary, object.body].some(v => typeof v !== 'string')) throw Error('Object text must be strings');
-      const checkpoint = await this.state.checkpoint();
-      const beforeHistory = this.history,beforeRefs=this.blobRefs,beforeRetired=this.retiredBlobs;
-      const beforeMutation = mutation ? this.mutations[mutation.key] : undefined;
-      const result = this.state.invoke('put', [object, previous?.revision || 0, writer || object.namespace]);
-      if (!result.committed) { if(JSON.stringify(result.result).includes('Forbidden'))throw Object.assign(Error('Only the owning app can write this namespace'),{status:403});throw new Conflict(previous); }
-      if (!quiet) this.history = [{ id: id(), objectId: object.id, title: object.title || 'Untitled thought', kind: object.kind, action, actor, at: now, before: previous, after: plain(object) }, ...this.history].slice(0, 300);
-      if (mutation) this.mutations[mutation.key] = mutation.sequence;this.rememberBlob(object);if(digest&&this.retiredBlobs.has(digest)){this.retiredBlobs=new Set(this.retiredBlobs);this.retiredBlobs.delete(digest);}
-      try { await this.persist(); } catch (error) { await this.state.restore(checkpoint); this.history = beforeHistory;this.blobRefs=beforeRefs;this.retiredBlobs=beforeRetired;if(mutation){if(beforeMutation===undefined)delete this.mutations[mutation.key];else this.mutations[mutation.key]=beforeMutation;} throw error; }
+      const savedObject=plain(object);
+      await this.commitRecord({actions:[{name:'put',object:savedObject,expected:previous?.revision||0,writer:writer||object.namespace}],history:quiet?[]:[{id:id(),objectId:object.id,title:object.title||'Untitled thought',kind:object.kind,action,actor,at:now,before:previous,after:savedObject}],mutation,unretire:digest?[digest]:[],events:[{type:'object',object:savedObject,actor,quiet}]});
       const saved = this.get(object.id);
       for (const listener of this.listeners) listener({ type: 'object', object: saved, version: this.version, actor, quiet });
       return saved;
+    }));
+  }
+  stateBatch(namespace,key,expected,changes,writeAccess,{notify=true}={}) {
+    return this.transact(()=>withWriteAccess(writeAccess,async()=>{
+      const root=this.get(hash(namespace+'\0state\0'+key).slice(0,32));
+      if((root?.revision||0)!==expected)throw new Conflict(root);
+      const now=Date.now(),actions=[];
+      for(const change of changes){
+        const objectId=hash(namespace+'\0state\0'+change.key).slice(0,32),previous=this.get(objectId);
+        if(change.delete){if(previous)actions.push({name:'erase',id:objectId,namespace});continue;}
+        if(this.purged.has(objectId)||this.deletingNamespaces.has(namespace))throw Object.assign(Error('Application state is unavailable'),{status:410});
+        const object={id:objectId,namespace,kind:'state',title:change.key,body:JSON.stringify(change.value),summary:'',tags:[],spaces:[],status:'saved',cover:'',source:'',location:'',revision:(previous?.revision||0)+1,created:previous?.created||now,updated:now,starred:false,archived:false,vector:[]};
+        actions.push({name:'put',object,expected:previous?.revision||0,writer:namespace});
+      }
+      if(actions.length)await this.commitRecord({actions,events:[]});
+      const saved=this.get(hash(namespace+'\0state\0'+key).slice(0,32));if(notify&&changes.some(change=>change.key===key))for(const listener of this.listeners)listener({type:'object',object:saved,version:this.version,actor:'Ink program',quiet:true});return{value:saved&&!saved.archived?JSON.parse(saved.body):null,revision:saved?.revision||0};
     }));
   }
   async update(key, changes, options = {}) {
@@ -180,18 +220,11 @@ export class World {
   async erase(ids,{cleanup}={}) {
     return this.transact(async () => {
       await this.versions?.assertCanPurge(ids);
-      const targets = new Set(ids), objects = this.all().filter(o => targets.has(o.id));
-      const checkpoint = await this.state.checkpoint(), history = this.history, mutations = this.mutations, purged = this.purged,refs=this.blobRefs,retired=this.retiredBlobs;
-      try {
-        this.retiredBlobs=new Set(retired);if(cleanup)await cleanup();
-        for (const object of objects) {
-          if (!this.state.invoke('erase', [object.id, object.namespace]).committed) throw Error('Permanent deletion failed');
-        }
-        this.purged = new Set([...purged, ...targets]);this.blobRefs=Object.fromEntries(Object.entries(this.blobRefs).filter(([id])=>!targets.has(id)));
-        this.history = history.filter(entry => !targets.has(entry.objectId));
-        this.mutations = Object.fromEntries(Object.entries(mutations).filter(([key]) => !targets.has(key.slice(0,32))));
-        await this.persist();
-      } catch (error) { await this.state.restore(checkpoint); this.history = history; this.mutations = mutations; this.purged = purged;this.blobRefs=refs;this.retiredBlobs=retired;throw error; }
+      const targets = new Set(ids), objects = [...targets].map(id=>this.get(id)).filter(Boolean);
+      const retired=this.retiredBlobs;this.retiredBlobs=new Set(retired);
+      let retire;try{if(cleanup)await cleanup();retire=[...this.retiredBlobs].filter(digest=>!retired.has(digest));}finally{this.retiredBlobs=retired;}
+      await this.commitRecord({actions:objects.map(object=>({name:'erase',id:object.id,namespace:object.namespace})),purge:[...targets],retire,events:[{type:'deleted',ids:[...targets]}]});
+      await this.persist();
       const namespaces = new Map(objects.map(object => [object.id, object.namespace])), groups = new Map();
       for (const id of targets) { const namespace = namespaces.get(id); if (!groups.has(namespace)) groups.set(namespace, []); groups.get(namespace).push(id); }
       for (const [namespace, ids] of groups) for (const listener of this.listeners) listener({type:'deleted',ids,namespace,version:this.version});
