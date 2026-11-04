@@ -32,7 +32,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
   function tracked(value,label){const current=ref(value);check(current instanceof Set,'MAINTENANCE_TRACKING_UNVERIFIED','Ordinary HTTP '+label+' tracking is unavailable');return current;}
   function pool(){return platform.provider?.pool;}
   function queues(){const c=platform.collaboration,p=platform.projects,runtime=platform.runtime,compute=pool();return{
-    publications:[platform.publishTail,...values(platform.releaseTails),...values(p?.operations)],
+    publications:[...values(platform.systemDeployments),platform.publishTail,...values(platform.releaseTails),...values(p?.operations)],
     writers:[platform.effects?.store.tail,world.tail,platform.keysTail,runtime?.tail,platform.apiKeys?.tail,platform.environment?.tail,p?.tail,p?.publisher?.tail,p?.credentials?.store?.tail,platform.versions?.tail,platform.desktopActions?.tail,platform.nativeJobs?.tail,platform.workflows?.tail,platform.schedules?.tail,platform.fileDefaultsPending,c?.indexing,c?.versionTail,...values(c?.objectTails),...values(c?.documents),platform.namespaceMigrations?.tail,platform.automationMigrations?.tail,storage?.aliases?.tail,...values(storage?.blobTails),compute?.tail],
     code:[...values(platform.inkViews?.tasks),...values(code?.pureTasks),...values(platform.effects?.tasks),...values(code?.tasks),...values(code?.compilations),...values(platform.nativeJobs?.native?.compilations)],
     assignments:[...values(compute?.pending),...values(compute?.retiring),compute?.reaping,compute?.maintenanceTask],

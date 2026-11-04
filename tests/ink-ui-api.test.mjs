@@ -152,6 +152,38 @@ test(
       { status: 403 },
     );
     await sdk.request(previewUi + '/' + mounted.id, { method: 'DELETE' });
+    const { loadInkSystem } = await import('../cli/bin/ink-system.mjs'),
+      { fileURLToPath } = await import('node:url');
+    const systemInput = await loadInkSystem(
+      fileURLToPath(new URL('../examples/tables-system/', import.meta.url)),
+    );
+    await assert.rejects(
+      readClient.ink.systems.build({ version: 1, apps: [], links: [] }),
+      { status: 403 },
+    );
+    const system = await sdk.ink.systems.deploy(systemInput),
+      again = await sdk.ink.systems.deploy(systemInput);
+    assert.deepEqual(again, system);
+    assert.equal(system.status, 'deployed');
+    const queryUi = sdk.apps.ink.ui(system.apps.dashboard.appId),
+      queryFrame = await queryUi.open();
+    await sdk.apps.ink.run(
+      system.apps.tables.appId,
+      'put',
+      '[0,{"id":1,"title":"Connected API","amount":7,"open":true}]',
+    );
+    const changed = await queryUi.refresh(queryFrame.id, {
+      revision: queryFrame.revision,
+    });
+    assert.deepEqual(changed.computed, ['results']);
+    assert.ok(
+      changed.patch.operations.some(
+        (op) =>
+          op.props?.text === 'Open total: 7' ||
+          op.node?.props.text === 'Open total: 7',
+      ),
+    );
+    await queryUi.dispose(queryFrame.id);
     await ui.dispose(frame.id);
     await assert.rejects(ui.refresh(frame.id, { revision: 0 }), {
       status: 410,

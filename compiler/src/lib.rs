@@ -5,7 +5,8 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::sync::Mutex;
 
-const MAX_REQUEST: usize = 8 * 1024 * 1024;
+const MAX_REQUEST: usize = 16 * 1024 * 1024;
+const MAX_GENERATED: usize = 8 * 1024 * 1024;
 const MAX_SOURCE: usize = 128 * 1024;
 const MAX_INPUT: usize = 1024 * 1024;
 thread_local! {
@@ -685,6 +686,24 @@ mod modules {
             json!({"version":1,"root":root,"modules":sources,"root_exports":modules[root].exports,"graph_sha256":graph_sha256,"core_sha256":core_sha256,"identity":identity}),
         ))
     }
+    /// Source ownership comes from the parser, never host regexes or cached hints.
+    /// Generic declarations remain templates; only their elaborated instances are checked.
+    pub fn describe(graph: &Value) -> Result<Value, String> {
+        let (checked, identity) = assemble(graph)?;
+        let mut result = Vec::new();
+        for module in graph["modules"].as_array().ok_or("modules missing")? {
+            let imported = graph["modules"].as_array().unwrap().iter()
+                .filter(|m| module["dependencies"].as_array().unwrap().contains(&m["path"]))
+                .flat_map(|m| m["exports"].as_array().unwrap().iter().filter_map(Value::as_str).map(str::to_owned))
+                .collect::<BTreeSet<_>>();
+            let surface = syntax::parse_surface(text(module,"source")?, imported)?;
+            let names = declarations(&surface);
+            result.push(json!({"path":module["path"],"declarations":names,
+                "templates":surface.parameters.keys().collect::<Vec<_>>()}));
+        }
+        result.sort_by(|a,b| a["path"].as_str().cmp(&b["path"].as_str()));
+        Ok(json!({"schema":1,"graph":identity["identity"],"core":checked.identity()?,"modules":result}))
+    }
 }
 
 fn text<'a>(request: &'a Value, name: &str) -> Result<&'a str, String> {
@@ -718,7 +737,7 @@ fn arguments(
 
 fn emit_checked(checked: &CheckedModule) -> Result<Value, String> {
     let emission = ink_lowering_js::lower(checked)?;
-    if emission.javascript.len() > MAX_REQUEST {
+    if emission.javascript.len() > MAX_GENERATED {
         return Err("Generated JavaScript exceeds 8 MiB.".into());
     }
     let bundle = (|| -> Result<Value, String> {
@@ -787,7 +806,7 @@ pub fn handle(request: &Value) -> Result<Value, String> {
                 }
             }
             let mut emission = ink_lowering_js::lower_planned(&plan)?;
-            if emission.javascript.len() > MAX_REQUEST { return Err("Generated JavaScript exceeds 8 MiB.".into()); }
+            if emission.javascript.len() > MAX_GENERATED { return Err("Generated JavaScript exceeds 8 MiB.".into()); }
             // Added implementation helpers are not new public OS entrypoints.
             if let Some(functions) = emission.manifest["functions"].as_array_mut() {
                 for function in functions {
@@ -841,6 +860,10 @@ pub fn handle(request: &Value) -> Result<Value, String> {
             let mut output = emit_checked(&checked)?;
             output["module_graph"] = graph;
             Ok(output)
+        }
+        "describeModules" => {
+            if request.as_object().is_none_or(|o| o.len()!=2 || o.keys().any(|k| k!="op" && k!="graph")) { return Err("describeModules accepts only op and graph".into()); }
+            modules::describe(&request["graph"])
         }
         "prepare" => {
             let identity = text(request, "identity")?;

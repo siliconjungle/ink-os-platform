@@ -802,6 +802,10 @@
 			try {
 				apply(await transport.refresh(frame.id, { revision: renderer.revision }));
 			} catch (error) {
+				if (error.status === 409 && error.current?.uiRetry) {
+					invalidate();
+					return;
+				}
 				if (error.status === 410) {
 					await open();
 					return;

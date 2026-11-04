@@ -7,6 +7,7 @@ import { backupCLI } from './backup.mjs';
 import { nativeCLI } from './native.mjs';
 import { migrationCLI, maintenanceCLI } from './migrations.mjs';
 import{workflowCLI,commandCLI}from './workflows.mjs';
+import {systemCLI} from './ink-system.mjs';
 import { initInk, buildInk, deployInk, committedSource, previewInkCLI } from './ink.mjs';
 import { prepareProjectSnapshot } from './project-checkout.mjs';
 import{commandAssets}from './command-assets.mjs';
@@ -158,6 +159,7 @@ export async function main(args=process.argv.slice(2)){
   return print(await request(path,'PUT',{values}));
  }
  if(command==='build')return print(await buildInk(sub||'.',options));
+ if(command==='ink'&&['system-build','system-deploy'].includes(sub))return print(await systemCLI(sub,value,options,request));
  if(command==='ink'&&['preview','preview-run','preview-status','preview-close'].includes(sub))return print(await previewInkCLI(sub,value,positional[3],options,request,await projectTarget()));
  if(command==='ink'){if(!value)throw Error('Provide an app ID');if(sub==='describe')return print(await request('apps/'+value+'/ink'));if(sub==='checkpoint')return print(await request('apps/'+value+'/ink/checkpoint'));if(sub==='migrate'){if(!options.file)throw Error('Provide --file with explicit migration releases, entries and revisions.');return print(await request('apps/'+value+'/ink/migrate','POST',JSON.parse(await readFile(resolve(String(options.file)),'utf8'))));}if(sub==='run'){const input=options['input-file']?await readFile(resolve(options['input-file']),'utf8'):options.input||'[]';return print(await request('apps/'+value+'/ink/run','POST',{entry:positional[3]||options.entry,input,requestId:options['request-id']||Date.now()+':'+globalThis.crypto.randomUUID(),...(options.backend?{backend:options.backend}:{})}));}throw Error('Use ink describe APP_ID, ink checkpoint APP_ID, ink migrate APP_ID --file migration.json, or ink run APP_ID ENTRY --input JSON_ARRAY');}
  if(command==='deploy'){

@@ -139,12 +139,10 @@ export class Code {
   }
   async readState(namespace, key, principal) {
     const world = await this.store();
-    if (world.collaboration)
-      return world.collaboration.state(
-        principal || { namespace },
-        key,
-        namespace,
-      );
+    if (world.collaboration){
+      const result=await world.collaboration.state(principal||{namespace},key,namespace);
+      world.observeState?.(namespace,key,result.value,result.revision);return result;
+    }
     const object = world.get(stateObjectId(namespace, key));
     return {
       value: object && !object.archived ? JSON.parse(object.body) : null,

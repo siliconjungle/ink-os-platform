@@ -116,3 +116,12 @@ and selected checkpoint histories, exercise abort/event/restart behavior and
 reject forged proof/code/source/target packets. `compiler/examples/plan-fixture.rs`
 reproduces their plan from the pinned core's ordinary projection and proof APIs.
 Native tests exchange selected-native and original-JavaScript snapshots.
+
+## Module and system plans
+
+New releases also carry checked module summaries. Independent app units can form
+an explicitly typed system graph, reuse unchanged builds and connect readonly
+queries to incremental views. Proof replay and admitted immutable releases are
+cached under bounded identities, so request latency is independent of repeatedly
+loading the proof packet. See [system planning](system-planning.md) and the
+[Tables/dashboard example](../examples/tables-system).

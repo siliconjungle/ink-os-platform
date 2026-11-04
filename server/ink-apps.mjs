@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { compileInkProgram, compilerInfo } from './ink-compiler.mjs';
+import { compileInkProgram, compilerInfo, sealInkProgram } from './ink-compiler.mjs';
 import { inkEntries, inkCommands, inkSpec, inkModuleGraph,inkPublicEntries } from '../shared/ink-app.mjs';
 import{runInkHostBinding}from'./ink-host-bindings.mjs';
 import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
@@ -40,7 +40,7 @@ export async function inkExecutionSource(input, files) {
   return (await verifyImplementation(source, text)).execution;
 }
 
-export async function buildInkApp(manifest, files, { source } = {}) {
+export async function buildInkApp(manifest, files, { source, cachedImplementation } = {}) {
   if (!manifest || manifest.language !== 'ink') fail(400, 'Set language to ink in ink-app.json.');
   files = sourceFiles(files);
   const paths = new Set(files.map(file => file.path));
@@ -58,7 +58,7 @@ export async function buildInkApp(manifest, files, { source } = {}) {
   }
   const candidate = { source: sourcePath, exports: [], ...(graph ? { modules: graph } : {}),...(manifest.host!==undefined?{version:2,host:manifest.host}:{}) };
   const program = inkSource(candidate, sourceRelease);
-  const { implementation, artifact } = await buildImplementation(program, files, manifest.optimisation);
+  const { implementation, artifact } = cachedImplementation?await verifyImplementation(program,JSON.stringify(cachedImplementation)):await buildImplementation(program, files, manifest.optimisation);
   const entries = inkEntries(artifact.manifest, artifact.module_graph);
   const spec = inkSpec({ ...candidate, version: 3, implementation: { version: 1, path: 'server/implementation.json' }, ...(manifest.effects?{effects:manifest.effects}:{}),...(manifest.ui?.version===1?{ui:manifest.ui}:{}), view: manifest.ui?.entry ?? null, exports: manifest.exports || entries.filter(entry => entry.name !== manifest.ui?.entry&&!manifest.ui?.components?.some(component=>component.entry===entry.name)&&!manifest.effects?.protocols?.some(protocol=>protocol.resume===entry.name)).map(entry => entry.name) });
   const capabilities=[...new Set(['code.execute','world.read','world.write',...(manifest.capabilities||[])])];
@@ -89,13 +89,14 @@ export async function buildInkApp(manifest, files, { source } = {}) {
   return { entry: 'index.html', ink: spec, files: release, commands, desktop, capabilities, ...(source ? { source } : {}) };
 }
 
-function validateEffectCapabilities(spec,capabilities){for(const protocol of spec.effects?.protocols||[])for(const operation of protocol.operations)if(!capabilities?.includes(EFFECT_CAPABILITIES[operation.kind]))fail(400,'Declare '+EFFECT_CAPABILITIES[operation.kind]+' for this effect protocol');}
-export async function validateInkBundle(bundle) {
+function validateEffectCapabilities(spec,capabilities){if(spec.ui?.components.some(component=>component.read&&component.read.appId!=='self')&&!capabilities?.includes('apps.invoke'))fail(400,'Declare apps.invoke for cross-app UI reads');for(const protocol of spec.effects?.protocols||[])for(const operation of protocol.operations)if(!capabilities?.includes(EFFECT_CAPABILITIES[operation.kind]))fail(400,'Declare '+EFFECT_CAPABILITIES[operation.kind]+' for this effect protocol');}
+export async function validateInkBundle(bundle, {allowUnboundUi=false}={}) {
   if (!bundle.ink) {
     if (bundle.commands.some(command => command.handler.type === 'ink')) fail(400, 'Ink commands require an Ink source contract.');
     return;
   }
   const spec = inkSpec(bundle.ink, new Set(bundle.files.map(file => file.path)));
+  if (!allowUnboundUi && spec.ui?.components.some(component=>component.data)) fail(400,'Bind every system UI data port before deployment');
   validateEffectCapabilities(spec,bundle.capabilities);
   const artifact = await compileInkProgram(await inkExecutionSource(spec, bundle.files));
   const expected = inkCommands(spec, inkEntries(artifact.manifest, artifact.module_graph),artifact.manifest.named_types);
@@ -135,20 +136,26 @@ export async function duplicateProjectApp(platform, appId, { title, configuratio
   return platform.publish(copy.id, release.id);
 }
 
+// A release is admitted once per runtime/code instance. Cached immutable bytes
+// remain bound to the current release record digest; app/release fences are
+// checked on every request. Ordinary execution does not reload proof packets.
+const admittedInk=new WeakMap();
+const immutable=value=>{if(value&&typeof value==='object'){for(const item of Object.values(value))immutable(item);Object.freeze(value);}return value;};
 export async function installedInk(platform, appId, releaseId) {
-  const app = platform.app(appId), manifest = JSON.parse(app.body);
-  const selected = releaseId || manifest.releaseId;
-  if (!selected || selected !== manifest.releaseId) fail(409, 'The Ink app release changed; refresh before running it.');
-  const release = platform.world.get(selected);
-  if (release?.kind !== 'release' || JSON.parse(release.body).appId !== appId) fail(404, 'Ink app release not found.');
-  const bundle = await platform.bundle(selected);
-  if (!bundle.ink) fail(400, 'This app has no Ink source contract.');
-  const spec = inkSpec(bundle.ink, new Set(bundle.files.map(file => file.path)));
-  const source = await inkExecutionSource(spec, bundle.files);
-  const compiled = await platform.code.compile(source);
-  inkCommands(spec, compiled.entries,compiled.artifact.manifest.named_types);
-  const implementation = spec.implementation ? implementationSummary(JSON.parse(Buffer.from(bundle.files.find(file => file.path === spec.implementation.path).base64, 'base64'))) : null;
-  return { source, spec, entries: inkPublicEntries(spec,compiled.entries,compiled.artifact.manifest.named_types).filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name), namedTypes: compiled.artifact.manifest.named_types, releaseId: selected, ...(implementation ? { implementation } : {}), ...(compiled.sourceIdentity ? { sourceIdentity: compiled.sourceIdentity } : {}) };
+ const app=platform.app(appId),manifest=JSON.parse(app.body),selected=releaseId||manifest.releaseId;
+ if(!selected||selected!==manifest.releaseId)fail(409,'The Ink app release changed; refresh before running it.');
+ const release=platform.world.get(selected);if(release?.kind!=='release'||JSON.parse(release.body).appId!==appId)fail(404,'Ink app release not found.');
+ let cache=admittedInk.get(platform);if(!cache||cache.code!==platform.code){cache={code:platform.code,entries:new Map(),bytes:0};admittedInk.set(platform,cache);}
+ const key=appId+':'+selected+':'+JSON.parse(release.body).digest;if(cache.entries.has(key))return cache.entries.get(key).task;
+ const entry={bytes:0};entry.task=(async()=>{
+ const bundle=await platform.bundle(selected);if(!bundle.ink)fail(400,'This app has no Ink source contract.');
+ const spec=inkSpec(bundle.ink,new Set(bundle.files.map(file=>file.path))),source=sealInkProgram(await inkExecutionSource(spec,bundle.files)),compiled=await platform.code.compile(source);
+ inkCommands(spec,compiled.entries,compiled.artifact.manifest.named_types);
+ const implementation=spec.implementation?implementationSummary(JSON.parse(Buffer.from(bundle.files.find(file=>file.path===spec.implementation.path).base64,'base64'))):null;
+ const result=immutable({source,spec,entries:inkPublicEntries(spec,compiled.entries,compiled.artifact.manifest.named_types).filter(entry=>spec.exports.includes(entry.name)||spec.view===entry.name),namedTypes:compiled.artifact.manifest.named_types,releaseId:selected,...(implementation?{implementation}:{}),...(compiled.sourceIdentity?{sourceIdentity:compiled.sourceIdentity}:{})});
+ entry.bytes=Buffer.byteLength(JSON.stringify(result));cache.bytes+=entry.bytes;for(const [id,item]of cache.entries){if(cache.entries.size<=16&&cache.bytes<=64*1024*1024)break;if(item.bytes){cache.entries.delete(id);cache.bytes-=item.bytes;}}
+ return result;
+ })();cache.entries.set(key,entry);entry.task.catch(()=>{if(cache.entries.get(key)===entry){cache.entries.delete(key);cache.bytes-=entry.bytes;}});return entry.task;
 }
 
 export async function runInstalledInk(platform, appId, input = {}, principal, releaseId, control={}) {

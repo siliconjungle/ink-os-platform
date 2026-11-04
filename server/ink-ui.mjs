@@ -7,6 +7,7 @@ import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
 import { wireValue } from '../shared/ink-values.mjs';
 import { composeUiTree, uiInput, UI_CONTROLS } from './ink-ui-tree.mjs';
 import { UiQueries, currentUiQuery, scopedUiQuery } from './ink-ui-queries.mjs';
+import { InkUiReads } from './ink-ui-reads.mjs';
 import { diffUiTree, UI_FORMAT } from '../sdk/src/ui-model.js';
 import { hostBudget } from './execution-budget.mjs';
 const fail = (status, message, current) => {
@@ -30,6 +31,7 @@ export class InkViews {
     this.tasks = new Set();
     this.bytes = 0;
     this.queries = new UiQueries(platform.world);
+    this.reads = new InkUiReads(platform);
     this.accepting = true;
     this.ready = false;
   }
@@ -114,6 +116,13 @@ export class InkViews {
       if (!meta.capabilities?.includes('code.execute'))
         fail(403, 'This app does not declare code.execute');
       app = await installedInk(this.platform, mount.appId, mount.releaseId);
+      if (
+        app.spec.ui?.components.some(
+          (c) => c.read && c.read.appId !== 'self',
+        ) &&
+        !meta.capabilities?.includes('apps.invoke')
+      )
+        fail(403, 'Cross-app UI reads require apps.invoke');
       if (
         app.spec.ui?.components.some((component) => component.query) &&
         !meta.capabilities?.includes('world.read')
@@ -226,10 +235,15 @@ export class InkViews {
       if (mount.disposed || mount.previewId) continue;
       let changed = false;
       if (
-        event.type === 'object' &&
-        event.object.namespace === mount.appId &&
-        event.object.kind === 'state' &&
-        event.object.title === 'ink-app:state'
+        (event.type === 'ink-state' && event.appId === mount.appId) ||
+        (event.type === 'object' &&
+          event.object.namespace === mount.appId &&
+          event.object.kind === 'state' &&
+          event.object.title === 'ink-app:state' &&
+          (event.restore ||
+            this.platform.world.stateCommits?.get(
+              mount.appId + '\0ink-app:state',
+            )?.body !== event.object.body))
       ) {
         const hint = this.platform.code.commitHints.get(
           key(mount.appId, 'ink-app:state'),
@@ -241,8 +255,9 @@ export class InkViews {
       }
       for (const entry of mount.cache.values())
         if (
-          entry.querySnapshot &&
-          !currentUiQuery(this.platform.world, entry.querySnapshot)
+          (entry.querySnapshot &&
+            !currentUiQuery(this.platform.world, entry.querySnapshot)) ||
+          (entry.readSnapshot && !this.reads.current(entry.readSnapshot))
         ) {
           entry.dataDirty = true;
           changed = true;
@@ -265,6 +280,26 @@ export class InkViews {
         all = mount.all,
         cache = new Map(mount.cache),
         computed = [];
+      // Read outside the consumer's state lock. This also permits self reads and
+      // prevents reciprocal query consumers from holding each other's locks.
+      const readSnapshots = new Map();
+      for (const component of program.components.values())
+        if (component.read) {
+          const binding =
+            component.read.appId === 'self'
+              ? {
+                  ...component.read,
+                  appId: mount.appId,
+                  releaseId: mount.releaseId,
+                }
+              : component.read;
+          readSnapshots.set(
+            component.name,
+            mount.previewId
+              ? null
+              : await this.reads.read(binding, component.data, signal),
+          );
+        }
       const compute = async () => {
         const readComponent = async (name) => {
           const component = program.components.get(name);
@@ -275,12 +310,22 @@ export class InkViews {
             all ||
             !entry ||
             entry.dataDirty ||
+            (component.read &&
+              entry.readSnapshot !== readSnapshots.get(name)) ||
             (entry.querySnapshot &&
               !currentUiQuery(this.platform.world, entry.querySnapshot)) ||
             component.roots.some((root) => dirty.has(root));
           if (!needed) return entry.view;
           let querySnapshot = entry?.querySnapshot,
             args = [];
+          const readSnapshot = readSnapshots.get(name);
+          if (component.port) fail(400, 'The UI data port is unbound');
+          if (component.read)
+            args = [
+              mount.previewId
+                ? { rows: [], total: { None: null }, version: 0n }
+                : readSnapshot.value,
+            ];
           if (component.query) {
             if (mount.previewId) {
               args = [{ rows: [], total: { None: null }, version: 0n }];
@@ -356,6 +401,7 @@ export class InkViews {
             view: parseExactJSON(wire),
             wire,
             querySnapshot,
+            readSnapshot,
             dataDirty: false,
           };
           cache.set(name, entry);
@@ -416,6 +462,7 @@ export class InkViews {
     }
     fail(409, 'State changed during interface computation; refresh again', {
       notApplied: true,
+      uiRetry: true,
     });
   }
   frame(mount, baseRevision, previous) {
@@ -625,6 +672,7 @@ export class InkViews {
     this.stop?.();
     for (const mount of this.mounts.values()) this.drop(mount);
     this.queries.close();
+    this.reads.close();
     this.ready = false;
   }
 }

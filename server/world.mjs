@@ -9,7 +9,7 @@ export const id = () => randomBytes(16).toString('hex');
 export const plain = value => JSON.parse(JSON.stringify(value, (_, v) => typeof v === 'bigint' ? Number(v) : v));
 export class Conflict extends Error { constructor(current) { super('This object changed in another view. Your draft is still here.'); this.status = 409; this.current = current; } }
 export class World {
-  constructor(directory) { this.directory = directory; this.state = createState(); this.history = []; this.blobRefs={};this.retiredBlobs=new Set();this.deleting=new Set();this.deletingNamespaces=new Set();this.mutations = {}; this.restorations={}; this.purged = new Set(); this.versionOffset = 0; this.tail = Promise.resolve(); this.listeners = new Set(); this.journal = new TransactionJournal(join(directory,'world.journal'),metadata.core_sha256); this.checkpointSequence=0; }
+  constructor(directory) { this.directory = directory; this.state = createState(); this.history = []; this.blobRefs={};this.retiredBlobs=new Set();this.deleting=new Set();this.deletingNamespaces=new Set();this.mutations = {}; this.restorations={}; this.purged = new Set(); this.versionOffset = 0; this.tail = Promise.resolve(); this.listeners = new Set();this.stateCommits=new Map(); this.journal = new TransactionJournal(join(directory,'world.journal'),metadata.core_sha256); this.checkpointSequence=0; }
   async open() {
     await durableDirectory(this.directory);
     let journalCheckpoint;
@@ -232,6 +232,8 @@ export class World {
       return objects;
     });
   }
+  observeState(namespace,key,value,revision){if(key==='ink-app:state')this.stateCommits.set(namespace+'\0'+key,{revision,body:JSON.stringify(value)});}
+  stateCommitted(namespace,key,value,revision){this.observeState(namespace,key,value,revision);if(key==='ink-app:state')for(const listener of this.listeners)listener({type:'ink-state',appId:namespace,namespace,key,revision,version:this.version});}
   subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   stats() {
     if(this.statsCache?.version===this.version)return {...this.statsCache};

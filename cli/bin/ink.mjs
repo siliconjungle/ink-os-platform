@@ -62,7 +62,7 @@ export async function buildInk(directory, options = {}) {
     const path = resolve(directory, name), inside = relative(directory, await realpath(path));
     if (inside === '..' || inside.startsWith('..' + sep) || (await lstat(path)).isSymbolicLink()) throw Error('App source must be inside the application directory.');
     const bytes = await readFile(path);
-    if (bytes.length > (planningInputs.has(name) ? 6 * 1024 * 1024 : 128 * 1024)) throw Error('Ink source/icon or planning input exceeds its byte limit.');
+    if (bytes.length > (planningInputs.has(name) ? 12 * 1024 * 1024 : 128 * 1024)) throw Error('Ink source/icon or planning input exceeds its byte limit.');
     files.push({ path: name, base64: bytes.toString('base64') });
   }
   const bundle = await buildInkApp(manifest, files);

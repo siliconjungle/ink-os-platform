@@ -1,0 +1,107 @@
+{
+  "slug": "system-tables",
+  "title": "tables",
+  "language": "ink",
+  "exports": [
+    "put",
+    "abort_edit",
+    "remove",
+    "dashboard",
+    "add",
+    "no_event"
+  ],
+  "optimisation": {
+    "version": 1,
+    "mode": "replay",
+    "plan": "selected.plan.json"
+  },
+  "ui": {
+    "version": 1,
+    "entry": "view",
+    "event": "no_event",
+    "components": [
+      {
+        "name": "results",
+        "entry": "results",
+        "event": "no_event",
+        "read": {
+          "appId": "self",
+          "releaseId": "self",
+          "entry": "dashboard",
+          "input": "[0,20]"
+        }
+      },
+      {
+        "name": "editor",
+        "entry": "editor",
+        "event": "add"
+      }
+    ]
+  },
+  "modules": {
+    "version": 1,
+    "root": "main.ink",
+    "modules": [
+      {
+        "path": "main.ink",
+        "name": "tables",
+        "dependencies": [
+          "ui.ink"
+        ],
+        "exports": [
+          "put",
+          "abort_edit",
+          "remove",
+          "dashboard",
+          "add",
+          "no_event",
+          "view",
+          "results",
+          "editor"
+        ]
+      },
+      {
+        "path": "ui.ink",
+        "name": "ink_ui",
+        "dependencies": [],
+        "exports": [
+          "UiKind",
+          "UiFieldKind",
+          "UiEventKind",
+          "UiOption",
+          "UiFieldValue",
+          "UiInput",
+          "UiEvent",
+          "UiData",
+          "UiNode",
+          "UiView",
+          "ui_node",
+          "ui_group",
+          "ui_text",
+          "ui_heading",
+          "ui_button",
+          "ui_field",
+          "ui_form",
+          "ui_component",
+          "ui_toggle",
+          "ui_select",
+          "ui_nav_item",
+          "ui_events",
+          "ui_disabled",
+          "ui_description",
+          "ui_invalid",
+          "ui_field_kind",
+          "ui_option",
+          "ui_field_text",
+          "UiDecimal",
+          "ui_digit",
+          "ui_key",
+          "ui_submit",
+          "ui_item",
+          "ui_cell",
+          "ui_header"
+        ]
+      }
+    ]
+  }
+}

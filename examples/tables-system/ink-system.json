@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "apps": [
+    {
+      "name": "tables",
+      "path": "tables"
+    },
+    {
+      "name": "dashboard",
+      "path": "dashboard"
+    }
+  ],
+  "links": [
+    {
+      "provider": "tables",
+      "entry": "dashboard",
+      "consumer": "dashboard",
+      "component": "results",
+      "input": "[0,20]"
+    }
+  ]
+}

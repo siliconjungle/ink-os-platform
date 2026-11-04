@@ -79,6 +79,9 @@ The server SDK exposes `projects.import`, `projects.snapshot`, `projects.files`,
 
 Typed incremental Ink interfaces support stable widget IDs, checked event handlers, component state dependencies and shared relational query inputs. Forms preserve local drafts while keyed lists and tables update in place. The [runnable example](examples/typed-ui) contains only Ink application code; [the contract](docs/typed-ui.md) describes DOM hosting, native adapter requirements and event retry behavior. Existing record views continue to work.
 
+[Connected system builds](docs/system-planning.md) compile app units independently, bind checked module summaries and typed query links, and reuse unchanged checked releases. The [Tables/dashboard example](examples/tables-system) demonstrates maintained filtered aggregates, paginated reads, shared query snapshots, incremental views and JavaScript/native recovery histories.
+
+
 
 Inspect an app's exported backend API before calling it:
 

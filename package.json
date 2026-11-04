@@ -69,6 +69,7 @@
       "types": "./sdk/src/ui-runtime.d.ts",
       "default": "./sdk/src/ui-runtime.js"
     },
-    "./ink/ui": "./sdk/ink/ui.ink"
+    "./ink/ui": "./sdk/ink/ui.ink",
+    "./systems": "./sdk/src/systems.js"
   }
 }

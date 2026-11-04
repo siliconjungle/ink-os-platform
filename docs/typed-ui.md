@@ -44,7 +44,7 @@ change save(event:UiEvent<Unit>)->Result<Unit,String>
 }
 ```
 
-`Activate` carries the declared action. `Input` and `Change` additionally carry text or a Bool. `Submit` carries all enabled controls in its form as `{name,text,checked}`. Control names must be unique inside that form. `ui_submit` creates a button using native form submission, including Enter in a field. `Err` reports a domain error; it does **not** roll back state the handler deliberately committed. Validate before making changes.
+`Activate` carries the declared action. `Input` and `Change` additionally carry text or a Bool. `Submit` carries all enabled controls in its form as `{name,text,checked}`. Control names must be unique inside that form. `ui_submit` creates a button using native form submission, including Enter in a field. `Err` from an Ink change aborts its tentative local changes and events. External effects that already completed retain their protocol outcomes; a later domain error does not imply remote rollback.
 
 The release checker compares the complete view and event schemas, including action types. It requires readonly views and exported compatible handlers. An event handler can be a checked external-effect protocol with the same public result type. Its capabilities, deadlines and uncertainty rules still apply. Disposable previews cannot dispatch external effects.
 
@@ -104,3 +104,5 @@ INK_TEST_UI_BROWSER=1 INK_UI_BROWSER_EXECUTABLE=/path/to/chrome node --test test
 ```
 
 The native test uses actual compiled Rust and shared checkpoints. The optional browser test uses an existing Chrome/Chromium installation through `playwright-core`; it does not download a browser. It exercises Ink-authored forms, keyed lists, focus/caret retention, remote draft conflicts, option reordering, composition, lost event acknowledgements and balanced disposal. Legacy record views remain supported; existing apps opt into this contract explicitly.
+
+Connected systems can bind a `UiData<Row>` component to a pinned exported readonly entry in another app, with exact checked types and shared snapshots. See [system planning](system-planning.md) for data ports, release fences and deployment.

@@ -108,7 +108,7 @@ export function inkUi(input) {
       if (
         !fields(
           component,
-          ['name', 'entry', 'event', 'query'],
+          ['name', 'entry', 'event', 'query', 'read', 'data'],
           ['name', 'entry', 'event'],
         ) ||
         !symbol(component.name) ||
@@ -121,6 +121,38 @@ export function inkUi(input) {
         fail('UI components require unique names and readonly view entries');
       names.add(component.name);
       entries.add(component.entry);
+      if (
+        [
+          component.query !== undefined,
+          component.read !== undefined,
+          component.data !== undefined,
+        ].filter(Boolean).length > 1
+      )
+        fail('Choose one UI data source');
+      if (component.data !== undefined && component.data !== true)
+        fail('An unbound UI data port is true');
+      if (component.read !== undefined) {
+        const read = component.read;
+        if (
+          !fields(
+            read,
+            ['appId', 'releaseId', 'entry', 'input'],
+            ['appId', 'releaseId', 'entry'],
+          ) ||
+          !(
+            (read.appId === 'self' && read.releaseId === 'self') ||
+            (/^[a-f0-9]{32}$/.test(read.appId || '') &&
+              /^[a-f0-9]{32}$/.test(read.releaseId || ''))
+          ) ||
+          !symbol(read.entry) ||
+          (read.input !== undefined &&
+            (typeof read.input !== 'string' ||
+              new TextEncoder().encode(read.input).length > 65536))
+        )
+          fail(
+            'UI reads bind an exact app, release, exported entry and bounded arguments',
+          );
+      }
       if (component.query !== undefined) {
         if (
           !object(component.query) ||
@@ -167,7 +199,8 @@ export function inkUiComponents(spec, entries, named = {}) {
       view.change ||
       view.effectProtocol ||
       view.hostBinding ||
-      view.params.length !== (component.query ? 1 : 0) ||
+      view.params.length !==
+        (component.query || component.read || component.data ? 1 : 0) ||
       !event ||
       !spec.exports.includes(event.name) ||
       event.hostBinding ||
@@ -211,7 +244,7 @@ export function inkUiComponents(spec, entries, named = {}) {
     )
       fail('UI event handlers return Unit or Result<Unit,String>');
     let data;
-    if (component.query) {
+    if (component.query || component.read || component.data) {
       data = resolveEffectType(view.params[0].type, named);
       const rows = data.fields?.find((field) => field.name === 'rows')?.type;
       if (
@@ -223,6 +256,11 @@ export function inkUiComponents(spec, entries, named = {}) {
       )
         fail('Data-backed views accept UiData<Row>');
     }
-    return { ...component, action: action.element, ...(data ? { data } : {}) };
+    return {
+      ...component,
+      action: action.element,
+      ...(data ? { data } : {}),
+      ...(component.data === true ? { port: true } : {}),
+    };
   });
 }

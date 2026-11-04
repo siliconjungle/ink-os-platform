@@ -137,8 +137,10 @@ export async function fixture(t, options = {}) {
   };
   t.after(async () => {
     for (const p of instances) {
+      await p.inkViews?.close();
       await p.effects.close();
       await p.code.close();
+      if(p.collaboration&&!p.collaboration.fixtureRetired)await p.collaboration.close();
       clearInterval(p.calls?.timer);
     }
     await rm(directory, { recursive: true, force: true });
