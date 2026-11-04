@@ -180,5 +180,8 @@ export async function runInstalledInk(platform, appId, input = {}, principal, re
   const result = await platform.code.run({ source: app.source, entry: input.entry, input: input.input, args: input.args, backend: input.backend, requestId: input.requestId, signal:control.signal, parallelPure:control.parallelPure, namespace: appId, stateKey: 'ink-app:state', principal: authority });
   if (result.needsArguments) fail(400, 'Provide a JSON argument array for this Ink entry.');
   const entry = app.entries.find(entry => entry.name === input.entry), wire = parseExactJSON(result.wire);
-  return { ...result, value: entry.action ? result.output.result : result.output, valueWire: stringifyExactJSON(entry.action ? wire.result : wire), releaseId: app.releaseId };
+  // Entry descriptors are fixed per release and published in its metadata
+  // (app.json, installedInk); repeating them made up ~80% of reply bytes.
+  const { entries: _entries, ...reply } = result;
+  return { ...reply, value: entry.action ? result.output.result : result.output, valueWire: stringifyExactJSON(entry.action ? wire.result : wire), releaseId: app.releaseId };
 }

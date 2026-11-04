@@ -162,12 +162,13 @@ export class InkLinks {
   }
   /** Where the copy stands in the provider's journal: base, applied tail records, head. */
   mark(link, saved) {
-    const root = saved.value;
+    const root = saved.value,
+      current = root?.format === appJournalFormat;
     Object.assign(link, {
       revision: saved.revision,
-      base: root?.format === appJournalFormat ? root.base.hash : null,
-      applied: root?.format === appJournalFormat ? root.records.length : 0,
-      head: root?.format === appJournalFormat ? root.head : null,
+      base: current ? root.base.hash : null,
+      applied: current ? root.count : 0,
+      head: current ? root.head?.hash ?? null : null,
     });
   }
   /**
@@ -183,18 +184,20 @@ export class InkLinks {
       fail(409, 'The provider state belongs to another source revision');
     if (
       link.revision !== null &&
+      link.base !== null &&
       root?.format === appJournalFormat &&
       root.base.hash === link.base &&
-      root.records.length >= link.applied &&
-      (root.records.length === link.applied || root.records[link.applied].previous === link.head)
+      root.count >= link.applied
     ) {
-      const fresh = root.records.slice(link.applied),
-        records = [];
-      for (const descriptor of fresh) records.push(await journal.payload(descriptor));
-      if (records.length) await this.request(session, owner, { op: 'apply', records }, signal);
-      this.counts.applies += records.length;
-      this.mark(link, saved);
-      return;
+      // Same base: replay only the records after the copy's position, if the
+      // chain still links to the record the copy applied last.
+      const { records, previous } = await journal.tail(root, link.applied);
+      if ((previous?.hash ?? null) === link.head) {
+        if (records.length) await this.request(session, owner, { op: 'apply', records }, signal);
+        this.counts.applies += records.length;
+        this.mark(link, saved);
+        return;
+      }
     }
     const recovery = root ? await journal.recover(saved) : { snapshot: null, records: [] };
     link.revision = null;

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { hash, World } from './world.mjs';
 import { InkResidents, javascriptResident } from './ink-residents.mjs';
-import { InkAppJournal, appJournalFormat } from './ink-app-journal.mjs';
+import { InkAppJournal, isAppJournal } from './ink-app-journal.mjs';
 import { withWriteAccess } from './runtime-credentials.mjs';
 import { stateObjectId } from './app-data.mjs';
 import {
@@ -197,7 +197,7 @@ export class Code {
   }
   async loadCheckpoint(namespace, key, principal) {
     const saved = await this.readState(namespace, key, principal);
-    if (saved.value?.format !== appJournalFormat) return saved;
+    if (!isAppJournal(saved.value)) return saved;
     const journal = new InkAppJournal(this.storage, namespace, key, principal),
       recovery = await journal.recover(saved),
       compiled = await this.compile(recovery.source);

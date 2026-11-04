@@ -3,7 +3,7 @@ const code = new Code('.', process.argv[2]),
   batch = code.storage.batch;
 code.storage.batch = async (...args) => {
   const result = await batch(...args);
-  if (args[3].some((item) => item.value?.format === 'ink-os-app-journal-v1')) {
+  if (args[3].some((item) => item.value?.format === 'ink-os-app-journal-v2')) {
     process.send('durable');
     await new Promise(() => {});
   }

@@ -68,16 +68,17 @@ test('resident bindings retain state, bound journals, and materialize portable c
     'small World writes must not checkpoint the whole store',
   );
   const saved = await f.code.readState(app, key);
-  assert.equal(saved.value.records.length, 4);
-  const keep = [saved.value.base, ...saved.value.records].reduce(
-    (count, item) => count + item.parts,
-    0,
-  );
-  assert.equal(
-    (await f.code.stateKeys(app, '@ink:')).length,
-    keep,
-    'compaction removes unreachable payloads',
-  );
+  assert.equal(saved.value.format, 'ink-os-app-journal-v2');
+  assert.equal(saved.value.count, 4);
+  // Compaction keeps exactly the base's content chunks and reusable record
+  // slots (overwritten in place, never deleted): nothing else survives.
+  const prefix = '@ink:' + hash(key) + ':',
+    chunks = new Set([...saved.value.base.meta.chunks, ...(saved.value.base.snapshot?.chunks || [])].map((id) => prefix + 'c:' + id)),
+    stored = await f.code.stateKeys(app, '@ink:');
+  for (const id of chunks) assert.ok(stored.includes(id), 'base chunk retained');
+  const slots = stored.filter((k) => !chunks.has(k));
+  assert.ok(slots.every((k) => new RegExp('^' + prefix + 'r[0-9]+:0$').test(k)), 'only record slots remain');
+  assert.ok(slots.length <= 64, 'compaction removes unreachable payloads');
   const portable = await f.code.loadCheckpoint(app, key);
   assert.equal(typeof portable.value.snapshot, 'string');
   await f.code.saveCheckpoint(app, key, portable.value, portable.revision);
@@ -167,11 +168,12 @@ test('corrupt payloads and deterministic replay mismatches fail closed', async (
   const f = await fixture(t);
   await f.run('add', [3]);
   const saved = await f.code.readState(app, key),
-    descriptor = saved.value.records[0];
-  const part = await f.code.readState(app, descriptor.id + ':0');
+    descriptor = saved.value.head,
+    slot = '@ink:' + hash(key) + ':r' + descriptor.slot + ':0';
+  const part = await f.code.readState(app, slot);
   await f.world.stateBatch(app, key, saved.revision, [
     {
-      key: descriptor.id + ':0',
+      key: slot,
       value: part.value.replace('"input":"[3]"', '"input":"[4]"'),
     },
   ]);
@@ -179,8 +181,7 @@ test('corrupt payloads and deterministic replay mismatches fail closed', async (
   f.code.residents = new InkResidents();
   await assert.rejects(f.run('total', []), /integrity check/);
   const changed = part.value.replace('"input":"[3]"', '"input":"[4]"');
-  saved.value.records[0].hash = hash(changed);
-  saved.value.head = hash(changed);
+  saved.value.head.hash = hash(changed);
   await f.world.stateBatch(app, key, saved.revision, [
     { key, value: saved.value },
   ]);
