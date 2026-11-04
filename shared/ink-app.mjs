@@ -1,3 +1,4 @@
+import {inkUi,inkUiComponents} from './ink-ui.mjs';
 import {inkEffects,inkEffectProtocols} from './ink-effects.mjs';
 const fail = message => { throw Object.assign(Error(message), { status: 400 }); };
 const entryName = value => typeof value === 'string' && /^[A-Za-z_][A-Za-z0-9_.]{0,100}$/.test(value);
@@ -44,9 +45,10 @@ export function inkSpec(input, paths) {
   if (!Array.isArray(input.exports) || input.exports.length > 63 || input.exports.some(name => !entryName(name)) || new Set(input.exports).size !== input.exports.length) fail('Declare up to 63 unique Ink exports.');
   const modules = input.modules === undefined ? null : inkModuleGraph(input.modules, { paths, privatePaths: true });
   if (modules && (modules.root !== input.source || [...input.exports, ...(input.view ? [input.view] : [])].some(name => !modules.modules.find(module => module.path === modules.root).exports.includes(name)))) fail('Ink view and app exports must be declared root module exports.');
+  const ui=input.ui===undefined?undefined:inkUi(input.ui);if(ui&&(input.version!==3||input.view!==ui.entry))fail('Typed UI requires a checked version 3 release and matching view');
   const host=input.host===undefined?undefined:inkHost(input.host);
   const effects=input.effects===undefined?undefined:inkEffects(input.effects);if(effects&&input.version!==3)fail('Typed effects require a checked version 3 release');
-  return { version: input.implementation?3:host?2:1, source: input.source, view: input.view || null, exports: [...input.exports], ...(modules ? { modules } : {}),...(effects?{effects}:{}),...(host?{host}:{}),...(input.implementation?{implementation:{version:1,path:input.implementation.path}}:{}) };
+  return { version: input.implementation?3:host?2:1, source: input.source, view: input.view || null, exports: [...input.exports], ...(modules ? { modules } : {}),...(effects?{effects}:{}),...(ui?{ui}:{}),...(host?{host}:{}),...(input.implementation?{implementation:{version:1,path:input.implementation.path}}:{}) };
 }
 
 export function inkHost(input){
@@ -70,9 +72,10 @@ export function inkEntries(manifest, graph) {
 export function inkCommands(spec, entries, named={}) {
   inkEffectProtocols(spec,entries,named);
   inkHostBindings(spec,entries);
+  inkUiComponents(spec,inkPublicEntries(spec,entries,named),named);
   if (spec.view) {
     const view = entries.find(entry => entry.name === spec.view);
-    if (!view || view.change || (spec.host?.bindings.find(binding=>binding.entry===view.name)?.effect==='read'?view.params.length!==1:view.params.length)) fail('The Ink view must be an exported function or query without arguments.');
+    if (!view || view.change || (!spec.ui&&(spec.host?.bindings.find(binding=>binding.entry===view.name)?.effect==='read'?view.params.length!==1:view.params.length))) fail('The Ink view must be an exported function or query without arguments.');
   }
   const ids = new Set();
   return spec.exports.map(name => {

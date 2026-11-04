@@ -1,6 +1,7 @@
 const root = document.querySelector('#app'), status = document.querySelector('#status');
 const fields = new Map();
 const hostRevisions=new Map();
+let typedUi;
 let ink, metadata, sequence = 0, timer, busy = false, hidden = false;
 const text = value => typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 const report = (message = '', error = false) => { status.textContent = message; status.dataset.error = String(error); };
@@ -70,11 +71,17 @@ function commandView() {
   }
   root.replaceChildren(view); root.setAttribute('aria-busy', 'false');
 }
+async function startTypedUi(transport,subscribe){
+ if(!globalThis.InkUI)await import('./ui.mjs');
+ typedUi=await globalThis.InkUI.mountInkUi({element:root,transport,subscribe,onError:error=>report(error.message,true),onStatus:value=>{if(value.pending&&value.retry){report('Connection interrupted. Check the previous action before continuing.',true);const retry=node('button','Check action');retry.onclick=()=>void value.retry();status.append(retry);if(value.reopen){const reopen=node('button','Reload interface');reopen.onclick=()=>void value.reopen();status.append(reopen);}}else if(!value.pending)report();}});
+ addEventListener('pagehide',()=>typedUi?.dispose(),{once:true});
+}
+
 try {
   const response = await fetch('/app.json'); if (!response.ok) throw Error('App metadata is unavailable.'); metadata = await response.json(); document.title = metadata.title;
   ink = await window.Ink.connect(); ink.ready();
-  ink.on('ink.state', () => { if (!hidden) { clearTimeout(timer); timer = setTimeout(() => void refresh(), 80); } });
-  ink.on('visibility', value => { hidden = value.hidden; if (!hidden) void refresh(); });
+  ink.on('ink.state', () => { if (!metadata.ink.ui&&!hidden) { clearTimeout(timer); timer = setTimeout(() => void refresh(), 80); } });
+  ink.on('visibility', value => { hidden = value.hidden;if(typedUi)typedUi.suspend(hidden);else if (!hidden) void refresh(); });
   ink.on('context', context => { if (context.theme) document.documentElement.dataset.theme = context.theme; });
-  if (metadata.ink.view) await refresh(); else commandView();
+  if(metadata.ink.ui)await startTypedUi(ink.ink.ui,invalidate=>{const stops=[ink.on('ink.state',invalidate),ink.on('world.delta',invalidate),ink.on('world.metadata',invalidate)];return()=>stops.forEach(stop=>stop());});else if (metadata.ink.view) await refresh(); else commandView();
 } catch (error) { root.setAttribute('aria-busy', 'false'); report(error.message, true); }

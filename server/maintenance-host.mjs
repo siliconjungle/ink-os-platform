@@ -34,7 +34,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
   function queues(){const c=platform.collaboration,p=platform.projects,runtime=platform.runtime,compute=pool();return{
     publications:[platform.publishTail,...values(platform.releaseTails),...values(p?.operations)],
     writers:[platform.effects?.store.tail,world.tail,platform.keysTail,runtime?.tail,platform.apiKeys?.tail,platform.environment?.tail,p?.tail,p?.publisher?.tail,p?.credentials?.store?.tail,platform.versions?.tail,platform.desktopActions?.tail,platform.nativeJobs?.tail,platform.workflows?.tail,platform.schedules?.tail,platform.fileDefaultsPending,c?.indexing,c?.versionTail,...values(c?.objectTails),...values(c?.documents),platform.namespaceMigrations?.tail,platform.automationMigrations?.tail,storage?.aliases?.tail,...values(storage?.blobTails),compute?.tail],
-    code:[...values(code?.pureTasks),...values(platform.effects?.tasks),...values(code?.tasks),...values(code?.compilations),...values(platform.nativeJobs?.native?.compilations)],
+    code:[...values(platform.inkViews?.tasks),...values(code?.pureTasks),...values(platform.effects?.tasks),...values(code?.tasks),...values(code?.compilations),...values(platform.nativeJobs?.native?.compilations)],
     assignments:[...values(compute?.pending),...values(compute?.retiring),compute?.reaping,compute?.maintenanceTask],
     native:[platform.nativeJobs?.pumping,platform.nativeJobs?.native?.tail],
   };}
@@ -77,13 +77,13 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
     };
   }
   function external(expected){check(closed&&externalClosed()===expected,'MAINTENANCE_ADMISSION_MISMATCH','Maintenance admission gates disagree',409);}
-  function closeAdmission({poolClosed=false}={}){check(typeof poolClosed==='boolean','MAINTENANCE_ADAPTER_CONFIG','Choose an explicit pool admission state');closed=true;effectsDrainAllowed=!poolClosed;platform.effects?.closeAdmission();if(!poolClosed)platform.effects?.drainAccepted();platform.schedules?.close();platform.workflows?.close();if(platform.nativeJobs)platform.nativeJobs.accepting=!poolClosed;
+  function closeAdmission({poolClosed=false}={}){check(typeof poolClosed==='boolean','MAINTENANCE_ADAPTER_CONFIG','Choose an explicit pool admission state');closed=true;platform.inkViews?.closeAdmission();effectsDrainAllowed=!poolClosed;platform.effects?.closeAdmission();if(!poolClosed)platform.effects?.drainAccepted();platform.schedules?.close();platform.workflows?.close();if(platform.nativeJobs)platform.nativeJobs.accepting=!poolClosed;
     for(const response of tracked(responses,'response'))if(String(response.getHeader?.('content-type')||'').startsWith('text/event-stream')&&!response.writableEnded)response.end();
     if(poolClosed&&pool())pool().admissionClosed=true;
   }
   function releasePool(){const compute=pool();if(!compute)return;if(typeof compute.releaseMaintenance==='function')compute.releaseMaintenance();else check(compute.admissionClosed!==true,'MAINTENANCE_POOL_UNSUPPORTED','This pool cannot release its maintenance gate');}
   function continueDraining(){external(true);releasePool();effectsDrainAllowed=true;platform.effects?.drainAccepted();if(platform.nativeJobs)platform.nativeJobs.accepting=true;}
-  function resumeAdmission(){check(externalClosed()===false,'MAINTENANCE_ADMISSION_MISMATCH','External maintenance admission is still closed',409);releasePool();closed=false;effectsDrainAllowed=true;platform.effects?.resumeAdmission();if(platform.nativeJobs)platform.nativeJobs.accepting=true;platform.workflows?.start();platform.schedules?.start();}
+  function resumeAdmission(){check(externalClosed()===false,'MAINTENANCE_ADMISSION_MISMATCH','External maintenance admission is still closed',409);releasePool();closed=false;platform.inkViews?.resumeAdmission();effectsDrainAllowed=true;platform.effects?.resumeAdmission();if(platform.nativeJobs)platform.nativeJobs.accepting=true;platform.workflows?.start();platform.schedules?.start();}
   async function inventory(request,{snapshot=false}={}){
     const diagnostics=[],custom=new Set(),apps=new Map(),releases=new Map(),callable=new Set();let incompatible=0;
     const localBackendsInactive=snapshot&&platform.provider instanceof LocalProvider&&await platform.provider.snapshotBackendsInactive();

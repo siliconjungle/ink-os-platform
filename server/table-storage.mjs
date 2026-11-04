@@ -265,6 +265,7 @@ function memberships(object) {
 export class TableStorage {
   constructor(world, options = {}) {
     this.world = world;
+    this.dependencyEpoch=0;this.dependencyVersions=new Map();
     this.limits = {
       rows: 100000,
       tableBytes: 64 * 1024 * 1024,
@@ -285,7 +286,9 @@ export class TableStorage {
     this.loaded = new Map();
     this.reset();
   }
+  dependencyToken(namespace,tableId){this.ensure();return this.dependencyEpoch+":"+(this.dependencyVersions.get(identity(namespace,tableId))||0);}
   reset() {
+    this.dependencyEpoch++;this.dependencyVersions.clear();
     this.objects.clear();
     this.members.clear();
     this.memberBytes.clear();
@@ -321,6 +324,7 @@ export class TableStorage {
       const id = action.name === 'put' ? action.object.id : action.id,
         old = this.objects.get(id),
         next = action.name === 'put' ? action.object : null;
+      const changed=new Set([...memberships(old),...memberships(next),...(old?.kind===TABLE_KIND?[identity(old.namespace,id)]:[]),...(next?.kind===TABLE_KIND?[identity(next.namespace,id)]:[])]);for(const key of changed)this.dependencyVersions.set(key,(this.dependencyVersions.get(key)||0)+1);
       for (const key of memberships(old)) {
         this.members.get(key)?.delete(id);
         this.memberBytes.set(

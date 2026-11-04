@@ -18,6 +18,22 @@
 		if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
 		return target;
 	};
+	// sdk/src/ui-client.js
+	/** Transport-neutral typed Ink interface sessions. */
+	function createInkUi(request) {
+		return Object.freeze({
+			open: (options = {}) => request("open", options),
+			refresh: (id, input) => request("refresh", {
+				id,
+				...input
+			}),
+			event: (id, input) => request("event", {
+				id,
+				...input
+			}),
+			dispose: (id) => request("dispose", { id })
+		});
+	}
 	// sdk/src/effects.js
 	/** Retain this ID across transport retries; expired IDs cannot execute again. */
 	function effectRequestId() {
@@ -982,6 +998,7 @@
 					}
 				};
 				client.ink = {
+					ui: createInkUi((action, input) => request("ink.ui." + action, input)),
 					effects: createEffects((action, input) => request("ink.effects." + action, input)),
 					describe: () => request("ink.describe"),
 					run: (entry, input = "[]", options = {}) => request("ink.run", {

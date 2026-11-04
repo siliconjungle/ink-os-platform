@@ -60,7 +60,7 @@ export async function buildInkApp(manifest, files, { source } = {}) {
   const program = inkSource(candidate, sourceRelease);
   const { implementation, artifact } = await buildImplementation(program, files, manifest.optimisation);
   const entries = inkEntries(artifact.manifest, artifact.module_graph);
-  const spec = inkSpec({ ...candidate, version: 3, implementation: { version: 1, path: 'server/implementation.json' }, ...(manifest.effects?{effects:manifest.effects}:{}), view: manifest.ui?.entry ?? null, exports: manifest.exports || entries.filter(entry => entry.name !== manifest.ui?.entry&&!manifest.effects?.protocols?.some(protocol=>protocol.resume===entry.name)).map(entry => entry.name) });
+  const spec = inkSpec({ ...candidate, version: 3, implementation: { version: 1, path: 'server/implementation.json' }, ...(manifest.effects?{effects:manifest.effects}:{}),...(manifest.ui?.version===1?{ui:manifest.ui}:{}), view: manifest.ui?.entry ?? null, exports: manifest.exports || entries.filter(entry => entry.name !== manifest.ui?.entry&&!manifest.ui?.components?.some(component=>component.entry===entry.name)&&!manifest.effects?.protocols?.some(protocol=>protocol.resume===entry.name)).map(entry => entry.name) });
   const capabilities=[...new Set(['code.execute','world.read','world.write',...(manifest.capabilities||[])])];
   validateEffectCapabilities(spec,capabilities);
   const commands = inkCommands(spec, entries,artifact.manifest.named_types);
@@ -72,7 +72,7 @@ export async function buildInkApp(manifest, files, { source } = {}) {
     encode('app.json', JSON.stringify(metadata)),
     encode('index.html', '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles/ink.css"><link rel="stylesheet" href="/app.css"><title>Ink app</title></head><body><main id="app" aria-busy="true"></main><p id="status" role="status"></p><script src="/sdk.js"></script><script type="module" src="/app.mjs"></script></body></html>'),
   ];
-  for (const name of ['ink-app.mjs', 'ink-app.css', 'sdk.js', 'desktop-keys.mjs', 'live-query.mjs']) {
+  for (const name of ['ink-app.mjs', 'ink-app.css', 'sdk.js', 'desktop-keys.mjs', 'live-query.mjs','ui.mjs']) {
     const path = name === 'ink-app.mjs' ? 'app.mjs' : name === 'ink-app.css' ? 'app.css' : name;
     release.push(encode(path, await readFile(new URL('../cli/templates/' + name, import.meta.url))));
   }

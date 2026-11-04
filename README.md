@@ -77,6 +77,9 @@ node cli/bin/ink-os.mjs apps duplicate APP_ID
 
 The server SDK exposes `projects.import`, `projects.snapshot`, `projects.files`, `apps.build`, `apps.publish`, and `apps.ink.describe/run`. Browser clients use `client.ink.describe()` and `client.ink.run(entry, input)` with the app's `code.execute` capability. Apps call other apps through exported commands and `apps.invoke`.
 
+Typed incremental Ink interfaces support stable widget IDs, checked event handlers, component state dependencies and shared relational query inputs. Forms preserve local drafts while keyed lists and tables update in place. The [runnable example](examples/typed-ui) contains only Ink application code; [the contract](docs/typed-ui.md) describes DOM hosting, native adapter requirements and event retry behavior. Existing record views continue to work.
+
+
 Inspect an app's exported backend API before calling it:
 
 ```sh

@@ -1,0 +1,101 @@
+{
+  "slug": "typed-ui-items",
+  "language": "ink",
+  "exports": [
+    "navigate",
+    "add",
+    "remove"
+  ],
+  "ui": {
+    "version": 1,
+    "entry": "view",
+    "event": "navigate",
+    "components": [
+      {
+        "name": "editor",
+        "entry": "editor",
+        "event": "add"
+      },
+      {
+        "name": "rows",
+        "entry": "rows",
+        "event": "remove"
+      },
+      {
+        "name": "grid",
+        "entry": "grid",
+        "event": "remove"
+      }
+    ]
+  },
+  "modules": {
+    "version": 1,
+    "root": "main.ink",
+    "modules": [
+      {
+        "path": "main.ink",
+        "name": "app",
+        "dependencies": [
+          "ui.ink"
+        ],
+        "exports": [
+          "view",
+          "editor",
+          "rows",
+          "navigate",
+          "add",
+          "remove",
+          "grid"
+        ]
+      },
+      {
+        "path": "ui.ink",
+        "name": "ink_ui",
+        "dependencies": [],
+        "exports": [
+          "UiKind",
+          "UiFieldKind",
+          "UiEventKind",
+          "UiOption",
+          "UiFieldValue",
+          "UiInput",
+          "UiEvent",
+          "UiData",
+          "UiNode",
+          "UiView",
+          "ui_node",
+          "ui_group",
+          "ui_text",
+          "ui_heading",
+          "ui_button",
+          "ui_field",
+          "ui_form",
+          "ui_component",
+          "ui_toggle",
+          "ui_select",
+          "ui_nav_item",
+          "ui_events",
+          "ui_disabled",
+          "ui_description",
+          "ui_invalid",
+          "ui_field_kind",
+          "ui_option",
+          "ui_field_text",
+          "UiDecimal",
+          "ui_digit",
+          "ui_key",
+          "ui_submit",
+          "ui_item",
+          "ui_cell",
+          "ui_header"
+        ]
+      }
+    ]
+  },
+  "title": "Ink items",
+  "desktop": {
+    "entry": "app",
+    "icon": "table",
+    "collaborative": true
+  }
+}

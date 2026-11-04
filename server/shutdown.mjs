@@ -9,6 +9,7 @@ export async function drainHost({ server, connections, platform, world, requests
   const closed = connections.close();
   for (const response of responses) if (String(response.getHeader('content-type')).startsWith('text/event-stream')) response.end();
   for (const socket of sockets.clients) socket.close(1001, 'Host is stopping');
+  await platform.inkViews?.close();
   await platform.effects?.close();
   await platform.nativeJobs?.close();
   await platform.provider?.close?.();

@@ -28,3 +28,22 @@ await copyFile(
   new URL('../sdk/src/live-query.js', import.meta.url),
   new URL('../cli/templates/live-query.mjs', import.meta.url),
 );
+
+await build({
+  root: fileURLToPath(new URL('../', import.meta.url)),
+  configFile: false,
+  publicDir: false,
+  build: {
+    lib: {
+      entry: fileURLToPath(new URL('../sdk/src/ui-global.js', import.meta.url)),
+      formats: ['iife'],
+      name: 'InkUIRuntime',
+      fileName: () => 'ui.mjs',
+    },
+    target: 'es2022',
+    outDir: 'cli/templates',
+    emptyOutDir: false,
+    minify: false,
+    rolldownOptions: { output: { codeSplitting: false } },
+  },
+});

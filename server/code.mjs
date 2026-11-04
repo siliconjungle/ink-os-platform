@@ -22,6 +22,7 @@ export class Code {
     Object.assign(this, { root, directory, world });
     this.tasks = new Map();
     this.pureTasks = new Set();
+    this.commitHints=new Map();
     this.budget = options.budget || hostBudget;
     this.compilations = new Map();
     this.residents = new InkResidents(options);
@@ -421,13 +422,16 @@ export class Code {
             wire: result.wire,
             receipt,
           };
-        const committed = await journal.commit(
+        const hintKey=namespace+'\0'+stateKey;this.commitHints.set(hintKey,{source:inkProgramKey(compiled.source),roots:(selected.roots||[]).map(index=>compiled.artifact.manifest.state.roots[index]?.name).filter(Boolean)});let committed;
+        try{
+        committed = await journal.commit(
           saved,
           recovery,
           compiled,
           record,
           () => scheduledEndpoint.request({ op: 'checkpoint' }),
         );
+        }finally{this.commitHints.delete(hintKey);}
         session.revision = committed.revision;
         // Only receipts are needed while the state is resident. Recovery reads
         // the immutable base and tail again after eviction or an external write.
