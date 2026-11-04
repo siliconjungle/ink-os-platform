@@ -84,8 +84,9 @@ export function admitLinkPlan({ binding, data, provider, consumer }) {
     code = linkPlanFunctions(plan).map(({ name, role, result }) => {
       const fn = consumer.compiled.artifact.manifest.functions.find((f) => f.name === name && !f.internal),
         graph = consumer.footprints.graphs.get(name);
-      if (!fn || !graph || graph.kind !== 'function')
-        fail(`Link plan ${role} ${name} is not a consumer function`);
+      const rootExports = consumer.compiled.artifact.module_graph?.root_exports;
+      if (!fn || !graph || graph.kind !== 'function' || (rootExports && !rootExports.includes(name)))
+        fail(`Link plan ${role} ${name} is not a consumer function exported by its root module`);
       if (!graph.pure)
         fail(`Link plan ${role} ${name} is not pure: moved code may not read, write, emit, call actions or perform effects`);
       if (
