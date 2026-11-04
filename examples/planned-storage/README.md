@@ -5,7 +5,7 @@ This app defines its view and event contract in Ink. Its manifest declares a typ
 From the platform repository:
 
 ```sh
-node cli/bin/ink-os.mjs ink build examples/planned-storage
+node cli/bin/ink-os.mjs build examples/planned-storage
 node --test tests/data-path-planning.test.mjs
 node scripts/benchmark-data-paths.mjs
 INK_UI_BROWSER_EXECUTABLE=/path/to/chrome node scripts/verify-data-path-ui.mjs

@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "platformRevision": "2cae0538506cfc64fcffe120148f290a1c9265c8",
   "javascript": {
     "target": "javascript",
     "rows": 512,
@@ -8,7 +9,7 @@
     "queryReads": 2,
     "sharedHits": 2,
     "admission": {
-      "id": "95ab566049acce2ffac65a82c8e5a0bd74d0409732ffbb8dfcfaf721713f8c8e",
+      "id": "474902034c4073a0505061ffecb6230dc638edf5ddfcf7a7f4ece5da6c3e65bd",
       "selected": "maintained",
       "fallback": null,
       "authority": "checked-fixed-storage-recipe-v1"
@@ -18,7 +19,7 @@
       "scanRows": 0,
       "resultBuildRows": 0,
       "indexBuildRows": 0,
-      "indexNodes": 23,
+      "indexNodes": 26,
       "aggregateBuildRows": 0,
       "visitedRows": 21,
       "returnedRows": 20,
@@ -34,7 +35,7 @@
     "queryReads": 2,
     "sharedHits": 2,
     "admission": {
-      "id": "898cb362bb16d689ced2e639f05d725e2c75b9fbf209b5e985e7fade5b2d8dd4",
+      "id": "f810397cee44e3b79596f0e4e03cd6577abf66fa13db2cfba0ad0baa93c5810b",
       "selected": "maintained",
       "fallback": null,
       "authority": "checked-fixed-storage-recipe-v1"
@@ -44,7 +45,7 @@
       "scanRows": 0,
       "resultBuildRows": 0,
       "indexBuildRows": 0,
-      "indexNodes": 27,
+      "indexNodes": 25,
       "aggregateBuildRows": 0,
       "visitedRows": 21,
       "returnedRows": 20,
