@@ -1,2 +1,4 @@
 .workspace-switch{overscroll-behavior-x:contain}
 .workspace-gesture-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;pointer-events:none}
+/* Workspace changes focus the desktop for the next gesture, without drawing a focus ring around the whole view. */
+.desktop-stage:focus{outline:none}
