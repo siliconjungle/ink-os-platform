@@ -43,7 +43,10 @@ manifest's touched roots, which over-approximate.
   became stale. Desktop frames refresh for another app's commit only when
   they are listed. Before, every frame holding `apps.invoke` refreshed on
   every commit of every app. Own-app commits still notify the app's own
-  frames.
+  frames. `scripts/verify-ink-reads-desktop.mjs` checks this in the real
+  desktop: with two copies of the tables system open, a commit to one
+  provider reaches only its own dashboard's frame
+  ([recorded run](benchmarks/ink-reads-desktop-2026-11-05.json)).
 
 Granularity is the [state path](state-paths.md): a whole root, the rows a
 filtered view admits, or the row a query parameter names. Fields within a row

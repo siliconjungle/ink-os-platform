@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-11-04T21:02:08.380Z",
+  "browser": "153.0.8010.12",
+  "scope": "Production host with the built desktop (dist/), two copies of examples/tables-system, three windows (Tables A, Dashboard A, Dashboard B). Requests are Ink UI opens, refreshes, events and non-heartbeat watch deliveries per app after each commit; frames are told by in-frame ink.state messages.",
+  "steps": [
+    {
+      "label": "commit to Tables A",
+      "requests": {
+        "Tables A": 1,
+        "Dashboard A": 1
+      }
+    },
+    {
+      "label": "commit to Tables B",
+      "requests": {
+        "Dashboard B": 1
+      }
+    }
+  ],
+  "framesToldPerProvider": {
+    "Tables A": 1,
+    "Tables B": 1
+  },
+  "dashboardsShowOwnRows": true
+}
