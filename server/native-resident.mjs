@@ -5,7 +5,7 @@ import { publicResult } from '../shared/ink-values.mjs';
 export function nativeResident({ executable, compiled, timeout = 30000 }) {
   const artifact = compiled.artifact;
   const child = spawn(executable, ['--resident'], {
-    env: {},
+    env: { INK_THREADS: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   let pending,

@@ -1,3 +1,4 @@
+import { hostBudget } from './execution-budget.mjs';
 import { lstat, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setImmediate as nextTurn } from 'node:timers/promises';
@@ -33,7 +34,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
   function queues(){const c=platform.collaboration,p=platform.projects,runtime=platform.runtime,compute=pool();return{
     publications:[platform.publishTail,...values(platform.releaseTails),...values(p?.operations)],
     writers:[platform.effects?.store.tail,world.tail,platform.keysTail,runtime?.tail,platform.apiKeys?.tail,platform.environment?.tail,p?.tail,p?.publisher?.tail,p?.credentials?.store?.tail,platform.versions?.tail,platform.desktopActions?.tail,platform.nativeJobs?.tail,platform.workflows?.tail,platform.schedules?.tail,platform.fileDefaultsPending,c?.indexing,c?.versionTail,...values(c?.objectTails),...values(c?.documents),platform.namespaceMigrations?.tail,platform.automationMigrations?.tail,storage?.aliases?.tail,...values(storage?.blobTails),compute?.tail],
-    code:[...values(platform.effects?.tasks),...values(code?.tasks),...values(code?.compilations),...values(platform.nativeJobs?.native?.compilations)],
+    code:[...values(code?.pureTasks),...values(platform.effects?.tasks),...values(code?.tasks),...values(code?.compilations),...values(platform.nativeJobs?.native?.compilations)],
     assignments:[...values(compute?.pending),...values(compute?.retiring),compute?.reaping,compute?.maintenanceTask],
     native:[platform.nativeJobs?.pumping,platform.nativeJobs?.native?.tail],
   };}
@@ -70,7 +71,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
       workflows:workflowWorkers+counter(platform.workflows?.pumping?1:0)+counter(platform.workflows?.runs?.filter(run=>!terminal.has(run.status)).length||0)+counter(platform.workflows?.pendingProjection?.size||0),
       schedules:scheduleWorkers+counter(platform.schedules?.ticking?1:0)+counter(platform.schedules?.runs?.filter(run=>!terminal.has(run.status)).length||0),
       nativeJobs:nativeCount+jobs.filter(job=>nativeActive.has(job.status)).length,
-      codeTasks:codeCount+counter(platform.effects?.queue.size||0),
+      codeTasks:codeCount+counter(platform.effects?.queue.size||0)+counter(hostBudget.activity()),
       poolAssignments:assignmentCount+counter(compute?.admissions?.size||0),
       poolRequests:sum(values(compute?.requests)),
     };

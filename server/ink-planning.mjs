@@ -1,3 +1,4 @@
+import { hostBudget, WORKER_MEMORY_MB } from './execution-budget.mjs';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, writeFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -74,13 +75,13 @@ async function search(original, options, files) {
       await writeFile(snapshotPath, snapshot, { mode: 0o600 });
       const args = ['compile', source, '--core', '--optimise', process.env.INK_OS_KNOWLEDGE_ROOT, '--snapshot', snapshotPath,
         '--target', 'javascript', '--planning-effort', 'quick', '--search-budget', String(options.budget), '--state-limit', '32', '--planning-seconds', String(options.timeSeconds),
-        '--recipe-workers', '1', '--measurement-mode', 'auto', '--measure-timeout', String(Math.min(options.timeSeconds, 10)), '--measure-processes', '3', '--reference-budget', '1000000', '--planning-cache', 'off', '-o', output];
+        '--recipe-workers', '1', '--measurement-mode', 'auto', '--measure-timeout', String(Math.min(options.timeSeconds, 10)), '--measure-processes', '1', '--reference-budget', '1000000', '--planning-cache', 'off', '-o', output];
       const costInputs = {};
       for (const [key, flag] of [['profile', '--profile'], ['workload', '--workload'], ['targetProfile', '--target-profile']]) if (options[key]) {
         const text = inputText(files, options[key]), path = join(directory, key + '.json');
         JSON.parse(text); await writeFile(path, text, { mode: 0o600 }); args.push(flag, path); costInputs[key] = text;
       }
-      await runPlanningProcess(process.env.INK_OS_PLANNER_COMPILER, args, (options.timeSeconds + 30) * 1000);
+      await hostBudget.run({owner:'planner',resources:{cpu:1,memoryMB:WORKER_MEMORY_MB},label:'implementation search'},()=>runPlanningProcess(process.env.INK_OS_PLANNER_COMPILER, args, (options.timeSeconds + 30) * 1000));
       const plan = await boundedText(output + '.planning.json');
       let receiptText = await boundedText(output + '.planning.json.receipt.json');
       for (const [path, label] of [[directory, '<build>'], [process.env.INK_OS_KNOWLEDGE_ROOT, '<knowledge>'], [process.env.INK_OS_PLANNER_COMPILER, '<compiler>']]) receiptText = receiptText.replaceAll(path, label);

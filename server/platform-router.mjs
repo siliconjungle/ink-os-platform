@@ -1,3 +1,4 @@
+import { hostBudget } from './execution-budget.mjs';
 import{adapterSettings,adaptersFor,activateAdapter,setAdapterDefault,startAdapter,pollAdapter}from './adapters.mjs';
 import { inkRoute } from './ink-router.mjs';
 import{workflowRoute}from './workflow-router.mjs';
@@ -85,6 +86,7 @@ export function platformRouter(platform,{send,body}){return async(req,res,url,pr
   if(!action&&method==='DELETE')return send(res,200,await platform.versions.archive(key,{permanent:url.searchParams.get('permanent')==='true'}));
   error(405,'Unsupported OS version operation');
  }
+ if(path==='/execution'&&method==='GET'){if(!isAdmin(principal))error(403,'Only the administrator can inspect host execution budgets');return send(res,200,{format:'ink-os-execution-budget-v1',...hostBudget.snapshot()});}
  const asApp=id=>{platform.app(id);if(!principal.owner&&principal.appId!==id)error(403,'Wrong app identity');return principal.owner?{owner:false,appId:id,namespace:id}:{...principal,owner:false,appId:id,namespace:id};};
  const sync=path.match(/^\/sync\/(os|[a-f0-9]{32})\/([^/]+)$/);if(sync){const namespace=sync[1],key=decodeURIComponent(sync[2]),kind=url.searchParams.get('kind')||'state';if(method==='GET')return send(res,200,await platform.collaboration.snapshot(await platform.collaboration.openFor(principal,namespace,key,kind,{create:!!principal.owner||principal.namespace===namespace})));if(method==='POST')return send(res,200,await platform.collaboration.submit(principal,namespace,key,kind,(await body(req)).updates));}
  if(path==='/adapters'&&method==='GET'){platform.owner(principal);return send(res,200,url.searchParams.has('source')?adaptersFor(platform,url.searchParams.get('source')):adapterSettings(platform));}

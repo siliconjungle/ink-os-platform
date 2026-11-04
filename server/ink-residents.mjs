@@ -1,3 +1,4 @@
+import { hostBudget, WORKER_MEMORY_MB } from './execution-budget.mjs';
 import { Worker } from 'node:worker_threads';
 import { compilerModule } from './ink-compiler.mjs';
 
@@ -63,7 +64,12 @@ export async function javascriptResident(compiled, { timeout = 30000 } = {}) {
 }
 
 export class InkResidents {
-  constructor({ limit = 4, idleMs = 30000, timeout = 30000 } = {}) {
+  constructor({
+    limit = 4,
+    idleMs = 30000,
+    timeout = 30000,
+    budget = hostBudget,
+  } = {}) {
     if (
       !Number.isInteger(limit) ||
       limit < 1 ||
@@ -74,6 +80,15 @@ export class InkResidents {
       timeout < 1
     )
       throw Error('Invalid resident Ink limits.');
+    this.budget = budget;
+    this.unregisterReclaimer = budget.registerReclaimer(async () => {
+      const idle = [...this.sessions.values()]
+        .filter((session) => !session.busy)
+        .sort((a, b) => a.used - b.used)[0];
+      if (!idle) return false;
+      await this.drop(idle);
+      return true;
+    });
     Object.assign(this, {
       limit,
       idleMs,
@@ -83,7 +98,18 @@ export class InkResidents {
       closed: false,
     });
   }
-  async acquire(key, create) {
+  async acquire(key, create, { owner = 'ink', signal, pooled = false } = {}) {
+    if (pooled) {
+      const lane = Array.from(
+        { length: this.limit },
+        (_, n) => key + ':' + n,
+      ).find((key) => !this.sessions.get(key)?.busy);
+      if (!lane)
+        throw Object.assign(Error('Resident Ink capacity is busy'), {
+          status: 429,
+        });
+      key = lane;
+    }
     if (this.closed)
       throw Object.assign(Error('Ink execution is stopping.'), { status: 503 });
     let session = this.sessions.get(key);
@@ -108,14 +134,22 @@ export class InkResidents {
       this.sessions.set(key, session);
       try {
         await eviction;
-        session.endpoint = await create({ timeout: this.timeout });
+        session.memoryLease = await this.budget.acquire({
+          owner,
+          resources: { memoryMB: WORKER_MEMORY_MB },
+          signal,
+          label: 'resident memory',
+        });
+        session.endpoint = await this.budget.run(
+          { owner, resources: { cpu: 1 }, signal, label: 'resident startup' },
+          () => create({ timeout: this.timeout }),
+        );
         if (this.closed || this.sessions.get(key) !== session) {
-          await session.endpoint.close();
           throw Error('Ink execution is stopping.');
         }
         this.starts++;
       } catch (error) {
-        this.sessions.delete(key);
+        await this.drop(session);
         throw error;
       }
     } else {
@@ -128,17 +162,28 @@ export class InkResidents {
     if (this.sessions.get(session.key) !== session) return;
     session.busy = false;
     session.used = Date.now();
-    session.timer = setTimeout(() => void this.drop(session), this.idleMs);
+    session.timer = setTimeout(
+      () => void this.drop(session).catch(() => {}),
+      this.idleMs,
+    );
     session.timer.unref();
+    this.budget.notify();
   }
   async drop(session) {
     if (this.sessions.get(session.key) === session)
       this.sessions.delete(session.key);
     clearTimeout(session.timer);
-    await session.endpoint?.close();
+    try {
+      await session.endpoint?.close();
+    } catch (error) {
+      this.budget.poison(error);
+      throw error;
+    }
+    session.memoryLease?.release();
   }
   async close() {
     this.closed = true;
+    this.unregisterReclaimer();
     await Promise.all(
       [...this.sessions.values()].map((session) => this.drop(session)),
     );

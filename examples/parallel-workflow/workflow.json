@@ -1,0 +1,67 @@
+{
+  "title": "Parallel Ink computation with ordered publication",
+  "scheduling": {
+    "version": 1,
+    "mode": "parallel",
+    "maxConcurrent": 4
+  },
+  "steps": [
+    {
+      "id": "left",
+      "appId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commandId": "ink.twice",
+      "bindings": {
+        "arg0": {
+          "source": "literal",
+          "value": "7"
+        }
+      }
+    },
+    {
+      "id": "right",
+      "appId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commandId": "ink.twice",
+      "bindings": {
+        "arg0": {
+          "source": "literal",
+          "value": "11"
+        }
+      }
+    },
+    {
+      "id": "join",
+      "appId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commandId": "ink.combine",
+      "bindings": {
+        "arg0": {
+          "source": "step",
+          "stepId": "left",
+          "path": "valueWire"
+        },
+        "arg1": {
+          "source": "step",
+          "stepId": "right",
+          "path": "valueWire"
+        }
+      }
+    },
+    {
+      "id": "publish",
+      "appId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commandId": "ink.save",
+      "bindings": {
+        "arg0": {
+          "source": "step",
+          "stepId": "join",
+          "path": "valueWire"
+        }
+      }
+    },
+    {
+      "id": "read",
+      "appId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "commandId": "ink.total",
+      "bindings": {}
+    }
+  ]
+}

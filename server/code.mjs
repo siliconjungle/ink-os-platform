@@ -1,3 +1,5 @@
+import { hostBudget } from './execution-budget.mjs';
+import { setTimeout as delay } from 'node:timers/promises';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { hash, World } from './world.mjs';
@@ -19,6 +21,8 @@ export class Code {
   constructor(root, directory = join(root, '.data/code'), world, options = {}) {
     Object.assign(this, { root, directory, world });
     this.tasks = new Map();
+    this.pureTasks = new Set();
+    this.budget = options.budget || hostBudget;
     this.compilations = new Map();
     this.residents = new InkResidents(options);
     this.storage = {
@@ -56,6 +60,10 @@ export class Code {
       );
     let source, wire;
     try {
+      if (input.signal !== undefined && !(input.signal instanceof AbortSignal))
+        throw Object.assign(Error('Invalid execution cancellation signal'), {
+          status: 400,
+        });
       source = normalizeInkProgram(input.source);
       wire = input.input ?? stringifyExactJSON(input.args || []);
       if (typeof wire !== 'string' || Buffer.byteLength(wire) > 1024 * 1024)
@@ -69,6 +77,36 @@ export class Code {
         throw Error('Invalid Ink request identity.');
     } catch (error) {
       return Promise.reject(error);
+    }
+    if (input.parallelPure) {
+      const task = (async () => {
+        const compiled = await this.compile(source),
+          entry = compiled.entries.find((entry) => entry.name === input.entry);
+        if (!entry || entry.action)
+          throw Object.assign(
+            Error(
+              'Concurrent Ink calls require a compiler-checked pure function',
+            ),
+            { status: 403 },
+          );
+        const signal = AbortSignal.any([
+          ...(input.signal ? [input.signal] : []),
+          AbortSignal.timeout(30000),
+        ]);
+        for (;;) {
+          try {
+            return await withWriteAccess(input.principal?.writeAccess, () =>
+              this.execute({ ...input, source, wire, signal }),
+            );
+          } catch (error) {
+            if (error.status !== 429 || signal.aborted) throw error;
+            await delay(5, undefined, { signal });
+          }
+        }
+      })();
+      this.pureTasks.add(task);
+      task.finally(() => this.pureTasks.delete(task)).catch(() => {});
+      return task;
     }
     return this.serializeState(
       input.namespace || input.instance || 'preview',
@@ -160,7 +198,17 @@ export class Code {
       'checkpoint:' + hash(JSON.stringify([namespace, key, compiled.digest])),
       (options) => javascriptResident(compiled, options),
     );
-    const endpoint = session.endpoint;
+    const endpoint = {
+      request: (message) =>
+        this.budget.run(
+          {
+            owner: namespace,
+            resources: { cpu: 1 },
+            label: 'checkpoint replay',
+          },
+          () => session.endpoint.request(message),
+        ),
+    };
     try {
       await endpoint.request({
         op: 'load',
@@ -295,15 +343,35 @@ export class Code {
         input.principal?.releaseId || null,
       ]),
     );
-    const session = await this.residents.acquire(key, (options) =>
-      nativeArtifact
-        ? this.nativeJobs.native.resident(nativeArtifact, {
-            namespace: input.namespace,
-            compiled,
-            ...options,
-          })
-        : javascriptResident(compiled, options),
+    const session = await this.residents.acquire(
+      key,
+      (options) =>
+        nativeArtifact
+          ? this.nativeJobs.native.resident(nativeArtifact, {
+              namespace: input.namespace,
+              compiled,
+              ...options,
+            })
+          : javascriptResident(compiled, options),
+      {
+        owner: namespace,
+        signal: input.signal,
+        pooled: !!input.parallelPure && !selected.action,
+      },
     );
+    const endpoint = session.endpoint;
+    const scheduledEndpoint = {
+      request: (message) =>
+        this.budget.run(
+          {
+            owner: namespace,
+            resources: { cpu: 1 },
+            signal: input.signal,
+            label: 'Ink execution',
+          },
+          () => endpoint.request(message),
+        ),
+    };
     const abort = () => {
       void this.residents.drop(session).catch(() => {});
     };
@@ -315,7 +383,7 @@ export class Code {
         if (session.revision !== saved.revision) {
           recovery = await journal.recover(saved);
           await journal.collect(saved);
-          await session.endpoint.request({
+          await scheduledEndpoint.request({
             op: 'load',
             snapshot: recovery.snapshot,
             records: recovery.records,
@@ -340,7 +408,7 @@ export class Code {
         );
       const result = previous
         ? previous.reply
-        : await session.endpoint.request({
+        : await scheduledEndpoint.request({
             op: 'call',
             entry: selected.name,
             input: input.wire,
@@ -358,7 +426,7 @@ export class Code {
           recovery,
           compiled,
           record,
-          () => session.endpoint.request({ op: 'checkpoint' }),
+          () => scheduledEndpoint.request({ op: 'checkpoint' }),
         );
         session.revision = committed.revision;
         // Only receipts are needed while the state is resident. Recovery reads
@@ -389,7 +457,7 @@ export class Code {
   }
   async close() {
     this.closing = true;
-    await Promise.allSettled([...this.tasks.values()]);
+    await Promise.allSettled([...this.tasks.values(), ...this.pureTasks]);
     await this.residents.close();
   }
 }

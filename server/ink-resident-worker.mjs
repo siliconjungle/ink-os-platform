@@ -8,6 +8,9 @@ const module = await import(
   'data:text/javascript;base64,' +
     Buffer.from(artifact.javascript).toString('base64')
 );
+// One admitted CPU lane owns this worker. Nested parallel_map keeps its
+// literal ordered semantics with one worker instead of multiplying host lanes.
+module.setParallelism?.(1);
 const api = (await WebAssembly.instantiate(workerData.compiler, {})).exports;
 let checked = false,
   state,
@@ -54,10 +57,7 @@ async function call({ entry, input }) {
     if (!state) throw Error('Resident Ink state was not loaded.');
     if (!bindings.has(entry)) bindings.set(entry, state.bind(entry));
     result = bindings.get(entry)(...args);
-  } else
-    result = selected.parallel
-      ? await module.callAsync(entry, args)
-      : module.callOwned(entry, args);
+  } else result = module.callOwned(entry, args);
   const visible = publicResult(result, selected, artifact.manifest);
   if (Buffer.byteLength(visible.wire) > 8 * 1024 * 1024)
     throw Error('Ink output exceeds 8 MiB.');

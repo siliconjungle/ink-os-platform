@@ -1,3 +1,4 @@
+import { hostBudget, WORKER_MEMORY_MB } from './execution-budget.mjs';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
@@ -21,18 +22,18 @@ export async function compilerModule() {
 }
 
 export function isolatedWorker(url, workerData, timeout = 30000) {
-  return new Promise((resolve, reject) => {
+  return hostBudget.run({owner:"compiler",resources:{cpu:1,memoryMB:WORKER_MEMORY_MB},label:"compiler worker"},()=>new Promise((resolve, reject) => {
     const worker = new Worker(url, { workerData, resourceLimits: { maxOldGenerationSizeMb: 256 } });
     let settled = false;
     const finish = (error, value) => {
       if (settled) return; settled = true; clearTimeout(timer);
-      void worker.terminate(); error ? reject(error) : resolve(value);
+      void worker.terminate().then(()=>error?reject(error):resolve(value),terminationError=>reject(error||terminationError));
     };
     const timer = setTimeout(() => finish(Error('Ink operation exceeded its execution time limit.')), timeout);
     worker.once('message', message => finish(message.error ? Error(message.error) : null, message.value));
     worker.once('error', error => finish(error));
     worker.once('exit', code => { if (!settled) finish(Error('Ink worker exited before returning a result (' + code + ').')); });
-  });
+  }));
 }
 
 export async function compilerRequest(request, options = {}) {

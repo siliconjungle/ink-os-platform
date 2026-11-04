@@ -224,6 +224,8 @@ Desktop arrow keys navigate icon geometry rather than catalog order, stop at edg
 
 Installed apps can express typed external effects in Ink, with durable protocol continuations, versioned files, capability-bound HTTP/process resources, subscriptions and direct typed app calls. See [typed effects and protocols](docs/typed-effects.md) and the [all-Ink example](examples/typed-effects).
 
+Workflows can opt into checked concurrent pure execution and shared snapshot read batches under a host CPU/memory/network/GPU admission budget. See [safe scheduling](docs/safe-scheduling.md) and the [parallel Ink example](examples/parallel-workflow).
+
 ### Typed storage queries
 
 The Tables SDK now sends [typed relational queries to storage](docs/typed-storage-queries.md),

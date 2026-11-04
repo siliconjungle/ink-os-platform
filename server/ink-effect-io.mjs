@@ -1,3 +1,4 @@
+import { hostBudget } from './execution-budget.mjs';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { spawn, fork } from 'node:child_process';
@@ -58,7 +59,24 @@ export function requestBytes(text, bytes, { required = false } = {}) {
     throw effectFailure('ResourceLimit', 'Payload exceeds 64 KiB');
   return result;
 }
-export async function httpEffect(profile, request, signal, markDispatched) {
+export async function httpEffect(
+  profile,
+  request,
+  signal,
+  markDispatched,
+  owner = 'effects',
+) {
+  return hostBudget.run(
+    {
+      owner,
+      resources: { network: 1, memoryMB: 8 },
+      signal,
+      label: 'HTTP effect',
+    },
+    () => dispatchHttpEffect(profile, request, signal, markDispatched),
+  );
+}
+async function dispatchHttpEffect(profile, request, signal, markDispatched) {
   const base = new URL(profile.origin),
     url = new URL(request.path, base),
     expected = optional(request.expected),
@@ -297,7 +315,7 @@ export async function runEffectProcess(
 
 /** A separate supervisor owns the process group. IPC disconnect on host death
  * aborts it, so a killed broker does not leave its normal children running. */
-export async function processEffect(
+async function dispatchProcessEffect(
   profile,
   request,
   signal,
@@ -366,4 +384,30 @@ export async function processEffect(
     worker.send({ profile, request, directory }, () => {});
     if (signal.aborted) abort();
   });
+}
+
+export async function processEffect(
+  profile,
+  request,
+  signal,
+  directory,
+  markDispatched,
+  owner = 'effects',
+) {
+  return hostBudget.run(
+    {
+      owner,
+      resources: { cpu: 1, memoryMB: 512 },
+      signal,
+      label: 'process effect',
+    },
+    () =>
+      dispatchProcessEffect(
+        profile,
+        request,
+        signal,
+        directory,
+        markDispatched,
+      ),
+  );
 }

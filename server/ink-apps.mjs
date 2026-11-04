@@ -158,7 +158,7 @@ export async function runInstalledInk(platform, appId, input = {}, principal, re
   if(app.spec.effects?.protocols.some(protocol=>protocol.entry===input.entry)){if(!platform.effects)fail(503,'Typed effect service is unavailable');return platform.effects.run(appId,{...input,releaseId:app.releaseId},principal||{appId,namespace:appId,releaseId:app.releaseId});}
   const hosted=await runInkHostBinding(platform,appId,app,input,principal);if(hosted)return hosted;
   const authority = platform.runtime.bind({ owner: false, appId, namespace: appId, releaseId: app.releaseId });
-  const result = await platform.code.run({ source: app.source, entry: input.entry, input: input.input, args: input.args, backend: input.backend, requestId: input.requestId, signal:control.signal, namespace: appId, stateKey: 'ink-app:state', principal: authority });
+  const result = await platform.code.run({ source: app.source, entry: input.entry, input: input.input, args: input.args, backend: input.backend, requestId: input.requestId, signal:control.signal, parallelPure:control.parallelPure, namespace: appId, stateKey: 'ink-app:state', principal: authority });
   if (result.needsArguments) fail(400, 'Provide a JSON argument array for this Ink entry.');
   const entry = app.entries.find(entry => entry.name === input.entry), wire = parseExactJSON(result.wire);
   return { ...result, value: entry.action ? result.output.result : result.output, valueWire: stringifyExactJSON(entry.action ? wire.result : wire), releaseId: app.releaseId };

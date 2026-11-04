@@ -53,6 +53,7 @@ export function routeScope(path,method){
  if(path.startsWith('/calls/'))return'computer';
  if(path.startsWith('/accounts'))return 'accounts:manage';
  if(path.startsWith('/projects'))return /\/credentials$/.test(path)?'apps:credentials':method==='GET'?'apps:read':'apps:deploy';
+ if(path==='/execution')return 'apps:read';
  if(path==='/native')return 'apps:read';
  if(path.startsWith('/runtimes'))return method==='GET'?'apps:read':'apps:deploy';
  if(path.startsWith('/keys'))return 'keys:manage';

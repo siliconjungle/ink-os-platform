@@ -1,3 +1,4 @@
+import { hostBudget, WORKER_MEMORY_MB } from './execution-budget.mjs';
 import { nativeResident } from './native-resident.mjs';
 import { compileInkProgram, compilerInfo, compilerRequest, normalizeInkProgram, inkProgramKey, inkProgramIdentity } from './ink-compiler.mjs';
 import { inkEntries } from '../shared/ink-app.mjs';
@@ -149,15 +150,18 @@ export class NativeInk {
     await writeFile(join(directory, 'Cargo.lock'), lock);
     await writeFile(join(directory, 'src/main.rs'), artifact.rust + driver);
     const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => buildEnvironmentName(name)));
-    Object.assign(env, Object.fromEntries(Object.entries(tools.runtimeEnvironment || {}).filter(([name]) => buildEnvironmentName(name))), { RUSTC: tools.rustc, CARGO_TARGET_DIR: join(this.directory, 'target'), CARGO_INCREMENTAL: '0', CARGO_PROFILE_RELEASE_DEBUG: '0', CARGO_ENCODED_RUSTFLAGS: [`--remap-path-prefix=${homedir()}=/build`, `--remap-path-prefix=${directory}=/ink/native`].join('\x1f') });
+    Object.assign(env, Object.fromEntries(Object.entries(tools.runtimeEnvironment || {}).filter(([name]) => buildEnvironmentName(name))), { CARGO_BUILD_JOBS:'1', RUSTC: tools.rustc, CARGO_TARGET_DIR: join(this.directory, 'target'), CARGO_INCREMENTAL: '0', CARGO_PROFILE_RELEASE_DEBUG: '0', CARGO_ENCODED_RUSTFLAGS: [`--remap-path-prefix=${homedir()}=/build`, `--remap-path-prefix=${directory}=/ink/native`].join('\x1f') });
     const args = ['build', '--locked', '--release', '--manifest-path', join(directory, 'Cargo.toml')];
     if (this.offline) args.push('--offline');
+    const lease=await hostBudget.acquire({owner:namespace,resources:{cpu:1,memoryMB:WORKER_MEMORY_MB},label:'native build'});
+    try{
     const task = this.execute(tools.cargo, args, { env, timeout: 300000, maxBuffer: 4 * 1024 * 1024 });
     task.catch(() => {});
     let notificationError;
     try { if (task.child?.pid) await onProcess?.({ pid: task.child.pid, artifactId: id, child: task.child }); } catch (error) { notificationError = error; }
     await task;
     if (notificationError) throw notificationError;
+    }finally{lease.release();}
     await copyFile(join(env.CARGO_TARGET_DIR, 'release', process.platform === 'win32' ? 'ink-native-app.exe' : 'ink-native-app'), executable+'.next');
     await chmod(executable+'.next', 0o700);
     await rename(executable+'.next',executable);
@@ -190,8 +194,11 @@ export class NativeInk {
     const action = artifact.manifest.state?.actions.find(action => action.name === entry);
     const kind = action ? action.change ? 'change' : 'query' : 'function';
     const input = '{"entry":' + JSON.stringify(entry) + ',"kind":' + JSON.stringify(kind) + ',"args":' + prepared.input + (snapshot ? ',"snapshot":' + JSON.stringify([...Buffer.from(snapshot, 'base64')]) : '') + '}';
+    const lease=await hostBudget.acquire({owner:namespace,resources:{cpu:1,memoryMB:WORKER_MEMORY_MB},label:'native execution'});
+    try{
     return new Promise((resolve, reject) => {
-      const child = spawn(join(directory, process.platform === 'win32' ? 'program.exe' : 'program'), [], { env: {}, stdio: ['pipe', 'pipe', 'pipe'] });
+      const child = spawn(join(directory, process.platform === 'win32' ? 'program.exe' : 'program'), [], { env: { INK_THREADS:'1' }, stdio: ['pipe', 'pipe', 'pipe'] });
+      child.once('close',()=>lease.release());child.once('error',()=>lease.release());
       let output = '', errorOutput = '', settled = false;
       const finish = (error, value) => { if (settled) return; settled = true; clearTimeout(timer); error ? reject(error) : resolve(value); };
       const timer = setTimeout(() => { child.kill(); finish(Error('Native execution exceeded 30 seconds.')); }, 30000);
@@ -210,5 +217,6 @@ export class NativeInk {
       });
       child.stdin.on('error', error => finish(error)); child.stdin.end(input);
     });
+    }catch(error){lease.release();throw error;}
   }
 }

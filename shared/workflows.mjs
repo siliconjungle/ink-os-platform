@@ -18,9 +18,11 @@ export function workflowDefinition(input){
    else if(binding.source==='step'){if(!ids.has(binding.stepId)||binding.path!==''&&!safePath(binding.path))fail('Results must come from an earlier step using a simple field path');bindings[name]={source:'step',stepId:binding.stepId,path:binding.path||''};}
    else fail('Choose a literal, workflow input or earlier result');
   }
-  ids.add(step.id);return{id:step.id,appId:step.appId,commandId:step.commandId,bindings};
+  const dependsOn=step.dependsOn;if(dependsOn!==undefined&&(!Array.isArray(dependsOn)||dependsOn.length>20||new Set(dependsOn).size!==dependsOn.length||dependsOn.some(id=>!ids.has(id))))fail('Explicit dependencies must name distinct earlier steps');
+  ids.add(step.id);return{id:step.id,appId:step.appId,commandId:step.commandId,bindings,...(dependsOn!==undefined?{dependsOn:[...dependsOn]}:{})};
  });
- const result={version:1,title:input.title.trim(),description:input.description||'',inputs:schema,steps};if(BufferlessBytes(result)>200000)fail('Workflow definition exceeds 200 KiB');return result;
+ let scheduling;if(input.scheduling!==undefined){const policy=input.scheduling;if(!plain(policy)||Object.keys(policy).some(key=>!['version','mode','maxConcurrent'].includes(key))||policy.version!==1||!['sequential','parallel'].includes(policy.mode)||!Number.isInteger(policy.maxConcurrent)||policy.maxConcurrent<1||policy.maxConcurrent>4)fail('Choose a version 1 workflow scheduling policy with 1–4 concurrent steps');scheduling={version:1,mode:policy.mode,maxConcurrent:policy.maxConcurrent};}
+ const result={...(scheduling?{scheduling}:{}),version:1,title:input.title.trim(),description:input.description||'',inputs:schema,steps};if(BufferlessBytes(result)>200000)fail('Workflow definition exceeds 200 KiB');return result;
 }
 const BufferlessBytes=value=>new TextEncoder().encode(JSON.stringify(value)).length;
 export const workflowInputs=(definition,input)=>commandInput({inputs:definition.inputs},input);

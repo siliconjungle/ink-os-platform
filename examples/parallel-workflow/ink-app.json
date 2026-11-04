@@ -1,0 +1,6 @@
+{
+  "slug": "parallel-example",
+  "title": "Parallel Ink example",
+  "language": "ink",
+  "exports": ["twice", "combine", "save", "total"]
+}
