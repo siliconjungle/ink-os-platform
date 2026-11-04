@@ -231,6 +231,9 @@ export class InkViews {
     });
   }
   invalidate(event) {
+    if (event.type === 'ink-reads') return;
+    const provider = this.reads.observe(event),
+      readers = new Set();
     for (const mount of this.mounts.values()) {
       if (mount.disposed || mount.previewId) continue;
       let changed = false;
@@ -261,6 +264,8 @@ export class InkViews {
         ) {
           entry.dataDirty = true;
           changed = true;
+          if (entry.readSnapshot && entry.readSnapshot.binding.appId !== mount.appId)
+            readers.add(mount.appId);
         }
       if (event.type === 'deleted' && event.ids.includes(mount.appId)) {
         mount.all = true;
@@ -268,6 +273,15 @@ export class InkViews {
       }
       if (changed) mount.epoch++;
     }
+    // Tell desktops which apps read the changed provider, so only their frames
+    // refresh; other apps holding apps.invoke are not woken by this commit.
+    if (provider && readers.size)
+      for (const listener of [...this.platform.world.listeners])
+        listener({
+          type: 'ink-reads',
+          provider: provider.appId,
+          apps: [...readers].sort(),
+        });
   }
   async render(mount, principal, provided) {
     if (mount.disposed) fail(410, 'Interface was disposed');
@@ -297,7 +311,10 @@ export class InkViews {
             component.name,
             mount.previewId
               ? null
-              : await this.reads.read(binding, component.data, signal),
+              : await this.reads.read(binding, component.data, signal, {
+                  appId: mount.appId,
+                  releaseId: mount.releaseId,
+                }),
           );
         }
       const compute = async () => {
@@ -306,6 +323,13 @@ export class InkViews {
           if (!component) fail(400, 'View references an undeclared component');
           let entry = cache.get(name);
           if (computed.includes(name)) return entry.view;
+          // A reused read snapshot (same exact value) supersedes its dirty mark.
+          if (
+            entry?.dataDirty &&
+            component.read &&
+            entry.readSnapshot === readSnapshots.get(name)
+          )
+            entry.dataDirty = false;
           const needed =
             all ||
             !entry ||

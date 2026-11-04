@@ -13,7 +13,7 @@ export const example = fileURLToPath(
 );
 export async function systemFixture(
   t,
-  { native = false, baseline = false, collaborative = false } = {},
+  { native = false, baseline = false, collaborative = false, edit } = {},
 ) {
   const f = await fixture(t),
     p = f.platform,
@@ -31,6 +31,7 @@ export async function systemFixture(
       (f) => f.path !== 'selected.plan.json',
     );
   }
+  edit?.(input);
   const start = performance.now(),
     packet = await buildInkSystem(input),
     buildMs = performance.now() - start,
@@ -66,10 +67,10 @@ export async function systemFixture(
     buildMs,
     deployMs,
     nativeBuildMs: native ? performance.now() - nativeStart : 0,
-    call: (entry, args = [], options = {}) =>
+    call: (entry, args = [], { appId, ...options } = {}) =>
       runInstalledInk(
         p,
-        deployed.apps.tables.appId,
+        appId || deployed.apps.tables.appId,
         {
           entry,
           input: typeof args === 'string' ? args : JSON.stringify(args),

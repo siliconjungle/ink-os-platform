@@ -1,7 +1,8 @@
 import { installedInk, runInstalledInk } from './ink-apps.mjs';
-import { stateObjectId } from './app-data.mjs';
 import { resolveEffectType, effectTypeEqual } from '../shared/ink-effects.mjs';
 import { parseExactJSON } from '../shared/exact-json.mjs';
+import { RootVersions } from './ink-root-versions.mjs';
+import { readRoots } from './ink-footprints.mjs';
 const fail = (status, message) => {
   throw Object.assign(Error(message), { status });
 };
@@ -24,33 +25,34 @@ export function checkUiRead(provider, entryName, expected) {
     fail(400, 'Exported query result does not match the UI data port');
   return entry;
 }
-/** Data snapshots are shared only inside the same pinned authority and arguments. */
+/**
+ * Data snapshots are shared only inside the same pinned authority and arguments.
+ * A snapshot stays current until a commit writes a state root its exported
+ * query reads (see RootVersions); a recomputed snapshot with identical exact
+ * bytes keeps its identity, so consumers whose inputs did not change do not
+ * recompute their views.
+ */
 export class InkUiReads {
   constructor(platform) {
     this.platform = platform;
     this.cache = new Map();
+    this.latest = new Map();
+    this.versions = new RootVersions(platform);
     this.reads = 0;
     this.hits = 0;
+    this.reused = 0;
   }
-  stamp(appId, releaseId) {
+  stamp(appId, releaseId, roots = null) {
     const app = this.platform.app(appId),
       meta = JSON.parse(app.body);
     if (meta.releaseId !== releaseId)
       fail(409, 'The exported query release changed; rebuild its consumers');
     if (!meta.capabilities?.includes('code.execute'))
       fail(403, 'The exported query app cannot execute');
-    const authority = this.platform.world.stateCommits?.get(
-      appId + '\0ink-app:state',
-    );
-    if (authority)
-      return JSON.stringify([app.revision, authority.revision, authority.body]);
-    const state = this.platform.world.get(
-      stateObjectId(appId, 'ink-app:state'),
-    );
     return JSON.stringify([
       app.revision,
-      state?.revision || 0,
-      state?.body || '',
+      releaseId,
+      roots ? this.versions.versions(appId, roots) : this.versions.token(appId),
     ]);
   }
   current(snapshot) {
@@ -58,33 +60,52 @@ export class InkUiReads {
       return (
         snapshot &&
         snapshot.stamp ===
-          this.stamp(snapshot.binding.appId, snapshot.binding.releaseId)
+          this.stamp(
+            snapshot.binding.appId,
+            snapshot.binding.releaseId,
+            snapshot.roots,
+          )
       );
     } catch {
       return false;
     }
   }
-  async read(binding, expected, signal) {
-    await this.platform.code.readState(binding.appId, 'ink-app:state');
-    const key = JSON.stringify([binding, expected]),
-      prior = this.cache.get(key);
-    if (prior && this.current(prior)) {
-      this.hits++;
-      return prior.promise;
-    }
-    const snapshot = {
-      binding,
-      stamp: this.stamp(binding.appId, binding.releaseId),
-    };
-    snapshot.promise = (async () => {
-      const provider = await installedInk(
+  /** Record a World event; returns the provider whose roots changed, if tracked. */
+  observe(event) {
+    return this.versions.observe(event);
+  }
+  async roots(binding) {
+    const provider = await installedInk(
         this.platform,
         binding.appId,
         binding.releaseId,
-      );
+      ),
+      compiled = await this.platform.code.compile(provider.source),
+      entry = compiled.entries.find((entry) => entry.name === binding.entry);
+    return {
+      provider,
+      roots: entry
+        ? readRoots(await this.platform.code.footprints(compiled), compiled, entry)
+        : null,
+    };
+  }
+  async read(binding, expected, signal, consumer) {
+    if (binding.plan)
+      return this.platform.inkLinks.read(binding, expected, { signal, consumer });
+    await this.platform.code.readState(binding.appId, 'ink-app:state');
+    const key = JSON.stringify([binding, expected]),
+      prior = this.cache.get(key);
+    if (prior && (prior.pending || this.current(prior))) {
+      this.hits++;
+      return prior.promise;
+    }
+    const snapshot = { binding, roots: null, pending: true };
+    snapshot.promise = (async () => {
+      const { provider, roots } = await this.roots(binding);
       checkUiRead(provider, binding.entry, expected);
+      snapshot.roots = roots;
       for (let attempt = 0; attempt < 3; attempt++) {
-        snapshot.stamp = this.stamp(binding.appId, binding.releaseId);
+        snapshot.stamp = this.stamp(binding.appId, binding.releaseId, roots);
         const result = await runInstalledInk(
           this.platform,
           binding.appId,
@@ -96,8 +117,21 @@ export class InkUiReads {
         if (Buffer.byteLength(result.valueWire) > 128 * 1024)
           fail(413, 'Exported UI data exceeds 128 KiB');
         if (!this.current(snapshot)) continue;
+        snapshot.pending = false;
         this.reads++;
+        const previous = this.latest.get(key);
+        if (previous && previous.wire === result.valueWire) {
+          // Same exact value: keep the identity consumers cached their views on.
+          previous.stamp = snapshot.stamp;
+          previous.roots = roots;
+          this.reused++;
+          return previous;
+        }
+        snapshot.wire = result.valueWire;
         snapshot.value = parseExactJSON(result.valueWire);
+        this.latest.set(key, snapshot);
+        while (this.latest.size > 32)
+          this.latest.delete(this.latest.keys().next().value);
         return snapshot;
       }
       throw Object.assign(
@@ -106,14 +140,23 @@ export class InkUiReads {
       );
     })();
     this.cache.set(key, snapshot);
-    snapshot.promise.catch(() => {
-      if (this.cache.get(key) === snapshot) this.cache.delete(key);
-    });
+    snapshot.promise.then(
+      (value) => {
+        // A reused snapshot is the cache entry from now on.
+        if (value !== snapshot && this.cache.get(key) === snapshot)
+          this.cache.set(key, value);
+      },
+      () => {
+        snapshot.pending = false;
+        if (this.cache.get(key) === snapshot) this.cache.delete(key);
+      },
+    );
     while (this.cache.size > 8)
       this.cache.delete(this.cache.keys().next().value);
     return snapshot.promise;
   }
   close() {
     this.cache.clear();
+    this.latest.clear();
   }
 }

@@ -15,6 +15,7 @@ import {
   inkOriginalSource,
 } from './ink-compiler.mjs';
 import { inkEntries } from '../shared/ink-app.mjs';
+import { inkFootprints, writeRoots } from './ink-footprints.mjs';
 import { stringifyExactJSON } from '../shared/exact-json.mjs';
 // Generated learn-hole entries (see server/ink-learned.mjs).
 const LEARNED_ENTRY = /^(__learn_get|__learn_set|__objective_[A-Za-z_][A-Za-z0-9_]*)$/;
@@ -34,6 +35,13 @@ export class Code {
       batch: (...args) => this.writeStates(...args),
       keys: (...args) => this.stateKeys(...args),
     };
+  }
+  /** IR footprints of a compiled program, or null when the compiler predates them. */
+  footprints(compiled) {
+    if (!this.footprintTasks) this.footprintTasks = new WeakMap();
+    if (!this.footprintTasks.has(compiled))
+      this.footprintTasks.set(compiled, inkFootprints(compiled.source).catch(() => null));
+    return this.footprintTasks.get(compiled);
   }
   async compile(source) {
     source = normalizeInkProgram(source);
@@ -429,7 +437,8 @@ export class Code {
             wire: result.wire,
             receipt,
           };
-        const hintKey=namespace+'\0'+stateKey;this.commitHints.set(hintKey,{source:inkProgramKey(compiled.source),roots:(selected.roots||[]).map(index=>compiled.artifact.manifest.state.roots[index]?.name).filter(Boolean)});let committed;
+        // Readers re-run only when a commit writes a root they read (IR write roots).
+        const hintKey=namespace+'\0'+stateKey;this.commitHints.set(hintKey,{source:inkProgramKey(compiled.source),roots:writeRoots(await this.footprints(compiled),compiled,selected)});let committed;
         try{
         committed = await journal.commit(
           saved,
