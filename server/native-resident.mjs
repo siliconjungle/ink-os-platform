@@ -10,7 +10,8 @@ export function nativeResident({ executable, compiled, timeout = 30000 }) {
   });
   let pending,
     failed,
-    buffer = Buffer.alloc(0),
+    chunks = [],
+    buffered = 0,
     stderr = '';
   const closed = new Promise((resolve) => child.once('close', resolve));
   const refs = (active) => {
@@ -35,16 +36,26 @@ export function nativeResident({ executable, compiled, timeout = 30000 }) {
     stderr = (stderr + bytes.toString()).slice(-8192);
   });
   child.stdout.on('data', (bytes) => {
-    buffer = Buffer.concat([buffer, bytes]);
-    if (buffer.length > 64 * 1024 * 1024) {
+    buffered += bytes.length;
+    if (buffered > 64 * 1024 * 1024) {
       fail(Error('Native response exceeds its storage budget.'));
       child.kill();
       return;
     }
-    const end = buffer.indexOf(10);
-    if (end < 0) return;
-    const line = buffer.subarray(0, end);
-    buffer = buffer.subarray(end + 1);
+    const end = bytes.indexOf(10);
+    if (end < 0) {
+      chunks.push(bytes);
+      return;
+    }
+    if (end !== bytes.length - 1) {
+      fail(Error('Unexpected trailing native response.'));
+      child.kill();
+      return;
+    }
+    chunks.push(bytes.subarray(0, end));
+    const line = Buffer.concat(chunks, buffered - 1);
+    chunks = [];
+    buffered = 0;
     if (!pending) {
       fail(Error('Unexpected resident native response.'));
       child.kill();

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, appendFile } from 'node:fs/promises';
+import { mkdtemp, rm, appendFile, copyFile, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NativeInk } from '../server/native-ink.mjs';
@@ -53,8 +53,15 @@ test('actual compiled Rust preserves browser values and portable state across ta
   await residentCode.residents.close();
   const {InkResidents}=await import('../server/ink-residents.mjs');residentCode.residents=new InkResidents();
   assert.equal((await run('sample',eventInput,'native','event')).output.events.length,1);
+  const largeEvent=eventInput.replace('"resident"','"'+'x'.repeat(512*1024)+'"');
+  await run('sample',largeEvent,'native','large-event');
+  await run('add','[0]'); // Compact the large tail through native checkpoint framing.
   const portable=await residentCode.loadCheckpoint('test-app','native-state');assert.ok(portable.value.snapshot);
-  await appendFile(join(directory, build.id, process.platform === 'win32' ? 'program.exe' : 'program'), 'tamper');
+  assert.ok(Buffer.byteLength(portable.value.snapshot,'base64')>512*1024);
+  const executable=join(directory,build.id,process.platform==='win32'?'program.exe':'program');
+  // Linux prevents in-place writes to a running executable. Replace its path
+  // with a corrupt copy while the resident retains the original inode.
+  await copyFile(executable,executable+'.corrupt');await appendFile(executable+'.corrupt','tamper');await rename(executable+'.corrupt',executable);
   await assert.rejects(native.run(build.id, { namespace: 'test-app', entry: 'total' }), { code: 'INK_NATIVE_INTEGRITY' });
   assert.equal((await native.build(source, { namespace: 'test-app' })).cached, false);
   assert.equal((await native.run(build.id, { namespace: 'test-app', entry: 'total' })).output.result, 0);
