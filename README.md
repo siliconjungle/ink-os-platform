@@ -238,3 +238,5 @@ The Tables SDK now sends [typed relational queries to storage](docs/typed-storag
 including predicates, projections, joins, aggregates, ordering, counts, and
 snapshot-bound pages. Indexed point/page reads and maintained aggregates avoid
 fetching complete tables into application JavaScript.
+
+Ink builds can also [select and replay measured data paths](docs/data-path-planning.md) for declared typed UI queries, comparing scans, fixed indexes and maintained results under bounded build-time budgets, with explicit scan fallbacks. The [planned storage example](examples/planned-storage) keeps its application view in Ink.

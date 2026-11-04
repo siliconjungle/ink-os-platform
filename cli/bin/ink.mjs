@@ -1,3 +1,4 @@
+import { dataPlanningFiles } from '../../server/data-path-planning.mjs';
 import { mkdir, readdir, readFile, writeFile, realpath, lstat } from 'node:fs/promises';
 import { resolve, join, relative, sep, basename } from 'node:path';
 import { Projects } from '../../server/projects.mjs';
@@ -51,7 +52,7 @@ export async function buildInk(directory, options = {}) {
   directory = await realpath(resolve(directory));
   const manifest = JSON.parse(await readFile(join(directory, 'ink-app.json'), 'utf8'));
   const names = new Set(manifest.modules !== undefined ? inkModuleGraph(manifest.modules).modules.map(module => module.path) : [manifest.source || 'main.ink']);
-  const planningInputs = new Set(planningFiles(planningOptions(manifest.optimisation)));
+  const planningInputs = new Set([...planningFiles(planningOptions(manifest.optimisation)),...dataPlanningFiles(manifest.storagePlanning)]);
   for (const path of planningInputs) names.add(path);
   const icon = manifest.desktop?.icon;
   if (typeof icon === 'string' && /\.svg$/i.test(icon)) names.add(icon);

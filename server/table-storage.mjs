@@ -121,12 +121,14 @@ class Table {
     this.keys = new Map();
     this.indexes = new Map();
     this.groups = new Map();
+    this.results = new Map();
     for (const object of objects) this.put(object, stats);
   }
   remove(id) {
     const row = this.rows.get(id);
     if (row) {
       for (const group of this.groups.values()) group.change(row, -1);
+      for (const view of this.results.values()) view.tree.remove(view.key(row));
       this.rows.delete(id);
       const bucket = this.keys.get(row.$key);
       bucket.delete(id);
@@ -143,6 +145,8 @@ class Table {
       const row = decode(object, this.table);
       this.rows.set(row.$id, row);
       for (const group of this.groups.values()) group.change(row, 1);
+      for (const view of this.results.values())
+        if (view.accept(row)) view.tree.insert(view.key(row), row);
       if (!this.keys.has(row.$key)) this.keys.set(row.$key, new Set());
       this.keys.get(row.$key).add(row.$id);
       for (const index of this.indexes.values())
@@ -198,6 +202,40 @@ class Table {
       view.change(row, 1);
     }
     this.groups.set(id, view);
+    return view;
+  }
+  resultView(id, accept, by, stats) {
+    if (this.results.has(id)) {
+      const value = this.results.get(id);
+      this.results.delete(id);
+      this.results.set(id, value);
+      return value;
+    }
+    if (this.results.size >= 2)
+      this.results.delete(this.results.keys().next().value);
+    const fields = [
+      ...by,
+      { field: '$key', collation: 'key', direction: 'asc' },
+      { field: '$id', collation: 'binary', direction: 'asc' },
+    ];
+    const view = {
+      accept,
+      key: (row) => fields.map((field) => row[field.field]),
+      tree: new OrderedIndex((a, b) => {
+        for (let i = 0; i < fields.length; i++) {
+          const order =
+            compareValues(a[i], b[i], fields[i].collation) *
+            (fields[i].direction === 'desc' ? -1 : 1);
+          if (order) return order;
+        }
+        return 0;
+      }),
+    };
+    for (const row of this.rows.values()) {
+      stats.resultBuildRows++;
+      if (accept(row)) view.tree.insert(view.key(row), row);
+    }
+    this.results.set(id, view);
     return view;
   }
   index(fields, collation, stats, tieDirection = 'asc') {
@@ -265,7 +303,8 @@ function memberships(object) {
 export class TableStorage {
   constructor(world, options = {}) {
     this.world = world;
-    this.dependencyEpoch=0;this.dependencyVersions=new Map();
+    this.dependencyEpoch = 0;
+    this.dependencyVersions = new Map();
     this.limits = {
       rows: 100000,
       tableBytes: 64 * 1024 * 1024,
@@ -286,9 +325,17 @@ export class TableStorage {
     this.loaded = new Map();
     this.reset();
   }
-  dependencyToken(namespace,tableId){this.ensure();return this.dependencyEpoch+":"+(this.dependencyVersions.get(identity(namespace,tableId))||0);}
+  dependencyToken(namespace, tableId) {
+    this.ensure();
+    return (
+      this.dependencyEpoch +
+      ':' +
+      (this.dependencyVersions.get(identity(namespace, tableId)) || 0)
+    );
+  }
   reset() {
-    this.dependencyEpoch++;this.dependencyVersions.clear();
+    this.dependencyEpoch++;
+    this.dependencyVersions.clear();
     this.objects.clear();
     this.members.clear();
     this.memberBytes.clear();
@@ -324,7 +371,17 @@ export class TableStorage {
       const id = action.name === 'put' ? action.object.id : action.id,
         old = this.objects.get(id),
         next = action.name === 'put' ? action.object : null;
-      const changed=new Set([...memberships(old),...memberships(next),...(old?.kind===TABLE_KIND?[identity(old.namespace,id)]:[]),...(next?.kind===TABLE_KIND?[identity(next.namespace,id)]:[])]);for(const key of changed)this.dependencyVersions.set(key,(this.dependencyVersions.get(key)||0)+1);
+      const changed = new Set([
+        ...memberships(old),
+        ...memberships(next),
+        ...(old?.kind === TABLE_KIND ? [identity(old.namespace, id)] : []),
+        ...(next?.kind === TABLE_KIND ? [identity(next.namespace, id)] : []),
+      ]);
+      for (const key of changed)
+        this.dependencyVersions.set(
+          key,
+          (this.dependencyVersions.get(key) || 0) + 1,
+        );
       for (const key of memberships(old)) {
         this.members.get(key)?.delete(id);
         this.memberBytes.set(

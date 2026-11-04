@@ -201,7 +201,8 @@ test('typed predicates, projections, nulls, ordering and ranges match the indepe
     { name: 'Item 4', rank: 4 },
     { name: 'Item 2', rank: 2 },
   ]);
-  assert.deepEqual(result.dependencies[0].columns, ['score', 'title']);
+  // Stable enumeration and order ties also depend on the source identity.
+  assert.deepEqual(result.dependencies[0].columns, ['$id', '$key', 'score', 'title']);
   for (const request of [
     tableQuery(namespace, tableId, { where: { unknown: 1 } }),
     tableQuery(namespace, tableId, { where: { score: 'bad' } }),

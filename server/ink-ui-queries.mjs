@@ -1,15 +1,6 @@
 import { stringifyExactJSON } from '../shared/exact-json.mjs';
 import { queryRelational } from './relational-query.mjs';
-const canonical = (value) =>
-  JSON.stringify(value, (_key, value) =>
-    value && typeof value === 'object' && !Array.isArray(value)
-      ? Object.fromEntries(
-          Object.keys(value)
-            .sort()
-            .map((key) => [key, value[key]]),
-        )
-      : value,
-  );
+import { DataPaths } from './data-path-planning.mjs';
 export function scopedUiQuery(query, appId) {
   const result = structuredClone(query),
     visit = (node) => {
@@ -18,12 +9,12 @@ export function scopedUiQuery(query, appId) {
         if (node.namespace !== 'self')
           throw Error('UI query namespace changed');
         node.namespace = appId;
-      }
-      for (const value of Object.values(node))
-        if (value && typeof value === 'object')
-          Array.isArray(value) ? value.forEach(visit) : visit(value);
+      } else if (node.op === 'join') {
+        visit(node.left);
+        visit(node.right);
+      } else if (node.input) visit(node.input);
     };
-  visit(result);
+  visit(result.relation);
   return result;
 }
 export function currentUiQuery(world, snapshot) {
@@ -41,11 +32,26 @@ export class UiQueries {
   constructor(world) {
     this.world = world;
     this.cache = new Map();
+    this.plans = new Map();
     this.reads = 0;
     this.hits = 0;
   }
-  read(query) {
-    const key = canonical(query),
+  control(app, appId, name) {
+    if (!app.dataPaths?.plans[name]) return null;
+    const key = appId + ':' + app.releaseId + ':' + app.dataPaths.identity;
+    if (!this.plans.has(key)) {
+      this.plans.set(key, new DataPaths(this.world, app.dataPaths, appId));
+      while (this.plans.size > 8)
+        this.plans.delete(this.plans.keys().next().value);
+    }
+    const manager = this.plans.get(key);
+    return {
+      identity: key + ':' + name,
+      query: (query) => manager.query(name, query),
+    };
+  }
+  read(query, control) {
+    const key = JSON.stringify([query, control?.identity || null]),
       previous = this.cache.get(key);
     if (currentUiQuery(this.world, previous)) {
       this.hits++;
@@ -53,7 +59,9 @@ export class UiQueries {
       this.cache.set(key, previous);
       return previous;
     }
-    const result = queryRelational(this.world, query);
+    const result = control
+      ? control.query(query)
+      : queryRelational(this.world, query);
     this.reads++;
     const snapshot = {
       storage: this.world.relationalStorage,
@@ -85,5 +93,6 @@ export class UiQueries {
   }
   close() {
     this.cache.clear();
+    this.plans.clear();
   }
 }

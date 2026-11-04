@@ -1,3 +1,4 @@
+import { dataPathSummary } from './data-path-planning.mjs';
 import { validateBundle } from './platform.mjs';
 import {
   mkdir,
@@ -43,6 +44,7 @@ const packetLimit = 64 * 1024 * 1024;
 async function toolIdentity() {
   const files = [
     'server/ink-system.mjs',
+    'server/data-path-planning.mjs','server/data-path-workload.mjs','server/data-path-worker.mjs','server/relational-query.mjs','server/table-storage.mjs',
     'server/ink-apps.mjs',
     'shared/ink-app.mjs',
     'shared/ink-ui.mjs',
@@ -104,6 +106,7 @@ async function describe(name, bundle) {
     implementation: saved.checked,
     targets: saved.targets,
     modules: saved.modules,
+    dataPaths: bundle.ink.dataPaths?dataPathSummary(JSON.parse(Buffer.from(bundle.files.find(f=>f.path===bundle.ink.dataPaths.path).base64,'base64'))):null,
     entries,
     namedTypes: artifact.manifest.named_types,
     components,

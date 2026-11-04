@@ -40,6 +40,7 @@ export function inkSpec(input, paths) {
   if (input.version !== 3 && (input.host !== undefined) !== (input.version === 2)) fail('Host bindings require Ink application contract version 2.');
   if ((input.version === 3) !== (input.implementation !== undefined)) fail('Checked implementations require Ink application contract version 3.');
   if (input.implementation !== undefined && (!keys(input.implementation,['version','path']) || input.implementation.version !== 1 || input.implementation.path !== 'server/implementation.json' || paths && !paths.has(input.implementation.path))) fail('A private checked implementation file is required.');
+  if(input.dataPaths!==undefined&&(!keys(input.dataPaths,['version','path'])||input.version!==3||input.dataPaths.version!==1||input.dataPaths.path!=='server/data-paths.json'||paths&&!paths.has(input.dataPaths.path)))fail('A private admitted data-path file is required');
   if (typeof input.source !== 'string' || !/^server\/[A-Za-z0-9_./-]+\.ink$/.test(input.source) || input.source.split('/').some(part => part === '..' || part === '.' || !part) || paths && !paths.has(input.source)) fail('Ink source must be a private server/*.ink release file.');
   if (input.view !== undefined && input.view !== null && !entryName(input.view)) fail('Choose a valid Ink view entry.');
   if (!Array.isArray(input.exports) || input.exports.length > 63 || input.exports.some(name => !entryName(name)) || new Set(input.exports).size !== input.exports.length) fail('Declare up to 63 unique Ink exports.');
@@ -48,7 +49,7 @@ export function inkSpec(input, paths) {
   const ui=input.ui===undefined?undefined:inkUi(input.ui);if(ui&&(input.version!==3||input.view!==ui.entry))fail('Typed UI requires a checked version 3 release and matching view');
   const host=input.host===undefined?undefined:inkHost(input.host);
   const effects=input.effects===undefined?undefined:inkEffects(input.effects);if(effects&&input.version!==3)fail('Typed effects require a checked version 3 release');
-  return { version: input.implementation?3:host?2:1, source: input.source, view: input.view || null, exports: [...input.exports], ...(modules ? { modules } : {}),...(effects?{effects}:{}),...(ui?{ui}:{}),...(host?{host}:{}),...(input.implementation?{implementation:{version:1,path:input.implementation.path}}:{}) };
+  return { version: input.implementation?3:host?2:1, source: input.source, view: input.view || null, exports: [...input.exports], ...(modules ? { modules } : {}),...(effects?{effects}:{}),...(ui?{ui}:{}),...(host?{host}:{}),...(input.dataPaths?{dataPaths:{version:1,path:input.dataPaths.path}}:{}),...(input.implementation?{implementation:{version:1,path:input.implementation.path}}:{}) };
 }
 
 export function inkHost(input){

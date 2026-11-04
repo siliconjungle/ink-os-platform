@@ -382,6 +382,11 @@ export class InkViews {
                 () =>
                   this.queries.read(
                     scopedUiQuery(component.query, mount.appId),
+                    this.queries.control(
+                      program.app,
+                      mount.appId,
+                      component.name,
+                    ),
                   ),
               );
               args = [

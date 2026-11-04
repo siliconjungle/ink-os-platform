@@ -167,14 +167,12 @@ export function inkUi(input) {
           if (depth > 32) fail('UI relational query nesting exceeds 32');
           if (value?.op === 'scan' && value.namespace !== 'self')
             fail('UI query scans use the fixed self namespace');
-          if (value && typeof value === 'object')
-            for (const item of Object.values(value))
-              if (item && typeof item === 'object')
-                Array.isArray(item)
-                  ? item.forEach((child) => visit(child, depth + 1))
-                  : visit(item, depth + 1);
+          if (value?.op === 'join') {
+            visit(value.left, depth + 1);
+            visit(value.right, depth + 1);
+          } else if (value?.input) visit(value.input, depth + 1);
         };
-        visit(component.query);
+        visit(component.query.relation);
       }
       return {
         ...component,

@@ -1,0 +1,1569 @@
+{
+  "version": 1,
+  "node": "24.22.2",
+  "icu": "78.3",
+  "cpu": "Apple M4 Pro",
+  "scope": "Cold adapter setup, all query reads and derived-cache write maintenance; excludes fixture creation, durable journal sync, network and rendering.",
+  "runs": [
+    {
+      "rows": 128,
+      "kind": "read-heavy",
+      "selected": "maintained",
+      "plan": "ade7efa2155aa22486241a2490ed5361857ba020c723e37f98893d581c108cda",
+      "reason": "Measured cold adapter setup and complete read/write history; 10% margin and repeated wins required",
+      "strategies": [
+        {
+          "family": "scan",
+          "valid": true,
+          "setupMS": 0.6380664,
+          "readMS": 24.5230156,
+          "writeMS": 0.0445168,
+          "totalMS": 25.2055988,
+          "trials": [
+            {
+              "setupNS": 1186166,
+              "readNS": 25810914,
+              "writeNS": 51750,
+              "totalNS": 27048830,
+              "heapGrowth": 2530816
+            },
+            {
+              "setupNS": 526208,
+              "readNS": 23995706,
+              "writeNS": 38167,
+              "totalNS": 24560081,
+              "heapGrowth": 11164240
+            },
+            {
+              "setupNS": 469000,
+              "readNS": 23415378,
+              "writeNS": 43001,
+              "totalNS": 23927379,
+              "heapGrowth": 14795832
+            },
+            {
+              "setupNS": 456291,
+              "readNS": 24315955,
+              "writeNS": 44083,
+              "totalNS": 24816329,
+              "heapGrowth": 24113808
+            },
+            {
+              "setupNS": 552667,
+              "readNS": 25077125,
+              "writeNS": 45583,
+              "totalNS": 25675375,
+              "heapGrowth": 8464432
+            }
+          ]
+        },
+        {
+          "family": "index",
+          "valid": true,
+          "setupMS": 0.6181418000000001,
+          "readMS": 20.2032934,
+          "writeMS": 0.069275,
+          "totalMS": 20.8907102,
+          "trials": [
+            {
+              "setupNS": 737667,
+              "readNS": 20879460,
+              "writeNS": 73333,
+              "totalNS": 21690460,
+              "heapGrowth": 12588624
+            },
+            {
+              "setupNS": 681583,
+              "readNS": 19194126,
+              "writeNS": 103709,
+              "totalNS": 19979418,
+              "heapGrowth": 8803240
+            },
+            {
+              "setupNS": 609792,
+              "readNS": 21466707,
+              "writeNS": 61334,
+              "totalNS": 22137833,
+              "heapGrowth": 19155488
+            },
+            {
+              "setupNS": 607208,
+              "readNS": 18420293,
+              "writeNS": 58208,
+              "totalNS": 19085709,
+              "heapGrowth": 30143232
+            },
+            {
+              "setupNS": 454459,
+              "readNS": 21055881,
+              "writeNS": 49791,
+              "totalNS": 21560131,
+              "heapGrowth": 2652608
+            }
+          ]
+        },
+        {
+          "family": "maintained",
+          "valid": true,
+          "setupMS": 0.5517998000000001,
+          "readMS": 9.0908928,
+          "writeMS": 0.049416800000000004,
+          "totalMS": 9.6921094,
+          "trials": [
+            {
+              "setupNS": 716708,
+              "readNS": 9928668,
+              "writeNS": 57875,
+              "totalNS": 10703251,
+              "heapGrowth": 8951592
+            },
+            {
+              "setupNS": 521000,
+              "readNS": 9417751,
+              "writeNS": 54376,
+              "totalNS": 9993127,
+              "heapGrowth": 11721304
+            },
+            {
+              "setupNS": 546083,
+              "readNS": 9008497,
+              "writeNS": 37750,
+              "totalNS": 9592330,
+              "heapGrowth": 15582632
+            },
+            {
+              "setupNS": 407750,
+              "readNS": 8161166,
+              "writeNS": 44708,
+              "totalNS": 8613624,
+              "heapGrowth": 17305080
+            },
+            {
+              "setupNS": 567458,
+              "readNS": 8938382,
+              "writeNS": 52375,
+              "totalNS": 9558215,
+              "heapGrowth": 17414000
+            }
+          ]
+        }
+      ],
+      "cold": {
+        "decodedRows": 128,
+        "scanRows": 0,
+        "resultBuildRows": 128,
+        "indexBuildRows": 0,
+        "indexNodes": 25,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4311
+      },
+      "hot": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 25,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4307
+      },
+      "scan": {
+        "decodedRows": 0,
+        "scanRows": 128,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 0,
+        "aggregateBuildRows": 0,
+        "visitedRows": 128,
+        "returnedRows": 20,
+        "wireBytes": 4146
+      },
+      "heldOut": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 25,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4307
+      },
+      "responseBytes": 2390,
+      "guards": {
+        "row": {
+          "min": 127,
+          "max": 128
+        }
+      }
+    },
+    {
+      "rows": 128,
+      "kind": "write-heavy",
+      "selected": "scan",
+      "plan": "1bd1378cbd385dc8949ba1d22a5a8bf00a2e2f8ca175fa8477be5db820cc2cb2",
+      "reason": "Measured cold adapter setup and complete read/write history; 10% margin and repeated wins required",
+      "strategies": [
+        {
+          "family": "scan",
+          "valid": true,
+          "setupMS": 0.620775,
+          "readMS": 0.3761,
+          "writeMS": 1.3350326000000001,
+          "totalMS": 2.3319076,
+          "trials": [
+            {
+              "setupNS": 654375,
+              "readNS": 356417,
+              "writeNS": 1384372,
+              "totalNS": 2395164,
+              "heapGrowth": 2425896
+            },
+            {
+              "setupNS": 560125,
+              "readNS": 408708,
+              "writeNS": 1463918,
+              "totalNS": 2432751,
+              "heapGrowth": 1795968
+            },
+            {
+              "setupNS": 538000,
+              "readNS": 397917,
+              "writeNS": 1624413,
+              "totalNS": 2560330,
+              "heapGrowth": 1502024
+            },
+            {
+              "setupNS": 569084,
+              "readNS": 319958,
+              "writeNS": 1244214,
+              "totalNS": 2133256,
+              "heapGrowth": 1879272
+            },
+            {
+              "setupNS": 782291,
+              "readNS": 397500,
+              "writeNS": 958246,
+              "totalNS": 2138037,
+              "heapGrowth": 3671520
+            }
+          ]
+        },
+        {
+          "family": "index",
+          "valid": true,
+          "setupMS": 0.652975,
+          "readMS": 0.4120916,
+          "writeMS": 1.4859354,
+          "totalMS": 2.551002,
+          "trials": [
+            {
+              "setupNS": 824333,
+              "readNS": 435291,
+              "writeNS": 1855006,
+              "totalNS": 3114630,
+              "heapGrowth": 2113960
+            },
+            {
+              "setupNS": 712958,
+              "readNS": 360584,
+              "writeNS": 1704293,
+              "totalNS": 2777835,
+              "heapGrowth": 1822968
+            },
+            {
+              "setupNS": 637292,
+              "readNS": 447917,
+              "writeNS": 1403748,
+              "totalNS": 2488957,
+              "heapGrowth": 3546640
+            },
+            {
+              "setupNS": 548667,
+              "readNS": 314250,
+              "writeNS": 1270875,
+              "totalNS": 2133792,
+              "heapGrowth": 3514528
+            },
+            {
+              "setupNS": 541625,
+              "readNS": 502416,
+              "writeNS": 1195755,
+              "totalNS": 2239796,
+              "heapGrowth": 3511992
+            }
+          ]
+        },
+        {
+          "family": "maintained",
+          "valid": true,
+          "setupMS": 0.7411168,
+          "readMS": 0.19555820000000002,
+          "writeMS": 1.6150576,
+          "totalMS": 2.5517326000000002,
+          "trials": [
+            {
+              "setupNS": 631459,
+              "readNS": 178875,
+              "writeNS": 1471044,
+              "totalNS": 2281378,
+              "heapGrowth": 2073704
+            },
+            {
+              "setupNS": 539667,
+              "readNS": 202750,
+              "writeNS": 1421787,
+              "totalNS": 2164204,
+              "heapGrowth": 3742192
+            },
+            {
+              "setupNS": 518458,
+              "readNS": 176875,
+              "writeNS": 1625169,
+              "totalNS": 2320502,
+              "heapGrowth": 3666024
+            },
+            {
+              "setupNS": 460250,
+              "readNS": 212208,
+              "writeNS": 1837749,
+              "totalNS": 2510207,
+              "heapGrowth": 2178992
+            },
+            {
+              "setupNS": 1555750,
+              "readNS": 207083,
+              "writeNS": 1719539,
+              "totalNS": 3482372,
+              "heapGrowth": 0
+            }
+          ]
+        }
+      ],
+      "cold": {
+        "decodedRows": 128,
+        "scanRows": 128,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 0,
+        "aggregateBuildRows": 0,
+        "visitedRows": 128,
+        "returnedRows": 20,
+        "wireBytes": 4314
+      },
+      "hot": {
+        "decodedRows": 0,
+        "scanRows": 128,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 0,
+        "aggregateBuildRows": 0,
+        "visitedRows": 128,
+        "returnedRows": 20,
+        "wireBytes": 4312
+      },
+      "scan": {
+        "decodedRows": 0,
+        "scanRows": 128,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 0,
+        "aggregateBuildRows": 0,
+        "visitedRows": 128,
+        "returnedRows": 20,
+        "wireBytes": 4146
+      },
+      "heldOut": {
+        "decodedRows": 0,
+        "scanRows": 128,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 0,
+        "aggregateBuildRows": 0,
+        "visitedRows": 128,
+        "returnedRows": 20,
+        "wireBytes": 4312
+      },
+      "responseBytes": 2390,
+      "guards": {
+        "row": {
+          "min": 128,
+          "max": 128
+        }
+      }
+    },
+    {
+      "rows": 512,
+      "kind": "read-heavy",
+      "selected": "maintained",
+      "plan": "b1a4fa10611a28306af3a164a7022a68510d6e415f76f1c1e5f7caa394431368",
+      "reason": "Measured cold adapter setup and complete read/write history; 10% margin and repeated wins required",
+      "strategies": [
+        {
+          "family": "scan",
+          "valid": true,
+          "setupMS": 1.8746496000000001,
+          "readMS": 75.305953,
+          "writeMS": 0.0742086,
+          "totalMS": 77.2548112,
+          "trials": [
+            {
+              "setupNS": 1778708,
+              "readNS": 77170715,
+              "writeNS": 79333,
+              "totalNS": 79028756,
+              "heapGrowth": 10713352
+            },
+            {
+              "setupNS": 2610541,
+              "readNS": 77064044,
+              "writeNS": 75041,
+              "totalNS": 79749626,
+              "heapGrowth": 0
+            },
+            {
+              "setupNS": 1589833,
+              "readNS": 75195253,
+              "writeNS": 78042,
+              "totalNS": 76863128,
+              "heapGrowth": 28739904
+            },
+            {
+              "setupNS": 1655625,
+              "readNS": 72583830,
+              "writeNS": 67834,
+              "totalNS": 74307289,
+              "heapGrowth": 29858840
+            },
+            {
+              "setupNS": 1738541,
+              "readNS": 74515923,
+              "writeNS": 70793,
+              "totalNS": 76325257,
+              "heapGrowth": 11964216
+            }
+          ]
+        },
+        {
+          "family": "index",
+          "valid": true,
+          "setupMS": 2.331017,
+          "readMS": 55.783350799999994,
+          "writeMS": 0.10295860000000001,
+          "totalMS": 58.2173264,
+          "trials": [
+            {
+              "setupNS": 2081334,
+              "readNS": 56368919,
+              "writeNS": 107458,
+              "totalNS": 58557711,
+              "heapGrowth": 8069016
+            },
+            {
+              "setupNS": 2614292,
+              "readNS": 53067412,
+              "writeNS": 97959,
+              "totalNS": 55779663,
+              "heapGrowth": 21684904
+            },
+            {
+              "setupNS": 3237000,
+              "readNS": 54866629,
+              "writeNS": 89875,
+              "totalNS": 58193504,
+              "heapGrowth": 10234184
+            },
+            {
+              "setupNS": 1842167,
+              "readNS": 56318833,
+              "writeNS": 91834,
+              "totalNS": 58252834,
+              "heapGrowth": 46807032
+            },
+            {
+              "setupNS": 1880292,
+              "readNS": 58294961,
+              "writeNS": 127667,
+              "totalNS": 60302920,
+              "heapGrowth": 44634536
+            }
+          ]
+        },
+        {
+          "family": "maintained",
+          "valid": true,
+          "setupMS": 1.691425,
+          "readMS": 10.0248406,
+          "writeMS": 0.0723078,
+          "totalMS": 11.7885734,
+          "trials": [
+            {
+              "setupNS": 1747125,
+              "readNS": 9659919,
+              "writeNS": 67041,
+              "totalNS": 11474085,
+              "heapGrowth": 8632000
+            },
+            {
+              "setupNS": 1374292,
+              "readNS": 9511957,
+              "writeNS": 86499,
+              "totalNS": 10972748,
+              "heapGrowth": 20870928
+            },
+            {
+              "setupNS": 1830333,
+              "readNS": 11463001,
+              "writeNS": 67166,
+              "totalNS": 13360500,
+              "heapGrowth": 15818776
+            },
+            {
+              "setupNS": 2009208,
+              "readNS": 9087330,
+              "writeNS": 54166,
+              "totalNS": 11150704,
+              "heapGrowth": 0
+            },
+            {
+              "setupNS": 1496167,
+              "readNS": 10401996,
+              "writeNS": 86667,
+              "totalNS": 11984830,
+              "heapGrowth": 20920312
+            }
+          ]
+        }
+      ],
+      "cold": {
+        "decodedRows": 512,
+        "scanRows": 0,
+        "resultBuildRows": 512,
+        "indexBuildRows": 0,
+        "indexNodes": 27,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4337
+      },
+      "hot": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 27,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4333
+      },
+      "scan": {
+        "decodedRows": 0,
+        "scanRows": 512,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 0,
+        "aggregateBuildRows": 0,
+        "visitedRows": 512,
+        "returnedRows": 20,
+        "wireBytes": 4171
+      },
+      "heldOut": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 27,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4333
+      },
+      "responseBytes": 2415,
+      "guards": {
+        "row": {
+          "min": 511,
+          "max": 512
+        }
+      }
+    },
+    {
+      "rows": 512,
+      "kind": "write-heavy",
+      "selected": "maintained",
+      "plan": "518eda1abf9b32c2d4fe6faaf160e14cab22d68f83bfe2478ea7fc045c7d28b2",
+      "reason": "Measured cold adapter setup and complete read/write history; 10% margin and repeated wins required",
+      "strategies": [
+        {
+          "family": "scan",
+          "valid": true,
+          "setupMS": 2.1674082,
+          "readMS": 1.4046248000000001,
+          "writeMS": 1.3630094,
+          "totalMS": 4.9350424,
+          "trials": [
+            {
+              "setupNS": 2712791,
+              "readNS": 1933667,
+              "writeNS": 2602793,
+              "totalNS": 7249251,
+              "heapGrowth": 0
+            },
+            {
+              "setupNS": 2321416,
+              "readNS": 1304333,
+              "writeNS": 1155922,
+              "totalNS": 4781671,
+              "heapGrowth": 7815184
+            },
+            {
+              "setupNS": 2048417,
+              "readNS": 1122041,
+              "writeNS": 1042751,
+              "totalNS": 4213209,
+              "heapGrowth": 7761072
+            },
+            {
+              "setupNS": 1966042,
+              "readNS": 934042,
+              "writeNS": 1041041,
+              "totalNS": 3941125,
+              "heapGrowth": 8110504
+            },
+            {
+              "setupNS": 1788375,
+              "readNS": 1729041,
+              "writeNS": 972540,
+              "totalNS": 4489956,
+              "heapGrowth": 5842904
+            }
+          ]
+        },
+        {
+          "family": "index",
+          "valid": true,
+          "setupMS": 2.5729417999999997,
+          "readMS": 1.2168,
+          "writeMS": 1.7625192,
+          "totalMS": 5.552261,
+          "trials": [
+            {
+              "setupNS": 3564625,
+              "readNS": 1384209,
+              "writeNS": 2212333,
+              "totalNS": 7161167,
+              "heapGrowth": 4589064
+            },
+            {
+              "setupNS": 3024208,
+              "readNS": 1071583,
+              "writeNS": 1747040,
+              "totalNS": 5842831,
+              "heapGrowth": 7010104
+            },
+            {
+              "setupNS": 2385625,
+              "readNS": 1596500,
+              "writeNS": 1525715,
+              "totalNS": 5507840,
+              "heapGrowth": 5496856
+            },
+            {
+              "setupNS": 2072542,
+              "readNS": 746750,
+              "writeNS": 2031010,
+              "totalNS": 4850302,
+              "heapGrowth": 4181424
+            },
+            {
+              "setupNS": 1817709,
+              "readNS": 1284958,
+              "writeNS": 1296498,
+              "totalNS": 4399165,
+              "heapGrowth": 5527920
+            }
+          ]
+        },
+        {
+          "family": "maintained",
+          "valid": true,
+          "setupMS": 1.855925,
+          "readMS": 0.18679179999999998,
+          "writeMS": 2.032226,
+          "totalMS": 4.0749428,
+          "trials": [
+            {
+              "setupNS": 2438292,
+              "readNS": 216958,
+              "writeNS": 2637667,
+              "totalNS": 5292917,
+              "heapGrowth": 3778600
+            },
+            {
+              "setupNS": 2162416,
+              "readNS": 197167,
+              "writeNS": 2598996,
+              "totalNS": 4958579,
+              "heapGrowth": 5284112
+            },
+            {
+              "setupNS": 1592334,
+              "readNS": 257917,
+              "writeNS": 2282347,
+              "totalNS": 4132598,
+              "heapGrowth": 5099032
+            },
+            {
+              "setupNS": 1503416,
+              "readNS": 117792,
+              "writeNS": 1273037,
+              "totalNS": 2894245,
+              "heapGrowth": 5627656
+            },
+            {
+              "setupNS": 1583167,
+              "readNS": 144125,
+              "writeNS": 1369083,
+              "totalNS": 3096375,
+              "heapGrowth": 5590072
+            }
+          ]
+        }
+      ],
+      "cold": {
+        "decodedRows": 512,
+        "scanRows": 0,
+        "resultBuildRows": 512,
+        "indexBuildRows": 0,
+        "indexNodes": 26,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4337
+      },
+      "hot": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 26,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4333
+      },
+      "scan": {
+        "decodedRows": 0,
+        "scanRows": 512,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 0,
+        "aggregateBuildRows": 0,
+        "visitedRows": 512,
+        "returnedRows": 20,
+        "wireBytes": 4171
+      },
+      "heldOut": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 26,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4333
+      },
+      "responseBytes": 2415,
+      "guards": {
+        "row": {
+          "min": 512,
+          "max": 512
+        }
+      }
+    },
+    {
+      "rows": 2048,
+      "kind": "read-heavy",
+      "selected": "maintained",
+      "plan": "a9e5a945bb76dce4a8ab4ebdb3c90850d425da82a0ac60e871d90ce0a538855f",
+      "reason": "Measured cold adapter setup and complete read/write history; 10% margin and repeated wins required",
+      "strategies": [
+        {
+          "family": "scan",
+          "valid": true,
+          "setupMS": 6.332825,
+          "readMS": 285.78842460000004,
+          "writeMS": 0.1926088,
+          "totalMS": 292.31385839999996,
+          "trials": [
+            {
+              "setupNS": 7950333,
+              "readNS": 292557250,
+              "writeNS": 260833,
+              "totalNS": 300768416,
+              "heapGrowth": 68903632
+            },
+            {
+              "setupNS": 6116542,
+              "readNS": 286373668,
+              "writeNS": 161917,
+              "totalNS": 292652127,
+              "heapGrowth": 51567560
+            },
+            {
+              "setupNS": 5807375,
+              "readNS": 280080874,
+              "writeNS": 154418,
+              "totalNS": 286042667,
+              "heapGrowth": 53574552
+            },
+            {
+              "setupNS": 6128125,
+              "readNS": 289871578,
+              "writeNS": 153584,
+              "totalNS": 296153287,
+              "heapGrowth": 34892360
+            },
+            {
+              "setupNS": 5661750,
+              "readNS": 280058753,
+              "writeNS": 232292,
+              "totalNS": 285952795,
+              "heapGrowth": 44968920
+            }
+          ]
+        },
+        {
+          "family": "index",
+          "valid": true,
+          "setupMS": 8.2237586,
+          "readMS": 201.19930019999998,
+          "writeMS": 0.19503320000000002,
+          "totalMS": 209.618092,
+          "trials": [
+            {
+              "setupNS": 7860917,
+              "readNS": 211033785,
+              "writeNS": 247083,
+              "totalNS": 219141785,
+              "heapGrowth": 20361800
+            },
+            {
+              "setupNS": 9287792,
+              "readNS": 203810454,
+              "writeNS": 222375,
+              "totalNS": 213320621,
+              "heapGrowth": 20018168
+            },
+            {
+              "setupNS": 9832583,
+              "readNS": 201898169,
+              "writeNS": 165333,
+              "totalNS": 211896085,
+              "heapGrowth": 68086024
+            },
+            {
+              "setupNS": 7233959,
+              "readNS": 194921131,
+              "writeNS": 161208,
+              "totalNS": 202316298,
+              "heapGrowth": 57664496
+            },
+            {
+              "setupNS": 6903542,
+              "readNS": 194332962,
+              "writeNS": 179167,
+              "totalNS": 201415671,
+              "heapGrowth": 54164000
+            }
+          ]
+        },
+        {
+          "family": "maintained",
+          "valid": true,
+          "setupMS": 5.2139918,
+          "readMS": 13.023231599999999,
+          "writeMS": 0.1245082,
+          "totalMS": 18.361731600000002,
+          "trials": [
+            {
+              "setupNS": 5300417,
+              "readNS": 12788207,
+              "writeNS": 163167,
+              "totalNS": 18251791,
+              "heapGrowth": 35350640
+            },
+            {
+              "setupNS": 4947500,
+              "readNS": 12580825,
+              "writeNS": 120417,
+              "totalNS": 17648742,
+              "heapGrowth": 35013856
+            },
+            {
+              "setupNS": 5352417,
+              "readNS": 14833248,
+              "writeNS": 113333,
+              "totalNS": 20298998,
+              "heapGrowth": 16807288
+            },
+            {
+              "setupNS": 4837000,
+              "readNS": 12801500,
+              "writeNS": 101000,
+              "totalNS": 17739500,
+              "heapGrowth": 17590744
+            },
+            {
+              "setupNS": 5632625,
+              "readNS": 12112378,
+              "writeNS": 124624,
+              "totalNS": 17869627,
+              "heapGrowth": 0
+            }
+          ]
+        }
+      ],
+      "cold": {
+        "decodedRows": 2048,
+        "scanRows": 0,
+        "resultBuildRows": 2048,
+        "indexBuildRows": 0,
+        "indexNodes": 24,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4378
+      },
+      "hot": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 24,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4372
+      },
+      "scan": {
+        "decodedRows": 0,
+        "scanRows": 2048,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 0,
+        "aggregateBuildRows": 0,
+        "visitedRows": 2048,
+        "returnedRows": 20,
+        "wireBytes": 4212
+      },
+      "heldOut": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 24,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4372
+      },
+      "responseBytes": 2453,
+      "guards": {
+        "row": {
+          "min": 2047,
+          "max": 2048
+        }
+      }
+    },
+    {
+      "rows": 2048,
+      "kind": "write-heavy",
+      "selected": "maintained",
+      "plan": "600482525b930fe70e2512bc226bc7336af8bb85e40cf199f5a8a789e2a95266",
+      "reason": "Measured cold adapter setup and complete read/write history; 10% margin and repeated wins required",
+      "strategies": [
+        {
+          "family": "scan",
+          "valid": true,
+          "setupMS": 6.846116599999999,
+          "readMS": 3.3032002,
+          "writeMS": 1.0992974,
+          "totalMS": 11.248614199999999,
+          "trials": [
+            {
+              "setupNS": 7107583,
+              "readNS": 3309750,
+              "writeNS": 1236042,
+              "totalNS": 11653375,
+              "heapGrowth": 24948112
+            },
+            {
+              "setupNS": 9024333,
+              "readNS": 3491084,
+              "writeNS": 1040588,
+              "totalNS": 13556005,
+              "heapGrowth": 0
+            },
+            {
+              "setupNS": 6301166,
+              "readNS": 3361292,
+              "writeNS": 1209177,
+              "totalNS": 10871635,
+              "heapGrowth": 25350840
+            },
+            {
+              "setupNS": 5942209,
+              "readNS": 2997375,
+              "writeNS": 962338,
+              "totalNS": 9901922,
+              "heapGrowth": 23965584
+            },
+            {
+              "setupNS": 5855292,
+              "readNS": 3356500,
+              "writeNS": 1048342,
+              "totalNS": 10260134,
+              "heapGrowth": 23976992
+            }
+          ]
+        },
+        {
+          "family": "index",
+          "valid": true,
+          "setupMS": 8.790349800000001,
+          "readMS": 3.2537,
+          "writeMS": 2.23779,
+          "totalMS": 14.2818398,
+          "trials": [
+            {
+              "setupNS": 9747458,
+              "readNS": 2777292,
+              "writeNS": 2204919,
+              "totalNS": 14729669,
+              "heapGrowth": 20817200
+            },
+            {
+              "setupNS": 8160583,
+              "readNS": 6657958,
+              "writeNS": 1611869,
+              "totalNS": 16430410,
+              "heapGrowth": 15143568
+            },
+            {
+              "setupNS": 10310958,
+              "readNS": 2261792,
+              "writeNS": 1646327,
+              "totalNS": 14219077,
+              "heapGrowth": 0
+            },
+            {
+              "setupNS": 7883125,
+              "readNS": 2283083,
+              "writeNS": 4103796,
+              "totalNS": 14270004,
+              "heapGrowth": 12477584
+            },
+            {
+              "setupNS": 7849625,
+              "readNS": 2288375,
+              "writeNS": 1622039,
+              "totalNS": 11760039,
+              "heapGrowth": 20039520
+            }
+          ]
+        },
+        {
+          "family": "maintained",
+          "valid": true,
+          "setupMS": 5.992725,
+          "readMS": 0.2004834,
+          "writeMS": 2.1488026000000002,
+          "totalMS": 8.342011,
+          "trials": [
+            {
+              "setupNS": 7620125,
+              "readNS": 199166,
+              "writeNS": 1828748,
+              "totalNS": 9648039,
+              "heapGrowth": 0
+            },
+            {
+              "setupNS": 6449084,
+              "readNS": 205250,
+              "writeNS": 1658333,
+              "totalNS": 8312667,
+              "heapGrowth": 14069352
+            },
+            {
+              "setupNS": 5296000,
+              "readNS": 141250,
+              "writeNS": 1563170,
+              "totalNS": 7000420,
+              "heapGrowth": 13704088
+            },
+            {
+              "setupNS": 5299291,
+              "readNS": 228042,
+              "writeNS": 1743713,
+              "totalNS": 7271046,
+              "heapGrowth": 13204576
+            },
+            {
+              "setupNS": 5299125,
+              "readNS": 228709,
+              "writeNS": 3950049,
+              "totalNS": 9477883,
+              "heapGrowth": 11170880
+            }
+          ]
+        }
+      ],
+      "cold": {
+        "decodedRows": 2048,
+        "scanRows": 0,
+        "resultBuildRows": 2048,
+        "indexBuildRows": 0,
+        "indexNodes": 27,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4378
+      },
+      "hot": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 27,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4372
+      },
+      "scan": {
+        "decodedRows": 0,
+        "scanRows": 2048,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 0,
+        "aggregateBuildRows": 0,
+        "visitedRows": 2048,
+        "returnedRows": 20,
+        "wireBytes": 4212
+      },
+      "heldOut": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 27,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4372
+      },
+      "responseBytes": 2453,
+      "guards": {
+        "row": {
+          "min": 2048,
+          "max": 2048
+        }
+      }
+    },
+    {
+      "rows": 8192,
+      "kind": "read-heavy",
+      "selected": "maintained",
+      "plan": "00e7b4f4b8dcca84c2a2b7bf39d0d3100c06688b53045139a1f60d7d52a1e0a5",
+      "reason": "Measured cold adapter setup and complete read/write history; 10% margin and repeated wins required",
+      "strategies": [
+        {
+          "family": "scan",
+          "valid": true,
+          "setupMS": 29.6853166,
+          "readMS": 1148.4259155999998,
+          "writeMS": 0.6222414000000001,
+          "totalMS": 1178.7334735999998,
+          "trials": [
+            {
+              "setupNS": 30220500,
+              "readNS": 1171890997,
+              "writeNS": 638833,
+              "totalNS": 1202750330,
+              "heapGrowth": 48031280
+            },
+            {
+              "setupNS": 31446917,
+              "readNS": 1205032164,
+              "writeNS": 697832,
+              "totalNS": 1237176913,
+              "heapGrowth": 50792016
+            },
+            {
+              "setupNS": 30458208,
+              "readNS": 1142264920,
+              "writeNS": 642458,
+              "totalNS": 1173365586,
+              "heapGrowth": 79178616
+            },
+            {
+              "setupNS": 26838667,
+              "readNS": 1120860625,
+              "writeNS": 606959,
+              "totalNS": 1148306251,
+              "heapGrowth": 65746440
+            },
+            {
+              "setupNS": 29462291,
+              "readNS": 1102080872,
+              "writeNS": 525125,
+              "totalNS": 1132068288,
+              "heapGrowth": 38497448
+            }
+          ]
+        },
+        {
+          "family": "index",
+          "valid": true,
+          "setupMS": 37.412091600000004,
+          "readMS": 877.4090726000001,
+          "writeMS": 0.7073166,
+          "totalMS": 915.5284807999999,
+          "trials": [
+            {
+              "setupNS": 35697167,
+              "readNS": 884942625,
+              "writeNS": 729625,
+              "totalNS": 921369417,
+              "heapGrowth": 46358528
+            },
+            {
+              "setupNS": 41294750,
+              "readNS": 913840701,
+              "writeNS": 806083,
+              "totalNS": 955941534,
+              "heapGrowth": 49019088
+            },
+            {
+              "setupNS": 42983708,
+              "readNS": 843062872,
+              "writeNS": 648459,
+              "totalNS": 886695039,
+              "heapGrowth": 36916384
+            },
+            {
+              "setupNS": 34924625,
+              "readNS": 863522378,
+              "writeNS": 703000,
+              "totalNS": 899150003,
+              "heapGrowth": 53262064
+            },
+            {
+              "setupNS": 32160208,
+              "readNS": 881676787,
+              "writeNS": 649416,
+              "totalNS": 914486411,
+              "heapGrowth": 67575680
+            }
+          ]
+        },
+        {
+          "family": "maintained",
+          "valid": true,
+          "setupMS": 24.725008600000002,
+          "readMS": 31.1734918,
+          "writeMS": 0.7781498,
+          "totalMS": 56.676650200000005,
+          "trials": [
+            {
+              "setupNS": 23645000,
+              "readNS": 43639539,
+              "writeNS": 659417,
+              "totalNS": 67943956,
+              "heapGrowth": 55850880
+            },
+            {
+              "setupNS": 22815917,
+              "readNS": 31207708,
+              "writeNS": 667583,
+              "totalNS": 54691208,
+              "heapGrowth": 53936800
+            },
+            {
+              "setupNS": 25394417,
+              "readNS": 26278537,
+              "writeNS": 890000,
+              "totalNS": 52562954,
+              "heapGrowth": 27857688
+            },
+            {
+              "setupNS": 27537917,
+              "readNS": 27635923,
+              "writeNS": 839124,
+              "totalNS": 56012964,
+              "heapGrowth": 4123008
+            },
+            {
+              "setupNS": 24231792,
+              "readNS": 27105752,
+              "writeNS": 834625,
+              "totalNS": 52172169,
+              "heapGrowth": 0
+            }
+          ]
+        }
+      ],
+      "cold": {
+        "decodedRows": 8192,
+        "scanRows": 0,
+        "resultBuildRows": 8192,
+        "indexBuildRows": 0,
+        "indexNodes": 39,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4386
+      },
+      "hot": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 39,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4380
+      },
+      "scan": {
+        "decodedRows": 0,
+        "scanRows": 8192,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 0,
+        "aggregateBuildRows": 0,
+        "visitedRows": 8192,
+        "returnedRows": 20,
+        "wireBytes": 4220
+      },
+      "heldOut": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 39,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4380
+      },
+      "responseBytes": 2461,
+      "guards": {
+        "row": {
+          "min": 8191,
+          "max": 8192
+        }
+      }
+    },
+    {
+      "rows": 8192,
+      "kind": "write-heavy",
+      "selected": "maintained",
+      "plan": "d3f52958cf089f5ef0daada81f33ec1f24fec2bfce936da18bf040fff2bff5e3",
+      "reason": "Measured cold adapter setup and complete read/write history; 10% margin and repeated wins required",
+      "strategies": [
+        {
+          "family": "scan",
+          "valid": true,
+          "setupMS": 29.629758600000002,
+          "readMS": 14.9036832,
+          "writeMS": 1.8318986000000002,
+          "totalMS": 46.3653404,
+          "trials": [
+            {
+              "setupNS": 32540042,
+              "readNS": 12725083,
+              "writeNS": 1697545,
+              "totalNS": 46962670,
+              "heapGrowth": 40708608
+            },
+            {
+              "setupNS": 29990292,
+              "readNS": 12661250,
+              "writeNS": 1849628,
+              "totalNS": 44501170,
+              "heapGrowth": 45332104
+            },
+            {
+              "setupNS": 28626333,
+              "readNS": 14438000,
+              "writeNS": 1708406,
+              "totalNS": 44772739,
+              "heapGrowth": 7142584
+            },
+            {
+              "setupNS": 29206917,
+              "readNS": 13214500,
+              "writeNS": 1971502,
+              "totalNS": 44392919,
+              "heapGrowth": 2695600
+            },
+            {
+              "setupNS": 27785209,
+              "readNS": 21479583,
+              "writeNS": 1932412,
+              "totalNS": 51197204,
+              "heapGrowth": 8803984
+            }
+          ]
+        },
+        {
+          "family": "index",
+          "valid": true,
+          "setupMS": 38.700641600000004,
+          "readMS": 11.261533400000001,
+          "writeMS": 2.7813854,
+          "totalMS": 52.7435604,
+          "trials": [
+            {
+              "setupNS": 38919375,
+              "readNS": 12838833,
+              "writeNS": 2911293,
+              "totalNS": 54669501,
+              "heapGrowth": 1180920
+            },
+            {
+              "setupNS": 41042375,
+              "readNS": 12329625,
+              "writeNS": 2807197,
+              "totalNS": 56179197,
+              "heapGrowth": 0
+            },
+            {
+              "setupNS": 44307000,
+              "readNS": 9271708,
+              "writeNS": 2836747,
+              "totalNS": 56415455,
+              "heapGrowth": 0
+            },
+            {
+              "setupNS": 34033625,
+              "readNS": 13223459,
+              "writeNS": 2487447,
+              "totalNS": 49744531,
+              "heapGrowth": 51844064
+            },
+            {
+              "setupNS": 35200833,
+              "readNS": 8644042,
+              "writeNS": 2864243,
+              "totalNS": 46709118,
+              "heapGrowth": 27623568
+            }
+          ]
+        },
+        {
+          "family": "maintained",
+          "valid": true,
+          "setupMS": 25.1980502,
+          "readMS": 0.2032418,
+          "writeMS": 3.0939332000000004,
+          "totalMS": 28.4952252,
+          "trials": [
+            {
+              "setupNS": 24986292,
+              "readNS": 206250,
+              "writeNS": 2394915,
+              "totalNS": 27587457,
+              "heapGrowth": 47101416
+            },
+            {
+              "setupNS": 23484834,
+              "readNS": 264125,
+              "writeNS": 5999169,
+              "totalNS": 29748128,
+              "heapGrowth": 42172960
+            },
+            {
+              "setupNS": 24845958,
+              "readNS": 170750,
+              "writeNS": 2032121,
+              "totalNS": 27048829,
+              "heapGrowth": 0
+            },
+            {
+              "setupNS": 27369292,
+              "readNS": 200584,
+              "writeNS": 2556333,
+              "totalNS": 30126209,
+              "heapGrowth": 0
+            },
+            {
+              "setupNS": 25303875,
+              "readNS": 174500,
+              "writeNS": 2487128,
+              "totalNS": 27965503,
+              "heapGrowth": 0
+            }
+          ]
+        }
+      ],
+      "cold": {
+        "decodedRows": 8192,
+        "scanRows": 0,
+        "resultBuildRows": 8192,
+        "indexBuildRows": 0,
+        "indexNodes": 30,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4386
+      },
+      "hot": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 30,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4380
+      },
+      "scan": {
+        "decodedRows": 0,
+        "scanRows": 8192,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 0,
+        "aggregateBuildRows": 0,
+        "visitedRows": 8192,
+        "returnedRows": 20,
+        "wireBytes": 4220
+      },
+      "heldOut": {
+        "decodedRows": 0,
+        "scanRows": 0,
+        "resultBuildRows": 0,
+        "indexBuildRows": 0,
+        "indexNodes": 30,
+        "aggregateBuildRows": 0,
+        "visitedRows": 21,
+        "returnedRows": 20,
+        "wireBytes": 4380
+      },
+      "responseBytes": 2461,
+      "guards": {
+        "row": {
+          "min": 8192,
+          "max": 8192
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "javascript": {
+    "target": "javascript",
+    "rows": 512,
+    "panes": 2,
+    "renderedRows": 40,
+    "queryReads": 2,
+    "sharedHits": 2,
+    "admission": {
+      "id": "95ab566049acce2ffac65a82c8e5a0bd74d0409732ffbb8dfcfaf721713f8c8e",
+      "selected": "maintained",
+      "fallback": null,
+      "authority": "checked-fixed-storage-recipe-v1"
+    },
+    "stats": {
+      "decodedRows": 0,
+      "scanRows": 0,
+      "resultBuildRows": 0,
+      "indexBuildRows": 0,
+      "indexNodes": 23,
+      "aggregateBuildRows": 0,
+      "visitedRows": 21,
+      "returnedRows": 20,
+      "wireBytes": 3375
+    },
+    "scope": "Actual compiled Ink UI, loopback owner fixture and headless Chrome DOM; excludes production authentication, desktop packaging and physical paint."
+  },
+  "native": {
+    "target": "native",
+    "rows": 512,
+    "panes": 2,
+    "renderedRows": 40,
+    "queryReads": 2,
+    "sharedHits": 2,
+    "admission": {
+      "id": "898cb362bb16d689ced2e639f05d725e2c75b9fbf209b5e985e7fade5b2d8dd4",
+      "selected": "maintained",
+      "fallback": null,
+      "authority": "checked-fixed-storage-recipe-v1"
+    },
+    "stats": {
+      "decodedRows": 0,
+      "scanRows": 0,
+      "resultBuildRows": 0,
+      "indexBuildRows": 0,
+      "indexNodes": 27,
+      "aggregateBuildRows": 0,
+      "visitedRows": 21,
+      "returnedRows": 20,
+      "wireBytes": 3375
+    },
+    "scope": "Actual compiled Ink UI, loopback owner fixture and headless Chrome DOM; excludes production authentication, desktop packaging and physical paint."
+  }
+}

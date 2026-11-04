@@ -1,3 +1,4 @@
+import { dataPlanningFiles } from '../../server/data-path-planning.mjs';
 import { readFile, writeFile, mkdir, realpath } from 'node:fs/promises';
 import { resolve, join, relative, sep } from 'node:path';
 import { sourceFiles } from '../../shared/source-files.mjs';
@@ -50,6 +51,7 @@ export async function loadInkSystem(directory, { committed = false } = {}) {
           ? inkModuleGraph(manifest.modules).modules.map((m) => m.path)
           : [manifest.source || 'main.ink']),
         ...planningFiles(planningOptions(manifest.optimisation)),
+        ...dataPlanningFiles(manifest.storagePlanning),
       ];
     const icon = manifest.desktop?.icon;
     if (typeof icon === 'string' && icon.endsWith('.svg')) names.push(icon);

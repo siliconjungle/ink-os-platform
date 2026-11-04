@@ -194,3 +194,7 @@ not a general performance guarantee. The 1,200-row correctness test additionally
 checks twenty-one visits for a twenty-row indexed page with an exact count,
 zero warm row decodes, and zero warm index rebuilds. Cursor tests also cover
 view eviction and restart without an intervening World write.
+
+## Build-time data-path control
+
+Opt-in Ink app releases can now bind declared typed UI queries to measured scan, fixed-index or maintained-result recipes, with replay checks and guarded scan fallback. See [data-path planning](data-path-planning.md) for the manifest, trusted-adapter proof boundary, measurements and remaining limits.

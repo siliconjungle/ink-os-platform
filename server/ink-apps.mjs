@@ -1,3 +1,4 @@
+import { buildDataPaths, verifyDataPaths, dataPathSummary } from './data-path-planning.mjs';
 import { readFile } from 'node:fs/promises';
 import { compileInkProgram, compilerInfo, sealInkProgram } from './ink-compiler.mjs';
 import { inkEntries, inkCommands, inkSpec, inkModuleGraph,inkPublicEntries } from '../shared/ink-app.mjs';
@@ -60,14 +61,16 @@ export async function buildInkApp(manifest, files, { source, cachedImplementatio
   const program = inkSource(candidate, sourceRelease);
   const { implementation, artifact } = cachedImplementation?await verifyImplementation(program,JSON.stringify(cachedImplementation)):await buildImplementation(program, files, manifest.optimisation);
   const entries = inkEntries(artifact.manifest, artifact.module_graph);
-  const spec = inkSpec({ ...candidate, version: 3, implementation: { version: 1, path: 'server/implementation.json' }, ...(manifest.effects?{effects:manifest.effects}:{}),...(manifest.ui?.version===1?{ui:manifest.ui}:{}), view: manifest.ui?.entry ?? null, exports: manifest.exports || entries.filter(entry => entry.name !== manifest.ui?.entry&&!manifest.ui?.components?.some(component=>component.entry===entry.name)&&!manifest.effects?.protocols?.some(protocol=>protocol.resume===entry.name)).map(entry => entry.name) });
+  const dataPaths=await buildDataPaths(program,manifest.ui,manifest.storagePlanning,files);
+  const spec = inkSpec({ ...candidate, version: 3, implementation: { version: 1, path: 'server/implementation.json' }, ...(dataPaths?{dataPaths:{version:1,path:'server/data-paths.json'}}:{}), ...(manifest.effects?{effects:manifest.effects}:{}),...(manifest.ui?.version===1?{ui:manifest.ui}:{}), view: manifest.ui?.entry ?? null, exports: manifest.exports || entries.filter(entry => entry.name !== manifest.ui?.entry&&!manifest.ui?.components?.some(component=>component.entry===entry.name)&&!manifest.effects?.protocols?.some(protocol=>protocol.resume===entry.name)).map(entry => entry.name) });
   const capabilities=[...new Set(['code.execute','world.read','world.write',...(manifest.capabilities||[])])];
   validateEffectCapabilities(spec,capabilities);
   const commands = inkCommands(spec, entries,artifact.manifest.named_types);
   const visibleEntries = inkPublicEntries(spec,entries,artifact.manifest.named_types).filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name);
-  const metadata = { title: manifest.title || manifest.slug, ink: spec, entries: visibleEntries, namedTypes: artifact.manifest.named_types, compiler: await compilerInfo(), implementation: implementationSummary(implementation), ...(artifact.module_graph ? { moduleGraph: artifact.module_graph } : {}) };
+  const metadata = { title: manifest.title || manifest.slug, ink: spec, entries: visibleEntries, namedTypes: artifact.manifest.named_types, compiler: await compilerInfo(), implementation: implementationSummary(implementation), ...(dataPaths?{dataPaths:dataPathSummary(dataPaths)}:{}), ...(artifact.module_graph ? { moduleGraph: artifact.module_graph } : {}) };
   const release = [
     ...sourceRelease,
+    ...(dataPaths?[encode('server/data-paths.json',JSON.stringify(dataPaths))]:[]),
     encode('server/implementation.json', JSON.stringify(implementation)),
     encode('app.json', JSON.stringify(metadata)),
     encode('index.html', '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles/ink.css"><link rel="stylesheet" href="/app.css"><title>Ink app</title></head><body><main id="app" aria-busy="true"></main><p id="status" role="status"></p><script src="/sdk.js"></script><script type="module" src="/app.mjs"></script></body></html>'),
@@ -98,6 +101,7 @@ export async function validateInkBundle(bundle, {allowUnboundUi=false}={}) {
   const spec = inkSpec(bundle.ink, new Set(bundle.files.map(file => file.path)));
   if (!allowUnboundUi && spec.ui?.components.some(component=>component.data)) fail(400,'Bind every system UI data port before deployment');
   validateEffectCapabilities(spec,bundle.capabilities);
+  if(spec.dataPaths)verifyDataPaths(inkSource(spec,bundle.files),spec.ui,JSON.parse(Buffer.from(bundle.files.find(f=>f.path===spec.dataPaths.path).base64,'base64')));
   const artifact = await compileInkProgram(await inkExecutionSource(spec, bundle.files));
   const expected = inkCommands(spec, inkEntries(artifact.manifest, artifact.module_graph),artifact.manifest.named_types);
   if (JSON.stringify(bundle.commands) !== JSON.stringify((await import('../shared/app-commands.mjs')).validateCommands(expected))) fail(400, 'Ink commands must match the checked source exports and effects.');
@@ -152,7 +156,9 @@ export async function installedInk(platform, appId, releaseId) {
  const spec=inkSpec(bundle.ink,new Set(bundle.files.map(file=>file.path))),source=sealInkProgram(await inkExecutionSource(spec,bundle.files)),compiled=await platform.code.compile(source);
  inkCommands(spec,compiled.entries,compiled.artifact.manifest.named_types);
  const implementation=spec.implementation?implementationSummary(JSON.parse(Buffer.from(bundle.files.find(file=>file.path===spec.implementation.path).base64,'base64'))):null;
- const result=immutable({source,spec,entries:inkPublicEntries(spec,compiled.entries,compiled.artifact.manifest.named_types).filter(entry=>spec.exports.includes(entry.name)||spec.view===entry.name),namedTypes:compiled.artifact.manifest.named_types,releaseId:selected,...(implementation?{implementation}:{}),...(compiled.sourceIdentity?{sourceIdentity:compiled.sourceIdentity}:{})});
+ const paths=spec.dataPaths?verifyDataPaths(inkSource(spec,bundle.files),spec.ui,JSON.parse(Buffer.from(bundle.files.find(f=>f.path===spec.dataPaths.path).base64,'base64'))):null;
+ const dataPaths=paths?{identity:paths.identity,queries:paths.queries,plans:paths.plans,workload:{version:1,tables:paths.workload.tables.map(t=>({id:t.id,columns:t.columns,rows:[]})),history:[]}}:null;
+ const result=immutable({source,spec,...(dataPaths?{dataPaths}:{}),entries:inkPublicEntries(spec,compiled.entries,compiled.artifact.manifest.named_types).filter(entry=>spec.exports.includes(entry.name)||spec.view===entry.name),namedTypes:compiled.artifact.manifest.named_types,releaseId:selected,...(implementation?{implementation}:{}),...(compiled.sourceIdentity?{sourceIdentity:compiled.sourceIdentity}:{})});
  entry.bytes=Buffer.byteLength(JSON.stringify(result));cache.bytes+=entry.bytes;for(const [id,item]of cache.entries){if(cache.entries.size<=16&&cache.bytes<=64*1024*1024)break;if(item.bytes){cache.entries.delete(id);cache.bytes-=item.bytes;}}
  return result;
  })();cache.entries.set(key,entry);entry.task.catch(()=>{if(cache.entries.get(key)===entry){cache.entries.delete(key);cache.bytes-=entry.bytes;}});return entry.task;

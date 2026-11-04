@@ -19,13 +19,14 @@ for (const path of [
   './table-storage.mjs',
   './ordered-index.mjs',
   './relational-numeric.mjs',
+  './data-path-workload.mjs',
   '../sdk/src/tables.js',
   '../sdk/src/relations.js',
 ])
   backendDigest
     .update(path + '\0')
     .update(readFileSync(new URL(path, import.meta.url)));
-const backendHash = backendDigest.digest('hex');
+export const backendHash = backendDigest.digest('hex');
 const orderedGroups = (groups) =>
   [...groups.entries()]
     .sort(([a], [b]) => compareValues(a, b, 'binary'))
@@ -488,28 +489,174 @@ function bounds(index, equals, range, table, stats) {
     );
   return [index.tree.rank(low, stats), index.tree.rank(high, stats)];
 }
-function access(path, context) {
-  const { table } = path.scan;
+function constraints(path) {
   const equals = new Map(),
     ranges = new Map();
   for (const atom of path.atoms) {
     if (atom.op === 'eq') equals.set(atom.field, atom.value);
     if (['lt', 'lte', 'gt', 'gte'].includes(atom.op)) {
-      const range = ranges.get(atom.field) || {};
-      const end = atom.op === 'lt' || atom.op === 'lte' ? 'upper' : 'lower',
-        inclusive = atom.op === 'lte' || atom.op === 'gte',
-        previous = range[end];
+      const range = ranges.get(atom.field) || {},
+        end = ['lt', 'lte'].includes(atom.op) ? 'upper' : 'lower',
+        inclusive = ['lte', 'gte'].includes(atom.op),
+        old = range[end];
       if (
-        !previous ||
+        !old ||
         (end === 'lower'
-          ? compareValues(atom.value, previous.value, 'binary') > 0
-          : compareValues(atom.value, previous.value, 'binary') < 0) ||
-        (equal(atom.value, previous.value) && !inclusive)
+          ? compareValues(atom.value, old.value, 'binary') > 0
+          : compareValues(atom.value, old.value, 'binary') < 0) ||
+        (equal(atom.value, old.value) && !inclusive)
       )
         range[end] = { value: atom.value, inclusive };
       ranges.set(atom.field, range);
     }
   }
+  return { equals, ranges };
+}
+function indexChoices(path) {
+  const { equals, ranges } = constraints(path),
+    primary = path.by?.length === 1 ? path.by[0] : null,
+    prefix = [...equals.keys()]
+      .filter((field) => field !== '$key')
+      .sort()
+      .slice(0, 3),
+    point = equals.has('$key');
+  let ordered = !!primary,
+    last = !path.by
+      ? '$key'
+      : primary?.field || ranges.keys().next().value || '$key';
+  if (
+    primary &&
+    ranges.has(last) &&
+    path.scan.table.fields.get(last).type === 'text' &&
+    primary.collation !== 'binary'
+  ) {
+    ordered = false;
+    last = ranges.keys().next().value;
+  }
+  const make = (last, ordered) => {
+    const fields = [...prefix, ...(prefix.includes(last) ? [] : [last])];
+    return {
+      fields,
+      collations: fields.map((field) =>
+        field === last && !prefix.includes(field)
+          ? ordered
+            ? primary?.collation || 'binary'
+            : last === '$key'
+              ? 'key'
+              : 'binary'
+          : 'binary',
+      ),
+      last,
+      ordered,
+      point,
+      direction: primary?.direction || 'asc',
+    };
+  };
+  const choices = [make(last, ordered)];
+  if (!point && path.by)
+    for (const field of ranges.keys())
+      if (field !== last && !equals.has(field) && choices.length < 3)
+        choices.push(make(field, false));
+  return choices;
+}
+function physicalCandidates(node) {
+  const paths = [];
+  const visit = (node) => {
+    const path = simple(node);
+    if (path) {
+      paths.push(path);
+      return;
+    }
+    if (node.left) {
+      visit(node.left);
+      visit(node.right);
+    } else if (node.input) visit(node.input);
+  };
+  visit(node);
+  const base = Object.fromEntries(
+    paths.map((path) => [path.scan.as, indexChoices(path)[0]]),
+  );
+  const choices = [
+    { family: 'scan', indexes: {} },
+    { family: 'index', indexes: base },
+  ];
+  for (const path of paths)
+    for (const choice of indexChoices(path).slice(1))
+      if (choices.length < 7)
+        choices.push({
+          family: 'index',
+          indexes: { ...base, [path.scan.as]: choice },
+        });
+  choices.push({ family: 'maintained', indexes: base });
+  return choices.map((recipe) => ({ id: hash(recipe), recipe }));
+}
+function scanAccess(path, context) {
+  const rows = [...path.scan.table.rows.values()].sort(
+    (a, b) =>
+      compareValues(a.$key, b.$key, 'key') ||
+      compareValues(a.$id, b.$id, 'binary'),
+  );
+  context.stats.scanRows += rows.length;
+  const exact = path.conjunctive && !path.atoms.length;
+  const plan = {
+    operator: 'table-scan',
+    tableId: path.scan.tableId,
+    estimatedRows: rows.length,
+    ordered: false,
+    exactCount: exact,
+  };
+  context.plans.push(plan);
+  return {
+    ...path,
+    ordered: false,
+    exact,
+    count: rows.length,
+    plan,
+    *rows(offset = 0, limit = Infinity) {
+      yield* rows.slice(
+        offset,
+        Number.isFinite(limit) ? offset + limit : undefined,
+      );
+    },
+  };
+}
+function maintainedAccess(path, context) {
+  const view = path.scan.table.resultView(
+    hash({ query: context.logical, alias: path.scan.as }),
+    (row) => !!path.transform(row),
+    path.by || [],
+    context.stats,
+  );
+  const plan = {
+    operator: 'maintained-result',
+    tableId: path.scan.tableId,
+    estimatedRows: view.tree.size,
+    ordered: !!path.by,
+    exactCount: true,
+  };
+  context.plans.push(plan);
+  return {
+    ...path,
+    ordered: !!path.by,
+    exact: true,
+    count: view.tree.size,
+    plan,
+    *rows(offset = 0, limit = Infinity) {
+      yield* view.tree.range(
+        offset,
+        Math.min(view.tree.size, offset + limit),
+        false,
+        context.stats,
+      );
+    },
+  };
+}
+function access(path, context) {
+  const { table } = path.scan;
+  if (context.recipe?.family === 'scan') return scanAccess(path, context);
+  if (context.recipe?.family === 'maintained')
+    return maintainedAccess(path, context);
+  const { equals, ranges } = constraints(path);
   const point = equals.has('$key');
   const primary = path.by?.length === 1 ? path.by[0] : null;
   // Equality prefixes are binary (predicate equality), independent of the
@@ -518,7 +665,7 @@ function access(path, context) {
     .filter((field) => field !== '$key')
     .sort()
     .slice(0, 3);
-  if (!path.by && !point && !prefix.length && !ranges.size) {
+  if (!context.recipe && !path.by && !point && !prefix.length && !ranges.size) {
     const exact = path.conjunctive && !path.atoms.length,
       plan = {
         operator: 'table-scan',
@@ -566,6 +713,13 @@ function access(path, context) {
           : 'binary'
         : 'binary',
     );
+  const fixed = context.recipe?.indexes[path.scan.as];
+  if (fixed) {
+    fields = fixed.fields;
+    collations = fixed.collations;
+    last = fixed.last;
+    ordered = fixed.ordered;
+  }
   let range = equals.has(last) ? undefined : ranges.get(last),
     index = point
       ? null
@@ -580,7 +734,7 @@ function access(path, context) {
     ordered = !primary || primary.field === '$key';
   } else [start, end] = bounds(index, equals, range, table, context.stats);
   const alternatives = [];
-  if (!point && end - start > 64) {
+  if (!context.recipe && !point && end - start > 64) {
     for (const field of ranges.keys()) {
       if (alternatives.length >= 2) break;
       if (field === last || equals.has(field)) continue;
@@ -856,6 +1010,7 @@ function* execute(node, context) {
     const path = simple(node.input),
       definitions = [...node.aggregates.values()];
     if (
+      (!context.recipe || context.recipe.family === 'maintained') &&
       path &&
       definitions.every((value) => ['count', 'sum', 'avg'].includes(value.op))
     ) {
@@ -983,7 +1138,7 @@ function dependencies(node, context) {
   const walk = (node, needed) => {
     node.required = new Set(needed);
     if (node.op === 'scan') {
-      add(node, needed);
+      add(node, [...needed, node.as + '.$key', node.as + '.$id']);
       return;
     }
     if (node.op === 'join') {
@@ -1030,7 +1185,8 @@ function dependencies(node, context) {
       })),
   }));
 }
-export function queryRelational(world, input) {
+const admitted = new WeakSet();
+export function queryRelational(world, input, control = {}) {
   try {
     if (Buffer.byteLength(JSON.stringify(input)) > 128 * 1024)
       fail(413, 'Relational request exceeds 128 KiB');
@@ -1089,6 +1245,8 @@ export function queryRelational(world, input) {
     fail(409, 'Relational snapshot changed; restart the query');
   const stats = {
       decodedRows: 0,
+      scanRows: 0,
+      resultBuildRows: 0,
       indexBuildRows: 0,
       indexNodes: 0,
       aggregateBuildRows: 0,
@@ -1099,6 +1257,7 @@ export function queryRelational(world, input) {
     context = {
       storage,
       stats,
+      logical: input.relation,
       nodes: 0,
       expressions: 0,
       sources: new Map(),
@@ -1164,6 +1323,73 @@ export function queryRelational(world, input) {
     sourceBytes > storage.limits.cacheBytes
   )
     fail(413, 'Relational source set exceeds the in-memory read budget');
+  const contract = {
+    format: 'ink-storage-query-contract-v1',
+    logical: { relation: input.relation, offset, limit, count },
+    schemas: [...context.sources.values()].map((source) => ({
+      namespace: source.namespace,
+      tableId: source.tableId,
+      columns: source.table.table.columns,
+    })),
+    output: [...compiled.schema],
+    dependencies: dependencies(compiled, context).map(
+      ({ namespace, tableId, alias, columns }) => ({
+        namespace,
+        tableId,
+        alias,
+        columns,
+      }),
+    ),
+    ...(control.describe || control.candidate
+      ? { candidates: physicalCandidates(compiled) }
+      : {}),
+    backend: backendHash,
+    collation: collationProfile(),
+  };
+  if (control.describe) return contract;
+  if (control.candidate) {
+    const found = contract.candidates.find(
+      (candidate) =>
+        candidate.id === control.candidate.id &&
+        JSON.stringify(candidate.recipe) ===
+          JSON.stringify(control.candidate.recipe),
+    );
+    if (!found)
+      fail(400, 'Physical recipe does not follow from this exact typed query');
+    context.recipe = found.recipe;
+  }
+  if (control.admitted) {
+    if (!admitted.has(control.admitted))
+      fail(400, 'Storage plan has not been checked');
+    const plan = control.admitted,
+      current = JSON.stringify(contract.logical);
+    let reason = null;
+    if (current !== plan.logical) reason = 'query-not-covered';
+    else if (JSON.stringify(contract.schemas) !== plan.schemas)
+      reason = 'schema-changed';
+    else if (
+      contract.backend !== plan.backend ||
+      JSON.stringify(contract.collation) !== plan.collation ||
+      control.target !== plan.target
+    )
+      reason = 'target-or-backend-changed';
+    else if (
+      [...context.sources.values()].some((source) => {
+        const count = storage.footprint(source.namespace, source.tableId).rows,
+          range = plan.rows[source.as];
+        return !range || count < range.min || count > range.max;
+      })
+    )
+      reason = 'workload-row-bound-changed';
+    reason = control.forceScan || reason;
+    context.recipe = reason ? { family: 'scan', indexes: {} } : plan.recipe;
+    context.admission = {
+      id: plan.id,
+      selected: context.recipe.family,
+      fallback: reason,
+      authority: 'checked-fixed-storage-recipe-v1',
+    };
+  }
   for (const source of context.sources.values()) {
     const key = source.namespace + ':' + source.tableId;
     let table = uniqueSources.get(key);
@@ -1241,6 +1467,7 @@ export function queryRelational(world, input) {
       backendHash,
       queryHash,
       operators: context.plans,
+      ...(context.admission ? { admission: context.admission } : {}),
       stats,
       capabilities: {
         placement: 'host',
@@ -1258,4 +1485,41 @@ export function queryRelational(world, input) {
   if (stats.wireBytes > 8 * 1024 * 1024)
     fail(413, 'Relational page exceeds 8 MiB; request fewer rows or columns');
   return result;
+}
+
+export function describeRelational(world, input) {
+  return queryRelational(world, input, { describe: true });
+}
+export function checkDataPath(world, input, artifact) {
+  const contract = describeRelational(world, input);
+  if (
+    artifact?.format !== 'ink-data-path-v1' ||
+    JSON.stringify(artifact.contract.logical) !==
+      JSON.stringify(contract.logical) ||
+    JSON.stringify(artifact.contract.schemas) !==
+      JSON.stringify(contract.schemas) ||
+    JSON.stringify(artifact.contract.dependencies) !==
+      JSON.stringify(contract.dependencies) ||
+    JSON.stringify(artifact.contract.output) !== JSON.stringify(contract.output)
+  )
+    fail(400, 'Data path contract differs from the complete typed query');
+  const candidate = contract.candidates.find(
+    (candidate) =>
+      candidate.id === artifact.selected &&
+      JSON.stringify(candidate.recipe) === JSON.stringify(artifact.recipe),
+  );
+  if (!candidate)
+    fail(400, 'Data path does not carry a derivable fixed recipe');
+  const value = {
+    id: artifact.identity,
+    recipe: structuredClone(candidate.recipe),
+    logical: JSON.stringify(contract.logical),
+    schemas: JSON.stringify(contract.schemas),
+    backend: artifact.contract.backend,
+    collation: JSON.stringify(artifact.contract.collation),
+    target: artifact.target,
+    rows: structuredClone(artifact.rows),
+  };
+  admitted.add(value);
+  return value;
 }

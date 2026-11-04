@@ -1,0 +1,137 @@
+{
+  "slug": "planned-storage",
+  "title": "Planned storage",
+  "language": "ink",
+  "exports": [
+    "event"
+  ],
+  "ui": {
+    "version": 1,
+    "entry": "view",
+    "event": "event",
+    "components": [
+      {
+        "name": "page",
+        "entry": "page",
+        "event": "event",
+        "query": {
+          "format": "ink-relational-v1",
+          "relation": {
+            "op": "project",
+            "input": {
+              "op": "order",
+              "input": {
+                "op": "filter",
+                "input": {
+                  "op": "scan",
+                  "namespace": "self",
+                  "tableId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "as": "row"
+                },
+                "predicate": {
+                  "op": "and",
+                  "args": [
+                    {
+                      "op": "contains",
+                      "left": {
+                        "column": "row.status"
+                      },
+                      "right": {
+                        "literal": "open"
+                      }
+                    }
+                  ]
+                }
+              },
+              "by": [
+                {
+                  "field": "row.score",
+                  "direction": "desc",
+                  "collation": "natural"
+                }
+              ]
+            },
+            "fields": {
+              "id": "row.$id",
+              "title": "row.title"
+            }
+          },
+          "limit": 20,
+          "count": true
+        }
+      }
+    ]
+  },
+  "storagePlanning": {
+    "version": 1,
+    "mode": "auto",
+    "workload": "storage-workload.json",
+    "milliseconds": 8000,
+    "candidates": 8,
+    "trials": 3
+  },
+  "modules": {
+    "version": 1,
+    "root": "main.ink",
+    "modules": [
+      {
+        "path": "main.ink",
+        "name": "app",
+        "dependencies": [
+          "ui.ink"
+        ],
+        "exports": [
+          "view",
+          "page",
+          "event"
+        ]
+      },
+      {
+        "path": "ui.ink",
+        "name": "ink_ui",
+        "dependencies": [],
+        "exports": [
+          "UiKind",
+          "UiFieldKind",
+          "UiEventKind",
+          "UiOption",
+          "UiFieldValue",
+          "UiInput",
+          "UiEvent",
+          "UiData",
+          "UiNode",
+          "UiView",
+          "ui_node",
+          "ui_group",
+          "ui_text",
+          "ui_heading",
+          "ui_button",
+          "ui_field",
+          "ui_form",
+          "ui_component",
+          "ui_toggle",
+          "ui_select",
+          "ui_nav_item",
+          "ui_events",
+          "ui_disabled",
+          "ui_description",
+          "ui_invalid",
+          "ui_field_kind",
+          "ui_option",
+          "ui_field_text",
+          "UiDecimal",
+          "ui_digit",
+          "ui_key",
+          "ui_submit",
+          "ui_item",
+          "ui_cell",
+          "ui_header"
+        ]
+      }
+    ]
+  },
+  "desktop": {
+    "entry": "app",
+    "icon": "table"
+  }
+}
