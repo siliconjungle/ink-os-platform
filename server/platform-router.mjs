@@ -21,6 +21,7 @@ import{environmentInput}from './app-environment.mjs';
 import{queryWorld}from './query.mjs';
 import{authorizeRoute,KEY_SCOPES,isAdmin}from './api-keys.mjs';
 import {sign,verify}from'./platform.mjs';
+import { learnedState, setLearnedGate, editLearned } from './ink-learned.mjs';
 const error=(status,message)=>{throw Object.assign(Error(message),{status});};
 export function platformRouter(platform,{send,body}){return async(req,res,url,principal)=>{
  const path=url.pathname.slice('/api/v1'.length),method=req.method;
@@ -127,6 +128,9 @@ export function platformRouter(platform,{send,body}){return async(req,res,url,pr
   if(action==='ink/effects'&&method==='POST'){asApp(appId);if(!platform.effects)error(503,'Typed effects unavailable');return send(res,202,await platform.effects.start(appId,await body(req),principal));}
   if(/^ink\/effects\/[a-f0-9]{32}(?:\/cancel)?$/.test(action)){asApp(appId);if(!platform.effects)error(503,'Typed effects unavailable');const id=action.split('/')[2];if(method==='GET'&&!action.endsWith('/cancel'))return send(res,200,platform.effects.get(appId,id,principal));if(method==='POST'&&action.endsWith('/cancel'))return send(res,200,await platform.effects.cancel(appId,id,principal));}
   if(action==='ink/run'&&method==='POST'){asApp(appId);return send(res,200,await runInstalledInk(platform,appId,await body(req),principal));}
+  if(action==='ink/learned'&&method==='GET'){platform.owner(principal);return send(res,200,await learnedState(platform,appId));}
+  if(action==='ink/learned/gate'&&method==='PUT'){platform.owner(principal);return send(res,200,await setLearnedGate(platform,appId,await body(req,5*1024*1024)));}
+  if(action==='ink/learned/edits'&&method==='POST'){platform.owner(principal);return send(res,200,await editLearned(platform,appId,await body(req,4*1024*1024)));}
   if(action==='ink/checkpoint'&&method==='GET'){platform.owner(principal);const app=platform.app(appId),checkpoint=await platform.code.loadCheckpoint(appId,'ink-app:state',principal);return send(res,200,{appId,appRevision:app.revision,releaseId:JSON.parse(app.body).releaseId,checkpointRevision:checkpoint.revision,digest:checkpoint.value?.digest||null,...(checkpoint.value?.sourceIdentity?{sourceIdentity:checkpoint.value.sourceIdentity}:{}),exists:!!checkpoint.value});}
   if(action==='ink/migrate'&&method==='POST'){platform.owner(principal);return send(res,200,await migrateInstalledInk(platform,appId,await body(req),principal));}
   if(action==='artifacts'&&method==='GET'){platform.owner(principal);return send(res,200,artifactRecords(platform,appId));}

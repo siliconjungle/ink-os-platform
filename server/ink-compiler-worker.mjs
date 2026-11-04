@@ -3,7 +3,7 @@ import { parentPort, workerData } from 'node:worker_threads';
 try {
   const instance = await WebAssembly.instantiate(workerData.module, {}), api = instance.exports;
   const bytes = new TextEncoder().encode(JSON.stringify(workerData.request));
-  if (bytes.length > 32 * 1024 * 1024) throw Error('Compiler request exceeds 16 MiB.');
+  if (bytes.length > 16 * 1024 * 1024) throw Error('Compiler request exceeds 16 MiB.');
   const pointer = api.ink_env_alloc(bytes.length);
   if (!pointer) throw Error('Compiler request allocation failed.');
   try {

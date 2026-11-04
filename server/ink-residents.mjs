@@ -8,7 +8,14 @@ export async function javascriptResident(compiled, { timeout = 30000 } = {}) {
     {
       workerData: {
         artifact: compiled.artifact,
-        entries: compiled.entries,
+        // Generated learn-hole entries are callable only through code.run's
+        // `learned` path (server/ink-learned.mjs), which checks them first.
+        entries: [
+          ...compiled.entries,
+          ...(compiled.artifact.manifest.state?.actions || [])
+            .filter((a) => /^(__learn_get|__learn_set|__objective_[A-Za-z_][A-Za-z0-9_]*)$/.test(a.name))
+            .map((a) => ({ ...a, action: true })),
+        ],
         compiler: (await compilerModule()).module,
       },
       resourceLimits: { maxOldGenerationSizeMb: 256 },

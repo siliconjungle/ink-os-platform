@@ -75,8 +75,8 @@ The recorded Apple M4 Pro run produced:
 
 | Computation | Edit-to-paint p50 / p95 | Successful guarded commits/s | Service recovery |
 | --- | ---: | ---: | ---: |
-| Baseline JavaScript | 65.9 / 82.7 ms | 49.9 | 86.8 ms |
-| Selected JavaScript | 65.9 / 82.6 ms | 48.6 | 156.8 ms |
-| Selected native | 81.5 / 99.0 ms | 48.3 | 126.1 ms |
+| Baseline JavaScript | 66.1 / 82.9 ms | 49.3 | 84.9 ms |
+| Selected JavaScript | 66.1 / 82.7 ms | 49.6 | 155.7 ms |
+| Selected native | 82.2 / 99.0 ms | 45.1 | 94.6 ms |
 
 All modes persisted about 4.8 KiB and exchanged about 14.0 KiB of RPC bodies per measured edit. At this small workload, maintained computation does not improve complete latency; durable commit, invalidation coalescing, frame cadence and optimistic retry contention remain substantial costs. Selected plans also increase admission memory and build time. These results establish the connected execution and recovery path, while leaving large-table placement and proof/admission memory as measurable next improvements.

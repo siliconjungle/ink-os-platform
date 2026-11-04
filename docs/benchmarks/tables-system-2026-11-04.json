@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "recordedAt": "2026-11-04T06:44:10.473Z",
+  "recordedAt": "2026-11-04T06:58:29.292Z",
   "host": {
     "platform": "darwin",
     "arch": "arm64",
@@ -12,14 +12,14 @@
   "runs": [
     {
       "mode": "baseline-javascript",
-      "system": "63907c7175ab2e925d788bc793eb31e043228bd17be743e3997ce68cfa8fb05d",
-      "compiler": "cddf402664b160935b6d3935b779ed69916140ed27116d8ce4a3d39e08f154a5",
+      "system": "260cdaa968199d58399c220bb996338178a3689c859aad90227e2b865385f181",
+      "compiler": "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
       "planSteps": 0,
       "setup": {
-        "buildMs": 646.69325,
-        "deployMs": 156.24337500000001,
+        "buildMs": 609.6397499999999,
+        "deployMs": 159.24199999999996,
         "nativeBuildMs": 0,
-        "startupMs": 102.60795800000005
+        "startupMs": 99.50866599999995
       },
       "workload": {
         "seedRows": 64,
@@ -30,37 +30,37 @@
       },
       "editToPaint": {
         "samplesMs": [
-          65.39999997615814,
-          65.5,
-          65.69999998807907,
-          65.79999995231628,
-          65.80000001192093,
+          64.09999996423721,
+          65.60000002384186,
           65.89999997615814,
           65.89999997615814,
-          65.89999997615814,
-          65.89999997615814,
-          65.90000003576279,
-          65.90000003576279,
-          65.90000003576279,
           66,
           66.10000002384186,
-          77.09999996423721,
-          82.69999998807907
+          66.10000002384186,
+          66.10000002384186,
+          66.69999998807907,
+          67.59999996423721,
+          68,
+          80.39999997615814,
+          81,
+          81.40000003576279,
+          81.69999998807907,
+          82.90000003576279
         ],
-        "p50Ms": 65.89999997615814,
-        "p95Ms": 82.69999998807907
+        "p50Ms": 66.10000002384186,
+        "p95Ms": 82.90000003576279
       },
       "concurrency": {
-        "durationMs": 27.75841700000001,
-        "requestsPerSecond": 576.4017450995133,
+        "durationMs": 25.766749999999774,
+        "requestsPerSecond": 620.9553009207657,
         "committed": 1,
         "conflicts": 15,
         "includeHttp": true,
         "successful": {
           "commits": 16,
           "attempts": 136,
-          "durationMs": 320.5642499999999,
-          "commitsPerSecond": 49.91199112190459
+          "durationMs": 324.74512500000037,
+          "commitsPerSecond": 49.26940781636054
         }
       },
       "persisted": {
@@ -71,22 +71,22 @@
       },
       "transferred": {
         "received": 5354,
-        "sent": 217915,
+        "sent": 217911,
         "requests": 48,
-        "bytesPerEdit": 13954.3125,
+        "bytesPerEdit": 13954.0625,
         "scope": "HTTP RPC request/response bodies; excludes headers, SSE notifications and initial source/assets"
       },
       "memory": {
-        "peakNodeRss": 502349824,
-        "processTreeRss": 1394294784,
+        "peakNodeRss": 496697344,
+        "processTreeRss": 1387872256,
         "scope": "RSS sum of this Node process and its descendants at one steady-state sample; shared pages may be counted more than once",
-        "browserHeap": 5059588
+        "browserHeap": 5487062
       },
       "sharedQueries": {
-        "reads": 29,
-        "hits": 32
+        "reads": 33,
+        "hits": 30
       },
-      "recoveryMs": 86.80012499999975,
+      "recoveryMs": 84.91491700000006,
       "validation": {
         "conflicts": true,
         "abortedChanges": true,
@@ -98,14 +98,14 @@
     },
     {
       "mode": "javascript",
-      "system": "4412a5116fb23e2016ccfd977e832995db567bd12836a8eb4098253c0e18303d",
-      "compiler": "cddf402664b160935b6d3935b779ed69916140ed27116d8ce4a3d39e08f154a5",
+      "system": "3328d0d9049e55b29a9202cf9d0ed1ea1885f746902d163d73d7a3eeb5fa2f53",
+      "compiler": "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
       "planSteps": 1,
       "setup": {
-        "buildMs": 5142.274875,
-        "deployMs": 323.8414590000002,
+        "buildMs": 5313.626666,
+        "deployMs": 322.37833300000057,
         "nativeBuildMs": 0,
-        "startupMs": 106.99749999999949
+        "startupMs": 101.05370799999946
       },
       "workload": {
         "seedRows": 64,
@@ -116,63 +116,63 @@
       },
       "editToPaint": {
         "samplesMs": [
-          65.5,
-          65.69999998807907,
+          65.39999997615814,
+          65.39999997615814,
+          65.40000003576279,
           65.79999995231628,
-          65.80000001192093,
-          65.80000001192093,
           65.89999997615814,
-          65.89999997615814,
-          65.90000003576279,
           66,
+          66.09999996423721,
           66.10000002384186,
-          66.10000002384186,
-          71.90000003576279,
-          82.40000003576279,
-          82.5,
-          82.59999996423721,
-          82.60000002384186
+          66.30000001192093,
+          66.59999996423721,
+          66.69999998807907,
+          77.39999997615814,
+          82.10000002384186,
+          82.19999998807907,
+          82.30000001192093,
+          82.69999998807907
         ],
-        "p50Ms": 65.90000003576279,
-        "p95Ms": 82.60000002384186
+        "p50Ms": 66.10000002384186,
+        "p95Ms": 82.69999998807907
       },
       "concurrency": {
-        "durationMs": 33.848917000000256,
-        "requestsPerSecond": 472.688683067759,
+        "durationMs": 26.667457999999897,
+        "requestsPerSecond": 599.98219552835,
         "committed": 1,
         "conflicts": 15,
         "includeHttp": true,
         "successful": {
           "commits": 16,
           "attempts": 136,
-          "durationMs": 328.92249999999876,
-          "commitsPerSecond": 48.64367746201631
+          "durationMs": 322.68879200000083,
+          "commitsPerSecond": 49.58337691505554
         }
       },
       "persisted": {
         "worldJournalBytes": 0,
-        "appJournalBytes": 76716,
-        "bytesPerEdit": 4794.75,
+        "appJournalBytes": 76748,
+        "bytesPerEdit": 4796.75,
         "scope": "Authoritative collaboration WAL plus World projection WAL; includes Ink transaction payloads/receipts; excludes checkpoint replacement and filesystem metadata"
       },
       "transferred": {
         "received": 5354,
-        "sent": 217915,
+        "sent": 217913,
         "requests": 48,
-        "bytesPerEdit": 13954.3125,
+        "bytesPerEdit": 13954.1875,
         "scope": "HTTP RPC request/response bodies; excludes headers, SSE notifications and initial source/assets"
       },
       "memory": {
-        "peakNodeRss": 846495744,
-        "processTreeRss": 1751924736,
+        "peakNodeRss": 821231616,
+        "processTreeRss": 1732345856,
         "scope": "RSS sum of this Node process and its descendants at one steady-state sample; shared pages may be counted more than once",
-        "browserHeap": 5042313
+        "browserHeap": 5048555
       },
       "sharedQueries": {
-        "reads": 30,
-        "hits": 29
+        "reads": 33,
+        "hits": 28
       },
-      "recoveryMs": 156.82524999999987,
+      "recoveryMs": 155.74512500000128,
       "validation": {
         "conflicts": true,
         "abortedChanges": true,
@@ -184,14 +184,14 @@
     },
     {
       "mode": "native",
-      "system": "4412a5116fb23e2016ccfd977e832995db567bd12836a8eb4098253c0e18303d",
-      "compiler": "cddf402664b160935b6d3935b779ed69916140ed27116d8ce4a3d39e08f154a5",
+      "system": "3328d0d9049e55b29a9202cf9d0ed1ea1885f746902d163d73d7a3eeb5fa2f53",
+      "compiler": "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
       "planSteps": 1,
       "setup": {
-        "buildMs": 5144.1305,
-        "deployMs": 314.82474999999977,
-        "nativeBuildMs": 22472.578166,
-        "startupMs": 186.81504199999836
+        "buildMs": 5230.525541,
+        "deployMs": 296.8186660000001,
+        "nativeBuildMs": 21280.674291,
+        "startupMs": 191.0957500000004
       },
       "workload": {
         "seedRows": 64,
@@ -202,63 +202,63 @@
       },
       "editToPaint": {
         "samplesMs": [
-          75.69999998807907,
-          79.30000001192093,
-          80.39999997615814,
-          80.69999998807907,
-          80.69999998807907,
-          81.09999996423721,
-          81.5,
-          81.5,
-          81.90000003576279,
+          81.80000001192093,
+          82.09999996423721,
+          82.09999996423721,
           82.10000002384186,
-          82.20000004768372,
-          82.30000001192093,
-          82.40000003576279,
-          82.5,
-          82.80000001192093,
+          82.10000002384186,
+          82.19999998807907,
+          82.19999998807907,
+          82.19999998807907,
+          86.69999998807907,
+          96.89999997615814,
+          97.10000002384186,
+          97.5,
+          97.5,
+          97.60000002384186,
+          98.69999998807907,
           99
         ],
-        "p50Ms": 81.5,
+        "p50Ms": 82.19999998807907,
         "p95Ms": 99
       },
       "concurrency": {
-        "durationMs": 44.1170409999977,
-        "requestsPerSecond": 362.6716488080158,
+        "durationMs": 49.081999999998516,
+        "requestsPerSecond": 325.985086182317,
         "committed": 1,
         "conflicts": 15,
         "includeHttp": true,
         "successful": {
           "commits": 16,
           "attempts": 136,
-          "durationMs": 331.5517910000017,
-          "commitsPerSecond": 48.25792058532394
+          "durationMs": 354.6065419999977,
+          "commitsPerSecond": 45.12043097050393
         }
       },
       "persisted": {
         "worldJournalBytes": 0,
-        "appJournalBytes": 76716,
-        "bytesPerEdit": 4794.75,
+        "appJournalBytes": 76748,
+        "bytesPerEdit": 4796.75,
         "scope": "Authoritative collaboration WAL plus World projection WAL; includes Ink transaction payloads/receipts; excludes checkpoint replacement and filesystem metadata"
       },
       "transferred": {
         "received": 5354,
-        "sent": 217856,
+        "sent": 217855,
         "requests": 48,
-        "bytesPerEdit": 13950.625,
+        "bytesPerEdit": 13950.5625,
         "scope": "HTTP RPC request/response bodies; excludes headers, SSE notifications and initial source/assets"
       },
       "memory": {
-        "peakNodeRss": 750092288,
-        "processTreeRss": 1603747840,
+        "peakNodeRss": 813367296,
+        "processTreeRss": 1651851264,
         "scope": "RSS sum of this Node process and its descendants at one steady-state sample; shared pages may be counted more than once",
-        "browserHeap": 5173977
+        "browserHeap": 5179768
       },
       "sharedQueries": {
-        "reads": 31,
-        "hits": 33
+        "reads": 32,
+        "hits": 36
       },
-      "recoveryMs": 126.10475000000224,
+      "recoveryMs": 94.585916,
       "validation": {
         "conflicts": true,
         "abortedChanges": true,
