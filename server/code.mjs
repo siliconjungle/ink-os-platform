@@ -16,6 +16,9 @@ import {
 } from './ink-compiler.mjs';
 import { inkEntries } from '../shared/ink-app.mjs';
 import { stringifyExactJSON } from '../shared/exact-json.mjs';
+// Generated learn-hole entries (see server/ink-learned.mjs).
+const LEARNED_ENTRY = /^(__learn_get|__learn_set|__objective_[A-Za-z_][A-Za-z0-9_]*)$/;
+const learnedEntry = (compiled, name) => { const fn = compiled.artifact.manifest.state?.actions?.find(a => a.name === name); return fn && { ...fn, action: true }; };
 
 export class Code {
   constructor(root, directory = join(root, '.data/code'), world, options = {}) {
@@ -273,8 +276,14 @@ export class Code {
         ),
         { status: 409 },
       );
+    // Generated learn-hole entries are reachable only from the platform's
+    // learned-parameter service (server/ink-learned.mjs), never from app
+    // callers, which construct their run input without `learned`.
     const selected = input.entry
-      ? compiled.entries.find((fn) => fn.name === input.entry)
+      ? compiled.entries.find((fn) => fn.name === input.entry) ??
+        (input.learned === true && LEARNED_ENTRY.test(input.entry)
+          ? learnedEntry(compiled, input.entry)
+          : undefined)
       : compiled.entries[0];
     if (!selected)
       throw Error('Select an exported function, query, or change.');
