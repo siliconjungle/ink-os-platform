@@ -248,10 +248,12 @@ export class InkViews {
     this.reads.invalidate(event);
     for (const mount of this.mounts.values()) {
       if (mount.disposed || mount.previewId) continue;
-      let changed = false;
+      let changed = false,
+        needsRender = false;
       if (event.type === 'object' && event.object.id === mount.appId) {
         mount.all = true;
         changed = true;
+        needsRender = true;
       }
       if (
         (event.type === 'ink-state' && event.appId === mount.appId) ||
@@ -269,25 +271,43 @@ export class InkViews {
         );
         if (hint?.source === mount.source) {
           for (const root of hint.roots) mount.dirty.add(root);
-        } else mount.all = true;
+          // Use the same compiler-checked dependencies as component caching.
+          // Input-backed pure components wait for their retained result instead
+          // of computing once before it is ready and then computing again.
+          needsRender ||= [...mount.cache.values()].some(
+            (entry) =>
+              !entry.roots ||
+              entry.roots.some((root) => hint.roots.includes(root)),
+          );
+        } else {
+          mount.all = true;
+          needsRender = true;
+        }
         changed = true;
       }
-      for (const entry of mount.cache.values())
+      for (const [name, entry] of mount.cache) {
         if (
-          (entry.querySnapshot &&
-            !currentUiQuery(this.platform.world, entry.querySnapshot)) ||
-          (entry.readSnapshot && !this.reads.current(entry.readSnapshot))
+          entry.querySnapshot &&
+          !currentUiQuery(this.platform.world, entry.querySnapshot)
         ) {
           entry.dataDirty = true;
           changed = true;
+          needsRender = true;
         }
+        if (entry.readSnapshot && !this.reads.current(entry.readSnapshot)) {
+          entry.dataDirty = true;
+          changed = true;
+          if (!mount.subscriptions.has(name)) needsRender = true;
+        }
+      }
       if (event.type === 'deleted' && event.ids.includes(mount.appId)) {
         mount.all = true;
         changed = true;
+        needsRender = true;
       }
       if (changed) {
         mount.epoch++;
-        this.schedule(mount);
+        if (needsRender) this.schedule(mount);
       }
     }
   }
@@ -425,6 +445,7 @@ export class InkViews {
             querySnapshot,
             readSnapshot,
             dataDirty: false,
+            roots: component.roots,
           };
           cache.set(name, entry);
           computed.push(name);

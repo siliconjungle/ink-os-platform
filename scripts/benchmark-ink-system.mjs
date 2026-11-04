@@ -249,13 +249,18 @@ const server = createServer(async (req, res) => {
     res.setHeader('Content-Type', 'text/html');
     res.end('<main id="tables"></main><main id="dashboard"></main>');
   } catch (error) {
-    if(res.destroyed)return;
+    if (res.destroyed) return;
     res.statusCode = error.status || 500;
     res.setHeader('Content-Type', 'application/json');
     const value = { error: error.message, current: error.current },
       text = JSON.stringify(value);
     sent += Buffer.byteLength(text);
-    if(req.rpcAccounting)completed.push({...req.rpcAccounting,received:req.rpcAccounting.bytes,sent:Buffer.byteLength(text)});
+    if (req.rpcAccounting)
+      completed.push({
+        ...req.rpcAccounting,
+        received: req.rpcAccounting.bytes,
+        sent: Buffer.byteLength(text),
+      });
     if (profiling && req.profileRequest)
       profile.rpc.push({
         trace: req.headers['x-ink-profile'] || 'background',
@@ -404,6 +409,12 @@ try {
     editSamples = [],
     profileRpcStart = profile?.rpc.length ?? 0,
     profileSpanStart = profile?.spans.length ?? 0;
+  const measuredEntries = {},
+    originalExecute = p.code.execute;
+  p.code.execute = function (input) {
+    measuredEntries[input.entry] = (measuredEntries[input.entry] || 0) + 1;
+    return originalExecute.call(this, input);
+  };
   if (profile) await profile.attach(p);
   for (let i = 0; i < edits; i++) {
     const label = 'Edit ' + i,
@@ -461,6 +472,7 @@ try {
           sent: sent - networkBefore.sent,
           requests: requests - networkBefore.requests,
         };
+  p.code.execute = originalExecute;
   const measuredQueryReads = p.inkViews.reads.reads - readsBefore,
     measuredRpcActions = completed
       .slice(completedBefore)
@@ -507,6 +519,7 @@ try {
   }
   profiling = false;
   profile?.close();
+  p.code.execute = originalExecute;
   const wireRpc = async (action, args, requestId) => {
     const response = await fetch(
       'http://127.0.0.1:' + server.address().port + '/rpc',
@@ -679,6 +692,7 @@ try {
       mode,
       delivery: live ? 'retained' : 'refresh',
       measuredQueryReads,
+      measuredEntries,
       measuredRpcActions,
       system: f.packet.graph.identity,
       compiler: f.packet.graph.units[0].modules.compiler,

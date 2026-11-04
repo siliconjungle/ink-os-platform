@@ -29,6 +29,12 @@ export async function retainedHistory(f) {
   assert.equal(views.reads.retained.size, 1);
   assert.equal([...views.reads.retained.values()][0].listeners.size, 2);
   const writesBefore = views.reads.reads;
+  let resultComputations = 0;
+  const execute = f.p.code.execute;
+  f.p.code.execute = function (input) {
+    if (input.entry === 'results') resultComputations++;
+    return execute.call(this, input);
+  };
   const reply = await f.call(
     'put',
     [0, { id: 1, title: 'Retained', amount: 7, open: true }],
@@ -36,6 +42,8 @@ export async function retainedHistory(f) {
   );
   const frames = await Promise.all([a, b]);
   assert.equal(views.reads.reads, writesBefore + 1);
+  f.p.code.execute = execute;
+  assert.equal(resultComputations, 2, 'compute each affected pane once');
   for (const value of frames) {
     assert.equal(value.updates.sequence, 1);
     assert.equal(value.snapshots[0].versionWire, '1');

@@ -284,11 +284,10 @@ export class InkUiReads {
           fail(413, 'Exported UI data exceeds 128 KiB');
         if (!this.current(snapshot)) continue;
         snapshot.value = freeze(parseExactJSON(result.valueWire));
-        snapshot.delta = queryPageDelta(prior?.value, snapshot.value);
+        snapshot.delta = queryPageDelta(prior?.value || record?.last?.value, snapshot.value);
         snapshot.stateRevision = JSON.parse(snapshot.stamp)[1];
         snapshot.versionWire = stringifyExactJSON(snapshot.value.version);
         if (record) snapshot.id = record.id;
-        snapshot.sequence = record ? ++record.sequence : 1;
         snapshot.bytes =
           Buffer.byteLength(result.valueWire) +
           Buffer.byteLength(stringifyExactJSON(snapshot.delta));
@@ -306,6 +305,7 @@ export class InkUiReads {
           8 * 1024 * 1024
         )
           fail(429, 'Retained query memory budget is busy');
+        snapshot.sequence = record ? ++record.sequence : 1;
         this.reads++;
         return snapshot;
       }
