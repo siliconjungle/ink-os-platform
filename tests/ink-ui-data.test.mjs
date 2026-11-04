@@ -126,6 +126,8 @@ test('typed previews isolate event state, parse the sandboxed runtime and dispos
       /<script nonce="[a-f0-9]+">([\s\S]*)<\/script>$/,
     )[1],
     iframe = {};
+  assert.match(page.html, /sandbox="allow-scripts allow-forms"/);
+  assert.match(page.csp, /form-action 'none'/);
   new Script(outer).runInContext(
     createContext({
       document: { querySelector: () => iframe },
@@ -135,6 +137,7 @@ test('typed previews isolate event state, parse the sandboxed runtime and dispos
   const inner = iframe.srcdoc.match(
     /<script type="module" nonce="[a-f0-9]+">([\s\S]*)<\/script>$/,
   )[1];
+  assert.ok(iframe.srcdoc.includes("form-action 'none'"));
   assert.doesNotThrow(() => new Script(inner));
   assert.match(inner, /startTypedUi/);
   await p.inkPreviews.remove(preview.id, owner);

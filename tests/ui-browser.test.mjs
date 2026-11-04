@@ -4,14 +4,47 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { uiFixture, owner } from './ink-ui-fixture.mjs';
+import { inkRoute } from '../server/ink-router.mjs';
 test(
   'browser controls retain identity, drafts, focus and IME state through Ink patches',
   { skip: process.env.INK_TEST_UI_BROWSER !== '1', timeout: 60000 },
   async () => {
     const cleanups = [];
-    const { p, app } = await uiFixture({ after: (fn) => cleanups.push(fn) });
+    const { p, app, data } = await uiFixture({
+      after: (fn) => cleanups.push(fn),
+    });
+    const preview = await p.inkPreviews.create(owner, { files: data.files });
+    const previewPage = await p.inkPreviews.view(preview.id, owner);
     const server = createServer(async (req, res) => {
       try {
+        if (req.url === '/preview') {
+          res.setHeader('Content-Type', 'text/html');
+          res.setHeader('Content-Security-Policy', previewPage.csp);
+          res.end(previewPage.html);
+          return;
+        }
+        if (req.url.startsWith('/api/v1/ink/previews/')) {
+          await inkRoute(
+            p,
+            req,
+            res,
+            new URL(req.url, 'http://localhost'),
+            owner,
+            {
+              send(res, status, value) {
+                res.statusCode = status;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(value));
+              },
+              async body(req) {
+                let text = '';
+                for await (const chunk of req) text += chunk;
+                return JSON.parse(text || '{}');
+              },
+            },
+          );
+          return;
+        }
         if (req.url.startsWith('/sdk/')) {
           const path = req.url.slice(5);
           if (!/^[a-z-]+\.js$/.test(path)) throw Error('path');
@@ -252,6 +285,14 @@ test(
       ]);
       assert.deepEqual(errors, []);
       await page.evaluate(() => controller.dispose());
+      await page.goto(url + '/preview');
+      const sandbox = page.frameLocator('iframe');
+      await sandbox
+        .getByRole('textbox', { name: 'Title' })
+        .fill('Preview item');
+      await sandbox.getByRole('button', { name: 'Add', exact: true }).click();
+      await sandbox.locator('li').filter({ hasText: 'Preview item' }).waitFor();
+      assert.deepEqual(errors, []);
       console.log(
         JSON.stringify({
           result: 'passed',
