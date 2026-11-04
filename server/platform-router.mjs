@@ -94,11 +94,12 @@ export function platformRouter(platform,{send,body}){return async(req,res,url,pr
  if(adapterMatch&&method==='PUT'){platform.owner(principal);const input=await body(req);if(typeof input.enabled!=='boolean')error(400,'Choose whether to enable the adapter');return send(res,200,await activateAdapter(platform,adapterMatch[1],input.enabled));}
  const adapterRun=path.match(/^\/adapter-runs\/([a-f0-9]{32})\/poll$/);
  if(adapterRun&&method==='POST'){platform.owner(principal);return send(res,200,await pollAdapter(platform,adapterRun[1]));}
- if(path==='/file-defaults'){platform.owner(principal);if(method==='GET')return send(res,200,fileDefaultSettings(platform));if(method==='PUT')return send(res,200,{defaults:await setFileDefault(platform,await body(req))});}
- if(path==='/file-defaults/reconcile'&&method==='POST'){platform.owner(principal);return send(res,200,await reconcileFileDefaults(platform));}
- if(path==='/file-defaults/resolve'&&method==='POST'){platform.owner(principal);return send(res,200,await resolveFileDefault(platform,(await body(req)).fileId));}
- if(path==='/file-defaults/dismiss'&&method==='POST'){platform.owner(principal);return send(res,200,await dismissFileDefault(platform,await body(req)));}
- if(path.startsWith('/file-defaults/')&&method==='DELETE'){platform.owner(principal);return send(res,200,{defaults:await setFileDefault(platform,{type:decodeURIComponent(path.slice('/file-defaults/'.length)),appId:null})});}
+ const defaultsAction=path.startsWith('/preview-defaults')?'preview':'open',defaultsPath=defaultsAction==='preview'?'/preview-defaults':'/file-defaults';
+ if(path===defaultsPath){platform.owner(principal);if(method==='GET')return send(res,200,fileDefaultSettings(platform,defaultsAction));if(method==='PUT')return send(res,200,{defaults:await setFileDefault(platform,await body(req),defaultsAction)});}
+ if(path===defaultsPath+'/reconcile'&&method==='POST'){platform.owner(principal);return send(res,200,await reconcileFileDefaults(platform,defaultsAction));}
+ if(path===defaultsPath+'/resolve'&&method==='POST'){platform.owner(principal);return send(res,200,await resolveFileDefault(platform,(await body(req)).fileId,defaultsAction));}
+ if(path===defaultsPath+'/dismiss'&&method==='POST'){platform.owner(principal);return send(res,200,await dismissFileDefault(platform,await body(req),defaultsAction));}
+ if(path.startsWith(defaultsPath+'/')&&method==='DELETE'){platform.owner(principal);return send(res,200,{defaults:await setFileDefault(platform,{type:decodeURIComponent(path.slice(defaultsPath.length+1)),appId:null},defaultsAction)});}
  if(path==='/trash'&&method==='GET'){platform.owner(principal);return send(res,200,platform.world.all().filter(o=>o.archived&&['note','image','task','code','space','app','view','link','audio','video','file'].includes(o.kind)).map(o=>platform.world.publicObject(o)));}
  if(path==='/files/upload'&&method==='POST')return send(res,201,await uploadBinary(platform,req,url,principal));
  if(path==='/files'&&method==='GET')return send(res,200,platform.world.publicAll().filter(desktopFile));

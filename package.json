@@ -58,6 +58,7 @@
     "./workflows": "./sdk/src/workflows.js",
     "./tables": "./sdk/src/tables.js",
     "./file-icons": "./sdk/src/file-icons.js",
-    "./object-drag": "./sdk/src/object-drag.js"
+    "./object-drag": "./sdk/src/object-drag.js",
+    "./file-preview": "./sdk/src/file-preview.js"
   }
 }

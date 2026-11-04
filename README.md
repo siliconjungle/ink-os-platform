@@ -211,3 +211,13 @@ Ink applications use bounded resident JavaScript/native execution and recover
 from durable action journals. World appends ordinary writes and checkpoints
 periodically. See [resident execution and recovery](docs/resident-execution.md)
 for retry identities, backup requirements, limits, and validation.
+
+### Quick preview and selection commands
+
+Space invokes `selection.preview` when focus is in a selectable item surface. Enter opens the selection. Typing, buttons, media controls and other app shortcuts retain their usual behavior. The shell owns the temporary preview, Escape/Space dismissal, arrow-key browsing, and focus restoration; previews do not enter the dock or shared window layout. Finder, desktop items and command query results use this shared action.
+
+Apps opt in with `desktop.preview: {"fileTypes": ["image/*", ".png"]}` independently of `desktop.fileTypes`. In preview mode the isolated app receives `route.mode === "preview"` and a `mode=preview` URL parameter. Start a dedicated reader instead of the editor. The host exposes read-only document/file operations in this mode. `@ink-os/platform/file-preview` exports `startPreview({render})` for media/text readers or custom renderers; return a cleanup callback from `render`. Renderers must stop media and subscriptions when dismissed. Unknown formats retain a metadata view.
+
+Apps register selectable scopes with `client.selection.set(ids, {root: element, items: orderedVisibleIds})` and may invoke `client.desktop.preview(ids, {items})`. A single selection browses the supplied item order; multiple selections browse the selected subset. `Open with` and `Preview with` have independent persisted type defaults in File → Default apps and in the preview provider chooser. The owner API exposes `/api/v1/preview-defaults` with the same GET/PUT, reconcile, resolve, dismiss and DELETE operations as file defaults. CLI users can pass `--action preview` to `files defaults` and `files default`; explicit Open with choices are preserved.
+
+Desktop arrow keys navigate icon geometry rather than catalog order, stop at edges, and keep reserved modified shortcuts available. Shift-arrow extends the selection and retracing the path shrinks it. When Quick Look starts on the desktop, all four arrows move that same desktop selection; closing the preview returns focus to the current item. Previews from list scopes use their supplied item order.

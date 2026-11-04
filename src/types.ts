@@ -12,5 +12,5 @@ export interface StorageState { r2?:{managed:boolean;bucket:string};local: boole
 export interface Operation { type: string; target: string; title: string; body: string; tags: string[]; objectIds: string[]; layout: string }
 export interface AssistantResponse { message: string; operations: Operation[]; suggestedSearch: string }
 export interface Job { id: string; status: string; message: string; result?: AssistantResponse; error?: string }
-export type Route = { app: string; id?: string };
+export type Route = { app: string; id?: string; mode?: 'preview' };
 export type Layout = 'gallery' | 'table' | 'board';
