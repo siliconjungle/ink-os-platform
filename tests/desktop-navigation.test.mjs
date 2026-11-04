@@ -42,3 +42,12 @@ test('invalid rectangles are ignored and exact ties are stable across catalog or
  assert.equal(desktopNeighbor(icons,'start','ArrowRight'),'a');
  assert.equal(desktopNeighbor([...icons].reverse(),'start','ArrowRight'),'a');
 });
+
+test('slightly misaligned columns and rows do not turn edge keys into long sideways jumps',()=>{
+ const column=new Map([['top',box(20,20)],['bottom',box(15,600)]]);
+ assert.equal(desktopNeighbor(column,'top','ArrowLeft'),'top');
+ assert.equal(desktopNeighbor(column,'top','ArrowDown'),'bottom');
+ const row=new Map([['left',box(20,20)],['right',box(600,15)]]);
+ assert.equal(desktopNeighbor(row,'left','ArrowUp'),'left');
+ assert.equal(desktopNeighbor(row,'left','ArrowRight'),'right');
+});
