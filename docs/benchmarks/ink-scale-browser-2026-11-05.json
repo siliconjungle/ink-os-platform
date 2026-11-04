@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-11-04T21:55:31.853Z",
+  "host": {
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v22.23.4",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 2
+  },
+  "scope": "Production host and built desktop in headless Chromium; examples/tables-system with a bulk seed; one in ten rows open. Edit-to-screen is the time from just before the commit request until the new title appears in each window (mutation observer, host clock); physical paint is not measured. Medians of --edits edits, one at a time.",
+  "workload": {
+    "rows": 100000,
+    "openRows": 10000,
+    "edits": 9
+  },
+  "compilerSha256": "bae346cddddfd5c81ab8c0a19d4c2c49a35a40ea4f0880494f66126fda239e3b",
+  "note": "After: filtered-views with the rebuilt browser compiler",
+  "runs": [
+    {
+      "plan": false,
+      "seedMs": 4051,
+      "openMs": 1172,
+      "writeMs": 9.8,
+      "editToScreenMs": {
+        "tables": {
+          "median": 38,
+          "max": 50,
+          "samples": [
+            39,
+            40,
+            50,
+            37,
+            37,
+            34,
+            46,
+            29,
+            38
+          ]
+        },
+        "dashboard": {
+          "median": 31,
+          "max": 41,
+          "samples": [
+            32,
+            31,
+            41,
+            32,
+            30,
+            24,
+            41,
+            23,
+            24
+          ]
+        }
+      }
+    },
+    {
+      "plan": true,
+      "seedMs": 4017,
+      "openMs": 2057,
+      "writeMs": 9.4,
+      "editToScreenMs": {
+        "tables": {
+          "median": 36,
+          "max": 88,
+          "samples": [
+            44,
+            38,
+            32,
+            32,
+            37,
+            34,
+            36,
+            88,
+            26
+          ]
+        },
+        "dashboard": {
+          "median": 46,
+          "max": 100,
+          "samples": [
+            82,
+            48,
+            40,
+            38,
+            44,
+            46,
+            47,
+            100,
+            45
+          ]
+        }
+      }
+    }
+  ]
+}

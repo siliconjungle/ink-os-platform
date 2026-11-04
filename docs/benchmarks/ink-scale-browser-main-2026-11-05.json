@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-11-04T21:54:58.458Z",
+  "host": {
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v22.23.4",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 2
+  },
+  "scope": "Production host and built desktop in headless Chromium; examples/tables-system with a bulk seed; one in ten rows open. Edit-to-screen is the time from just before the commit request until the new title appears in each window (mutation observer, host clock); physical paint is not measured. Medians of --edits edits, one at a time.",
+  "workload": {
+    "rows": 100000,
+    "openRows": 10000,
+    "edits": 9
+  },
+  "compilerSha256": "b5045e1175c12a9c27384e458b704351fb8ec1674f4fbf8b15aa95ae516432a3",
+  "note": "Before: ink-os-platform main 95593b1",
+  "runs": [
+    {
+      "plan": false,
+      "seedMs": 5651,
+      "openMs": 1293,
+      "writeMs": 9.6,
+      "editToScreenMs": {
+        "tables": {
+          "median": 75,
+          "max": 81,
+          "samples": [
+            66,
+            75,
+            81,
+            65,
+            80,
+            75,
+            76,
+            69,
+            68
+          ]
+        },
+        "dashboard": {
+          "median": 66,
+          "max": 75,
+          "samples": [
+            75,
+            68,
+            66,
+            58,
+            70,
+            64,
+            68,
+            59,
+            60
+          ]
+        }
+      }
+    },
+    {
+      "plan": true,
+      "seedMs": 5773,
+      "openMs": 1992,
+      "writeMs": 9.8,
+      "editToScreenMs": {
+        "tables": {
+          "median": 77,
+          "max": 140,
+          "samples": [
+            86,
+            63,
+            77,
+            140,
+            96,
+            62,
+            74,
+            95,
+            59
+          ]
+        },
+        "dashboard": {
+          "median": 161,
+          "max": 246,
+          "samples": [
+            161,
+            180,
+            148,
+            246,
+            179,
+            131,
+            149,
+            167,
+            144
+          ]
+        }
+      }
+    }
+  ]
+}

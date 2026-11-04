@@ -83,7 +83,7 @@ Typed incremental Ink interfaces support stable widget IDs, checked event handle
 
 [Connected system builds](docs/system-planning.md) compile app units independently, bind checked module summaries and typed query links, and reuse unchanged checked releases. The [Tables/dashboard example](examples/tables-system) demonstrates maintained filtered aggregates, paginated reads, shared query snapshots, incremental views and JavaScript/native recovery histories.
 
-[Cross-app plans](docs/cross-app-plans.md) refresh another app's reads only when a commit writes a state root they read, run a consumer's pure filter, page and aggregate next to a read-only copy of the provider under a checked footprint rule, and run Ink tasks whose model, HTTP and app effects go through the effect system's capability checks.
+[Cross-app plans](docs/cross-app-plans.md) refresh another app's reads only when a commit changes a [state path](docs/state-paths.md) they read (a root, a maintained filtered view or a keyed row), run a consumer's pure filter, page and aggregate next to a read-only copy of the provider under a checked footprint rule, and run Ink tasks whose model, HTTP and app effects go through the effect system's capability checks.
 
 
 

@@ -70,37 +70,92 @@ function replay(records) {
   }
 }
 const U64 = (1n << 64n) - 1n;
+const resolve = (type, types) => (type.kind === 'ref' ? resolve(types[type.name], types) : type);
+// Consumer function results, reused row by row. A pure function's result
+// depends only on the parameter fields admission found it reads
+// (paramFields), so rows that agree on them share one call. Each memo holds
+// at most what the last few evaluations needed.
+const memos = new Map(),
+  MEMO_LIMIT = 262144;
+function fieldKey(value, type) {
+  switch (type.kind) {
+    case 'u32': case 'i32': case 'u64': case 'i64': case 'bool': case 'unit':
+      return String(value);
+    case 'string': case 'id': case 'enum':
+      return JSON.stringify(value);
+    default:
+      return stringifyExactJSON(wireValue(value, type, named));
+  }
+}
+function memoized(c, consumer, name, rowType) {
+  const fn = c.functions[name],
+    record = rowType.kind === 'record' ? rowType : null,
+    fields = record && fn.fields ? fn.fields.map((f) => [f, record.fields.find((x) => x.name === f)?.type]) : null,
+    key =
+      fields && fields.every(([, type]) => type)
+        ? fields.length === 1
+          ? (row) => fieldKey(row[fields[0][0]], resolve(fields[0][1], named))
+          : (row) => fields.map(([f, type]) => fieldKey(row[f], resolve(type, named))).join('\u0001')
+        : (row) => stringifyExactJSON(wireValue(row, rowType, named)),
+    id = consumer + '\0' + name;
+  let memo = memos.get(id);
+  if (!memo) memos.set(id, (memo = new Map()));
+  if (memo.size > MEMO_LIMIT) memo.clear();
+  return (row) => {
+    const k = key(row);
+    let result = memo.get(k);
+    if (result === undefined) {
+      result = c.module.callOwned(name, [native(wireValue(row, rowType, named), fn.param, c.named)]);
+      memo.set(k, result);
+      counts.calls++;
+    } else counts.reused++;
+    return result;
+  };
+}
+const counts = { calls: 0, reused: 0 };
 function evaluate({ entry, input, plan, consumer }) {
   const started = performance.now(),
     { selected, output } = invoke(entry, input);
   if (output.committed) throw Error('A link plan read committed state.');
-  const data = wireValue(output.result, selected.result, named);
-  let rows = data.rows,
-    total = data.total;
+  // Rows stay native; only the fields a consumer function reads, and the
+  // selected page, are converted.
+  const dataType = resolve(selected.result, named),
+    field = (name) => dataType.fields.find((f) => f.name === name).type,
+    rowType = resolve(field('rows').element, named),
+    value = output.result,
+    all = value.rows;
   const c = consumer && consumers.get(consumer);
   if ((plan.where || plan.aggregate?.value) && !c) throw Error('Consumer code is not loaded.');
-  const call = (name, row) => c.module.callOwned(name, [native(row, c.functions[name].param, c.named)]);
-  if (plan.where) rows = rows.filter((row) => call(plan.where, row) === true);
+  const before = { ...counts };
+  let rows = all,
+    total = wireValue(value.total, field('total'), named);
+  if (plan.where) {
+    const test = memoized(c, consumer, plan.where, rowType);
+    rows = all.filter((row) => test(row) === true);
+  }
   if (plan.aggregate) {
     const op = plan.aggregate.op;
     if (op === 'count') total = { Some: BigInt(rows.length) };
     else {
-      let value = null;
+      const of = memoized(c, consumer, plan.aggregate.value, rowType);
+      let result = null;
       for (const row of rows) {
-        const x = BigInt(call(plan.aggregate.value, row));
-        value = value === null ? x : op === 'sum' ? value + x : op === 'min' ? (x < value ? x : value) : x > value ? x : value;
-        if (value > U64) throw Object.assign(Error('Link aggregate sum overflows u64'), { status: 422 });
+        const x = BigInt(of(row));
+        result = result === null ? x : op === 'sum' ? result + x : op === 'min' ? (x < result ? x : result) : x > result ? x : result;
+        if (result > U64) throw Object.assign(Error('Link aggregate sum overflows u64'), { status: 422 });
       }
-      total = op === 'sum' ? { Some: value ?? 0n } : value === null ? { None: null } : { Some: value };
+      total = op === 'sum' ? { Some: result ?? 0n } : result === null ? { None: null } : { Some: result };
     }
   } else if (plan.where) total = { Some: BigInt(rows.length) };
   const matched = rows.length,
-    offset = plan.offset ?? 0;
-  rows = rows.slice(offset, plan.limit === undefined ? undefined : offset + plan.limit);
+    offset = plan.offset ?? 0,
+    page = rows.slice(offset, plan.limit === undefined ? undefined : offset + plan.limit).map((row) => wireValue(row, rowType, named));
   return {
-    wire: stringifyExactJSON({ rows, total, version: data.version }),
-    scanned: data.rows.length,
+    wire: stringifyExactJSON({ rows: page, total, version: wireValue(value.version, field('version'), named) }),
+    scanned: all.length,
     matched,
+    calls: counts.calls - before.calls,
+    reused: counts.reused - before.reused,
     ms: performance.now() - started,
   };
 }

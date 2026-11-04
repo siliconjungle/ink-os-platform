@@ -24,13 +24,16 @@ manifest's touched roots, which over-approximate.
 
 ## Precise invalidation
 
-- **Commit hints.** Each commit's hint lists the change's IR write roots.
+- **Commit hints.** Each commit's hint lists the [state paths](state-paths.md)
+  it changed, as the runtime reports them: roots, filtered views and keyed
+  rows. Without a report (an older compiler, a native artifact, a replayed
+  receipt) it lists every path of the change's IR write roots.
 - **Root versions.** `RootVersions` keeps per-root versions of each tracked
   provider. A hinted commit advances only its roots. Any unexplained state
   change advances every root: a restore, a migration, a replicated commit,
   or a missed event.
 - **Currency.** A cross-app snapshot, retained or not, is current until a
-  commit writes a root its exported query reads. Its `stateRevision` then
+  commit changes a state path its exported query reads. Its `stateRevision` then
   names the commit it was computed at; the value is unchanged since.
 - **Identical results.** A recomputed result with identical exact bytes keeps
   its snapshot identity. Consumers do not recompute their views, and
@@ -40,10 +43,14 @@ manifest's touched roots, which over-approximate.
   became stale. Desktop frames refresh for another app's commit only when
   they are listed. Before, every frame holding `apps.invoke` refreshed on
   every commit of every app. Own-app commits still notify the app's own
-  frames.
+  frames. `scripts/verify-ink-reads-desktop.mjs` checks this in the real
+  desktop: with two copies of the tables system open, a commit to one
+  provider reaches only its own dashboard's frame
+  ([recorded run](benchmarks/ink-reads-desktop-2026-11-05.json)).
 
-Granularity is the state root. Rows and fields within a table are not
-tracked.
+Granularity is the [state path](state-paths.md): a whole root, the rows a
+filtered view admits, or the row a query parameter names. Fields within a row
+are not tracked.
 
 ## Link plans
 
@@ -95,10 +102,12 @@ Plans run in a **link worker** (`server/ink-link-worker.mjs`) that holds a
 read-only copy of the provider release's state.
 
 - **Loading.** The copy is restored from the provider's journal.
-- **Following.** It replays each committed record, the same deterministic
-  replay recovery uses. When a read arrives before a commit's announcement,
-  the copy catches up from the journal tail instead. It follows compactions
-  onto a new base, and any mismatch reloads it.
+- **Following.** It replays committed records, the same deterministic replay
+  recovery uses. Commits that arrive while the copy is busy are replayed
+  together, and the commit's own journal header says where the copy stands.
+  When a read arrives before a commit's announcement, the copy catches up
+  from the journal tail instead. It follows compactions onto a new base, and
+  any mismatch reloads it.
 - **No provider authority.** The worker has no World, storage, host-binding
   or effect access. Consumer modules are loaded only to call the admitted
   pure functions.
@@ -108,8 +117,14 @@ read-only copy of the provider release's state.
 - **Sharing.** One result per binding and plan code serves every consumer
   whose plan code is identical. The code identity is its call closure and
   types.
+- **Rows stay native.** Exported rows are not converted wholesale: consumer
+  functions see only the fields they read, and only the selected page is
+  converted to exact JSON.
+- **Row-level reuse.** A consumer function's result is reused for every row
+  that agrees on the parameter fields it reads (`paramFields`, from the
+  consumer's checked core). Purity, proved at admission, makes this exact.
 - **Freshness.** Recently used results are recomputed after a commit that
-  writes a root the provider query reads, so they are current before the
+  changes a path the provider query reads, so they are current before the
   next read.
 - **Delivery.** Plan snapshots carry the same fields as retained queries:
   `id`, `sequence`, `stateRevision`, `versionWire`, `delta`.
@@ -121,10 +136,11 @@ read-only copy of the provider release's state.
   either app's state. They are dropped when their consumers or provider are
   deleted.
 
-Aggregates are recomputed on each relevant commit; they are not maintained
-row by row. The provider query still scans what it scans, and indexed
-placement is separate work. Running two apps in one process and fusing writes
-across apps are deliberately not done.
+Aggregates are still summed over the matching rows on each relevant commit,
+from reused per-row results. The provider query reads maintained filtered
+views where its filters are closed ([state paths](state-paths.md)); it still
+builds every row it returns. Running two apps in one process and fusing
+writes across apps are deliberately not done.
 
 ## Ink tasks
 
@@ -160,17 +176,40 @@ with the runtime's vendored scheduler:
 - **Concurrency.** Independent effects overlap, but the result is that of
   sequential execution.
 - **State calls.** Only the running task's generated queries and named steps
-  are callable. Changes carry stable request identities.
+  are callable. Changes and app writes carry request identities keyed by
+  their step.
 - **Model and app replies.** These must pass the generated accept query, or
   the step takes its authored fallback.
 - **HTTP, clock and random.** Driver failures are typed `EffectError`
   values.
+- **Durable runs.** Each run keeps a journal in the host namespace
+  `ink-tasks` (`run:<runId>`). Every effect reply and step result is written
+  there before the task uses it. A host that starts while runs are still
+  `running` resumes them: kept replies and results are reused, and only
+  unfinished steps run again. A change or app write that committed before
+  its result was kept is not applied twice while the target still holds its
+  receipt. A run repeated with the same `requestId` returns the finished
+  result, and the same identity with different input is refused.
 - **Traces.** Each run's trace is stored in World as `ink-task-run`, bound
-  to its release. It replays offline without effects: `ink replay-task
-  SOURCE TRACE --restore SNAPSHOT`.
+  to its release. It replays offline without effects (`ink replay-task
+  SOURCE TRACE --restore SNAPSHOT`) or in the platform:
+  `POST /api/v1/apps/APP/ink/task-runs/RUN/replay` (`client.apps.ink.replayTask`)
+  answers every effect from the trace and runs the queries and changes on a
+  scratch copy of the state the run started from (kept for states up to
+  1 MiB). Live state is not touched, and the result and outcomes must match
+  exactly. They do when no other commit interleaved with the run.
+
+- **Native artifacts.** When an app's native (Rust) artifact is ready, the
+  task's queries, changes and generated step queries run on it, like any
+  other call. A run's trace replays the same on JavaScript state
+  (`tests/ink-tasks.test.mjs`, under `INK_TEST_NATIVE=1`). The Ink
+  distribution also has the scheduler itself in Rust for native hosts, and
+  runs tasks on Wasm-compiled state (ink-lang `docs/effect-tasks.md`).
 
 Queries and changes a task calls must be root-module exports. A task runs
-within its contract's deadline (at most 30 s). It does not survive a restart.
+within its contract's deadline (at most 30 s), counted again when it
+resumes. Model and HTTP reads that were in flight when the host stopped are
+sent again.
 
 ## Measurements
 
@@ -201,7 +240,9 @@ effects of these changes are therefore:
 - far fewer bytes cross the link;
 - consumers can filter and aggregate at all.
 
-The query itself is not faster.
+The query itself was not faster in this run. [State paths](state-paths.md)
+records the later work that made it so: maintained filtered views, row-level
+reuse and faster snapshots.
 
 ## Validation
 
@@ -215,9 +256,13 @@ The query itself is not faster.
   - plans checked against their definition;
   - sharing between two consumers;
   - follow-by-replay with eager refresh;
+  - reads that depend on filtered views and keyed rows stay current through
+    commits that change neither (skipped when the compiler predates them);
   - undeclared plans refused;
   - impure or mistyped plans rejected at system build.
 - `tests/ink-tasks.test.mjs`:
+  - an interrupted run resuming on a new host without repeating its kept
+    effects, idempotent repeats and in-platform replay on scratch state;
   - model, HTTP and cross-app effects against local stand-ins;
   - overlapping model calls;
   - typed fallbacks and typed HTTP denial;

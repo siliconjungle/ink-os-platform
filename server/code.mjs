@@ -16,6 +16,7 @@ import {
 } from './ink-compiler.mjs';
 import { inkEntries } from '../shared/ink-app.mjs';
 import { inkFootprints, writeRoots } from './ink-footprints.mjs';
+import { expandRoots } from '../shared/ink-state-paths.mjs';
 import { stringifyExactJSON } from '../shared/exact-json.mjs';
 // Generated learn-hole entries (see server/ink-learned.mjs).
 const LEARNED_ENTRY = /^(__learn_get|__learn_set|__objective_[A-Za-z_][A-Za-z0-9_]*)$/;
@@ -437,6 +438,9 @@ export class Code {
             entry: selected.name,
             input: input.wire,
           });
+      // The paths a commit changed travel with this request only, never in its receipt.
+      const changed = previous ? null : result.paths;
+      if (!previous) delete result.paths;
       if (result.committed && !previous) {
         const receipt = { id: requestId, hash: requestHash, reply: result },
           record = {
@@ -445,8 +449,9 @@ export class Code {
             wire: result.wire,
             receipt,
           };
-        // Readers re-run only when a commit writes a root they read (IR write roots).
-        const hintKey=namespace+'\0'+stateKey,hint={source:inkProgramKey(compiled.source),roots:writeRoots(await this.footprints(compiled),compiled,selected)};this.commitHints.set(hintKey,hint);let committed;
+        // Readers re-run only when a commit changes a state path they read: the
+        // runtime's report of rows, views and keys, else every path of the IR write roots.
+        const hintKey=namespace+'\0'+stateKey,hint={source:inkProgramKey(compiled.source),roots:changed||expandRoots(writeRoots(await this.footprints(compiled),compiled,selected),compiled.artifact.manifest.state)};this.commitHints.set(hintKey,hint);let committed;
         try{
         committed = await journal.commit(
           saved,
@@ -456,7 +461,7 @@ export class Code {
           () => scheduledEndpoint.request({ op: 'checkpoint' }),
         );
         }finally{this.commitHints.delete(hintKey);}
-        for(const listener of this.commitListeners)try{listener({namespace,stateKey,before:saved.revision,after:committed.revision,record:{entry:record.entry,input:record.input,wire:record.wire},source:hint.source,roots:hint.roots});}catch{}
+        for(const listener of this.commitListeners)try{listener({namespace,stateKey,before:saved.revision,after:committed.revision,header:committed.header,record:{entry:record.entry,input:record.input,wire:record.wire},source:hint.source,roots:hint.roots});}catch{}
         session.revision = committed.revision;
         // Only receipts are needed while the state is resident. Recovery reads
         // the immutable base and tail again after eviction or an external write.

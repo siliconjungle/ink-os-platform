@@ -1,15 +1,18 @@
 // Per-root versions of installed apps' Ink state, for precise cross-app reads.
 //
 // A read of another app's exported query is current while no commit has
-// written a state root that query reads. Commits announce the roots they may
-// write through the code service's commit hints (IR write roots, or every
-// touched root with an older compiler). Any change to an app's state that is
+// changed a state path that query reads (shared/ink-state-paths.mjs: roots,
+// filtered views and keyed rows). Commits announce the paths they changed
+// through the code service's commit hints: the runtime's own report, else
+// every path of the IR write roots (or of every touched root with an older
+// compiler). Any change to an app's state that is
 // not explained by a hint, such as a restore, a migration or a replicated
 // commit from another device, advances every root of that app. Versions only
 // grow, so a stale read is never mistaken for a current one.
 import { stateObjectId } from './app-data.mjs';
 
-const STATE = 'ink-app:state';
+const STATE = 'ink-app:state',
+  PATH_LIMIT = 4096;
 
 export class RootVersions {
   constructor(platform) {
@@ -58,6 +61,12 @@ export class RootVersions {
       return { appId, roots: null };
     }
     for (const root of hint.roots) entry.roots.set(root, version);
+    // Row paths accumulate with distinct keys: past the bound, forget them all
+    // and advance every path once instead.
+    if (entry.roots.size > PATH_LIMIT) {
+      entry.roots.clear();
+      entry.all = version;
+    }
     return { appId, roots: [...hint.roots] };
   }
   /** Current versions of an app's roots; an unexplained change advances them all. */

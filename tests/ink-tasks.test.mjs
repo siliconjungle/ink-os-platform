@@ -154,3 +154,217 @@ test('task contracts bind every effect, order writes, match driver types and dec
   await reject({ source: TASK.replace('effect fetch(request:HttpEffectRequest)', 'effect fetch(request:ClockEffectRequest)').replace('fetch(HttpEffectRequest{method:"GET",path:path,body:None,bytes:None,expected:None})', 'fetch(ClockEffectRequest{delayMs:0})') }, /http effect request/);
   await reject({ capabilities: ['effects.http', 'apps.invoke'] }, /effects.model/);
 });
+
+test('an interrupted task run resumes from its journal without repeating effects, and replays on scratch state', async (t) => {
+  let hang = true;
+  const hits = { tickets: 0, classify: 0, summarise: 0 },
+    hung = [];
+  const server = createServer(async (req, res) => {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    if (req.url === '/tickets/1') {
+      hits.tickets++;
+      return res.end('the app crashes on start');
+    }
+    const prompt = JSON.parse(body).messages[0].content,
+      kind = prompt.includes('classify(') ? 'classify' : 'summarise';
+    hits[kind]++;
+    // The first summarise never answers: the host "stops" while it is open.
+    if (kind === 'summarise' && hang) return hung.push(res);
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ content: [{ type: 'text', text: kind === 'classify' ? '"Label.Bug"' : '"crash on start"' }] }));
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => {
+    for (const res of hung) res.destroy();
+    server.close();
+  });
+  const origin = 'http://127.0.0.1:' + server.address().port,
+    { platform, directory } = await fixture(t, {
+      allowHttp: true,
+      policy: {
+        version: 1,
+        resources: {
+          assistant: { kind: 'model', namespaces: ['*'], origin, model: 'test-model', maxTokens: 256 },
+          tickets: { kind: 'http', namespaces: ['*'], origin, methods: ['GET'], pathPrefix: '/tickets/' },
+        },
+      },
+    });
+  // State goes through collaboration documents, as on a production host.
+  const { Collaboration } = await import('../server/collaboration.mjs');
+  await new Collaboration({ directory, world: platform.world }).index();
+  const log = await install(platform, await buildInkApp({ slug: 'log', language: 'ink', exports: ['log', 'last'] }, [file('main.ink', LOG)])),
+    triage = await install(platform, await taskApp({ app: log.app, release: log.release })),
+    total = async () => (await runInstalledInk(platform, triage.app.id, { entry: 'total', input: '[]' }, owner)).valueWire,
+    last = async () => (await runInstalledInk(platform, log.app.id, { entry: 'last', input: '[]' }, owner)).valueWire;
+
+  // First host: the run keeps fetch and classify, then stops mid-summarise.
+  const first = new InkTasks({ platform }),
+    stop = new AbortController(),
+    running = first.run(triage.app.id, { task: 'triage', input: '["/tickets/1"]', requestId: 'durable' }, owner, { signal: stop.signal }).catch((e) => e);
+  const journal = async () => {
+    const keys = await platform.code.stateKeys('os', 'ink-task:run:');
+    const key = keys.find((k) => /^ink-task:run:[a-f0-9]{32}$/.test(k));
+    return key && (await platform.code.readState('os', key)).value;
+  };
+  for (let i = 0; i < 200 && !(hung.length && JSON.parse((await journal())?.records || '[]').length >= 2); i++) await new Promise((r) => setTimeout(r, 25));
+  const kept = JSON.parse((await journal()).records);
+  assert.deepEqual(kept.map((r) => r.effect), ['fetch', 'classify']);
+  stop.abort();
+  assert.match(String((await running).message), /abort/i);
+  assert.equal((await journal()).status, 'running');
+  assert.equal(await total(), '0');
+
+  // Second host: the run continues where it stopped.
+  hang = false;
+  const second = new InkTasks({ platform }),
+    [resumed] = await second.resume();
+  assert.equal(resumed.valueWire, '{"Ok":"Label.Bug"}');
+  assert.equal(second.resumed, 1);
+  assert.deepEqual(hits, { tickets: 1, classify: 1, summarise: 2 }, 'only the unfinished effect runs again');
+  assert.equal(await total(), '1');
+  assert.equal(await last(), '"crash on start"');
+  assert.deepEqual(
+    parseExactJSON(resumed.trace).effects.map((e) => [e.effect, e.outcome]),
+    [['fetch', 'accepted'], ['classify', 'accepted'], ['summarise', 'accepted'], ['notify', 'accepted']],
+  );
+  const done = await journal();
+  assert.equal(done.status, 'done');
+  assert.equal(done.records, '[]');
+
+  // The same request identity returns the finished run without running it.
+  const again = await second.run(triage.app.id, { task: 'triage', input: '["/tickets/1"]', requestId: 'durable' }, owner);
+  assert.equal(again.traceId, resumed.traceId);
+  assert.deepEqual(hits, { tickets: 1, classify: 1, summarise: 2 });
+  await assert.rejects(second.run(triage.app.id, { task: 'triage', input: '["/tickets/2"]', requestId: 'durable' }, owner), { status: 409 });
+
+  // In-platform replay: effects come from the trace and state changes land on
+  // a scratch copy of the state the run started from.
+  const replay = await second.replay(triage.app.id, resumed.runId, owner);
+  assert.equal(replay.matches, true);
+  assert.equal(replay.valueWire, resumed.valueWire);
+  assert.deepEqual(hits, { tickets: 1, classify: 1, summarise: 2 }, 'replay performs no effect');
+  assert.equal(await total(), '1', 'replay leaves live state alone');
+  assert.equal(await last(), '"crash on start"');
+  assert.deepEqual(
+    (await platform.code.stateKeys('os', 'ink-task:replay:')),
+    [],
+    'scratch state is removed',
+  );
+  await assert.rejects(second.replay(log.app.id, resumed.runId, owner), { status: 404 });
+});
+
+test(
+  'task steps run on the native artifact and its traces replay identically on JavaScript state',
+  { skip: process.env.INK_TEST_NATIVE !== '1', timeout: 600000 },
+  async (t) => {
+    const { NativeInk } = await import('../server/native-ink.mjs'),
+      { NativeJobs } = await import('../server/native-jobs.mjs'),
+      { inkExecutionSource } = await import('../server/ink-apps.mjs'),
+      { join } = await import('node:path');
+    const server = createServer(async (req, res) => {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      if (req.url === '/tickets/1') return res.end('the app crashes on start');
+      const prompt = JSON.parse(body).messages[0].content;
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ content: [{ type: 'text', text: prompt.includes('classify(') ? '"Label.Bug"' : '"crash on start"' }] }));
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    t.after(() => server.close());
+    const origin = 'http://127.0.0.1:' + server.address().port,
+      { platform, directory } = await fixture(t, {
+        allowHttp: true,
+        policy: {
+          version: 1,
+          resources: {
+            assistant: { kind: 'model', namespaces: ['*'], origin, model: 'test-model', maxTokens: 256 },
+            tickets: { kind: 'http', namespaces: ['*'], origin, methods: ['GET'], pathPrefix: '/tickets/' },
+          },
+        },
+      });
+    const log = await install(platform, await buildInkApp({ slug: 'log', language: 'ink', exports: ['log', 'last'] }, [file('main.ink', LOG)])),
+      bundle = await taskApp({ app: log.app, release: log.release }),
+      triage = await install(platform, bundle);
+    const jobs = await new NativeJobs(directory, {
+      native: new NativeInk(join(directory, 'native'), { offline: process.env.INK_NATIVE_OFFLINE === '1' }),
+      source: () => inkExecutionSource(bundle.ink, bundle.files),
+    }).open();
+    t.after(() => jobs.close());
+    const job = await jobs.enqueue(triage.app.id, triage.release.id);
+    await jobs.pump();
+    assert.equal(jobs.get(triage.app.id, job.id).status, 'succeeded', JSON.stringify(jobs.get(triage.app.id, job.id)));
+    platform.code.nativeJobs = jobs;
+    const backends = [],
+      run = platform.code.run.bind(platform.code);
+    platform.code.run = async (input) => {
+      const result = await run(input);
+      if (input.namespace === triage.app.id) backends.push(result.backend);
+      return result;
+    };
+    const tasks = new InkTasks({ platform }),
+      native = await tasks.run(triage.app.id, { task: 'triage', input: '["/tickets/1"]' }, owner);
+    assert.equal(native.valueWire, '{"Ok":"Label.Bug"}');
+    assert.ok(backends.length && backends.every((b) => b === 'native'), 'every step ran on the native artifact: ' + backends);
+    // The native run's trace replays on JavaScript state started from the
+    // same state, with every effect answered from the trace.
+    platform.code.nativeJobs = null;
+    const replay = await tasks.replay(triage.app.id, native.runId, owner);
+    assert.equal(replay.matches, true);
+    assert.equal(replay.valueWire, native.valueWire);
+  },
+);
+
+// A target entry that takes the caller identity first receives it from the
+// host; a task can neither name another caller nor declare that parameter.
+const AUDIT = `module audit;
+record Actor {appId:String,releaseId:String,}
+state Last:String="";
+change write(actor:Actor,v:String)->Result<u64,String> reads(Last) writes(Last){Last=string_concat(actor.appId,string_concat(":",v));return Ok(1);}
+query last()->String reads(Last){return Last;}`;
+const CALLER = (effect, call) => `module app;
+record Actor {appId:String,releaseId:String,}
+state N:u64=0;
+query total()->u64 reads(N){return N;}
+${effect}
+task go(id:String) -> Result<u64,String> {
+  let sent = ${call};
+  return sent;
+}
+`;
+test('task app effects carry the host-filled caller identity and cannot forge another', async (t) => {
+  const { platform } = await fixture(t, { policy: { version: 1, resources: {} } }),
+    audit = await install(platform, await buildInkApp({ slug: 'audit', language: 'ink', exports: ['write', 'last'] }, [file('main.ink', AUDIT)])),
+    tasks = new InkTasks({ platform }),
+    last = async () => (await runInstalledInk(platform, audit.app.id, { entry: 'last', input: '[]' }, owner)).valueWire;
+  const caller = async (effect, call) =>
+    install(
+      platform,
+      await buildInkApp(
+        {
+          slug: 'caller-' + crypto.randomUUID().slice(0, 8),
+          language: 'ink',
+          exports: ['total'],
+          capabilities: ['apps.invoke'],
+          tasks: {
+            version: 1,
+            entries: ['go'],
+            effects: [{ name: 'poke', kind: 'app', resource: { appId: audit.app.id, releaseId: audit.release.id, entry: 'write' }, effect: 'write', deadlineMs: 5000 }],
+          },
+        },
+        [file('main.ink', CALLER(effect, call))],
+      ),
+    );
+  const honest = await caller('ordered effect poke(v:String) -> Result<u64,String>;', 'poke(id)'),
+    victim = 'f'.repeat(32);
+  await tasks.run(honest.app.id, { task: 'go', input: JSON.stringify([victim]) }, owner);
+  assert.equal(await last(), JSON.stringify(honest.app.id + ':' + victim), 'the target sees the real caller');
+  const forger = await caller(
+    'ordered effect poke(actor:Actor,v:String) -> Result<u64,String>;',
+    'poke(Actor{appId:id,releaseId:""},"forged")',
+  );
+  await assert.rejects(tasks.run(forger.app.id, { task: 'go', input: JSON.stringify([victim]) }, owner), (e) => e.status === 422 && /types differ/.test(e.message));
+  assert.equal(await last(), JSON.stringify(honest.app.id + ':' + victim), 'nothing was written as another app');
+});
