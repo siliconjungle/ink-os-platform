@@ -166,19 +166,20 @@ export class Desktop{
   const point=this.camera!.worldPoint(x,y);for(const[i,object]of objects.entries())this.placeObject(object!,{x:point.x-88*start.grabX+i%4*20,y:point.y-80*start.grabY+Math.floor(i/4)*20});
  }
  paintWorkspaces(){const c=this.compositor,selected=this.overview?.isConnected?this.overviewPanel?.selected??c.workspace:c.workspace,wanted=new Set(c.workspaces.map(w=>w.id));for(const[id,node]of this.workspaceNodes)if(!wanted.has(id)){node.remove();this.workspaceNodes.delete(id);}for(const [i,space]of c.workspaces.entries()){let node=this.workspaceNodes.get(space.id);if(!node){node=el('button',{onclick:()=>this.overview?.isConnected?this.overviewPanel?.choose(space.id):c.switchWorkspace(space.id)},el('span'));this.workspaceNodes.set(space.id,node);}node.setAttribute('aria-label',space.name);node.title=space.name;node.setAttribute('aria-pressed',String(selected===space.id));if(this.workspaces.children[i]!==node)this.workspaces.insertBefore(node,this.workspaces.children[i]||this.addDesktop);}this.workspaces.append(this.addDesktop);const status=this.workspaces.querySelector('.workspace-gesture-status');if(status)status.textContent=c.workspaces.find(space=>space.id===selected)?.name||'Desktop';}
+ setOverviewOpen(open:boolean){this.shell.classList.toggle('overview-open',open);if(this.dock.parentElement)this.dock.parentElement.inert=open;}
  showOverview(){
   const c=this.compositor;c.workspaceTransition.finish();this.overviewMotion.finish();if(this.overview?.isConnected)return;
   const panel=new DesktopOverview(c,id=>this.world.get(id),()=>void this.hideOverview(),(id,key)=>void this.hideOverview(id,key),()=>this.paintWorkspaces());this.overviewPanel=panel;this.overview=panel.node;
-  void this.overviewMotion.run(this.shell,panel.cards.get(panel.selected)?.canvas,true,()=>{this.shell.append(panel.node);panel.node.tabIndex=-1;panel.node.focus({preventScroll:true});panel.reveal(panel.selected,'instant');},undefined,()=>this.overviewPanel?.cards.get(this.compositor.workspace)?.canvas);
+  void this.overviewMotion.run(this.shell,panel.cards.get(panel.selected)?.canvas,true,()=>{this.setOverviewOpen(true);this.shell.append(panel.node);panel.node.tabIndex=-1;panel.node.focus({preventScroll:true});panel.reveal(panel.selected,'instant');},undefined,()=>this.overviewPanel?.cards.get(this.compositor.workspace)?.canvas);
  }
  dismissOverview(){
-  this.overviewMotion.release();const panel=this.overviewPanel;if(!this.overview?.isConnected||!panel)return;
+  this.overviewMotion.release();this.setOverviewOpen(false);const panel=this.overviewPanel;if(!this.overview?.isConnected||!panel)return;
   this.overview=undefined;panel.destroy();panel.node.remove();void this.compositor.switchWorkspace(panel.selected,{animate:false});
  }
  hideOverview(workspace=this.overviewPanel?.selected??this.compositor.workspace,windowKey?:string){
   const c=this.compositor;c.workspaceTransition.finish();this.overviewMotion.finish();const panel=this.overviewPanel;if(!this.overview?.isConnected||!panel)return Promise.resolve();
   this.overview=undefined;
-  return this.overviewMotion.run(this.shell,panel.cards.get(workspace)?.canvas,false,()=>{panel.node.classList.add('is-closing');void c.switchWorkspace(workspace,{animate:false});if(windowKey)c.focus(windowKey,true);c.stage.focus({preventScroll:true});},()=>{panel.destroy();panel.node.remove();});
+  return this.overviewMotion.run(this.shell,panel.cards.get(workspace)?.canvas,false,()=>{this.setOverviewOpen(false);panel.node.classList.add('is-closing');void c.switchWorkspace(workspace,{animate:false});if(windowKey)c.focus(windowKey,true);c.stage.focus({preventScroll:true});},()=>{panel.destroy();panel.node.remove();});
  }
 
  shortcut(e:KeyboardEvent){if(this.commands.key(e))return;if(e.ctrlKey&&e.key==='ArrowUp'){e.preventDefault();this.showOverview();}if(e.key==='Escape')this.handleShortcut('escape');if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();this.handleShortcut('expand');}if(e.metaKey||e.ctrlKey){const key=e.key.toLowerCase();if(['k','n'].includes(key)){e.preventDefault();this.handleShortcut(key);}}if(e.altKey&&e.key==='Tab'){e.preventDefault();const windows=this.compositor.windows.filter(w=>w.workspace===this.compositor.workspace&&!w.minimized).sort((a,b)=>b.z-a.z);if(windows[1])this.compositor.focus(windows[1].key,true);}if(e.altKey&&e.key.toLowerCase()==='d'){e.preventDefault();this.compositor.showDesktop();}}
