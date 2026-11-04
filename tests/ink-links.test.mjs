@@ -1,29 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { systemFixture, owner } from './ink-system-fixture.mjs';
+import { systemFixture, owner, extendTables, planned } from './ink-system-fixture.mjs';
 import { inkFootprints } from '../server/ink-footprints.mjs';
-
-// Tables gains a root its exported dashboard query never reads, a change that
-// reads Rows but writes only that root, and a change that rewrites a row.
-const EXTRA = `
-state Notes:u64=0;
-change note(x:u64)->Result<Unit,String> reads(Rows,Notes) writes(Notes){Notes=x+sum(Rows.values().map(fn(row)=>row.amount));return Ok(());}
-change touch(row:Row)->Result<Unit,String> reads(Rows) writes(Rows){Rows.put(row.id,row);return Ok(());}
-`;
-export function extendTables(input, source = EXTRA, exports = ['note', 'touch']) {
-  const app = input.apps.find((a) => a.name === 'tables'),
-    main = app.files.find((f) => f.path === 'main.ink');
-  main.base64 = Buffer.from(
-    Buffer.from(main.base64, 'base64').toString() + source,
-  ).toString('base64');
-  app.manifest.exports.push(...exports);
-  app.manifest.modules.modules
-    .find((m) => m.path === 'main.ink')
-    .exports.push(...exports);
-  app.files.find((f) => f.path === 'ink-app.json').base64 = Buffer.from(
-    JSON.stringify(app.manifest),
-  ).toString('base64');
-}
 
 test('footprints report IR write roots and pure functions', async () => {
   const fp = await inkFootprints(`module app;
@@ -80,38 +58,6 @@ test('cross-app reads refresh only when a commit writes a state root the exporte
   assert.equal(p.inkViews.reads.reused, 1);
 });
 
-// The dashboard gains pure plan functions; a second, identical dashboard
-// shares results with it.
-const PLAN_CODE = `
-fn big(row:Item)->Bool{return row.amount>=5;}
-fn amount(row:Item)->u64{return row.amount;}
-fn wrong(n:u64)->Bool{return n>3;}
-`;
-function source(app, path, extra) {
-  const file = app.files.find((f) => f.path === path);
-  file.base64 = Buffer.from(Buffer.from(file.base64, 'base64').toString() + extra).toString('base64');
-}
-function manifest(app) {
-  app.files.find((f) => f.path === 'ink-app.json').base64 = Buffer.from(JSON.stringify(app.manifest)).toString('base64');
-}
-export function planned(plan, { twin = true } = {}) {
-  return (input) => {
-    const dashboard = input.apps.find((a) => a.name === 'dashboard');
-    source(dashboard, 'main.ink', PLAN_CODE);
-    dashboard.manifest.modules.modules.find((m) => m.path === 'main.ink').exports.push('big', 'amount', 'wrong');
-    manifest(dashboard);
-    input.links[0].input = '[0,1000]';
-    input.links[0].plan = plan;
-    if (twin) {
-      const copy = structuredClone(dashboard);
-      copy.name = 'dashboard2';
-      copy.manifest.slug = 'system-dashboard-two';
-      manifest(copy);
-      input.apps.push(copy);
-      input.links.push({ ...input.links[0], consumer: 'dashboard2' });
-    }
-  };
-}
 const PLAN = { version: 1, where: 'big', limit: 1, aggregate: { op: 'sum', value: 'amount' } };
 
 async function portRead(p, appId, name = 'results') {
