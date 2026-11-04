@@ -1,3 +1,4 @@
+import { packProofPlan, proofPlan } from '../server/ink-proof-plan.mjs';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -62,8 +63,12 @@ try {
   await execute(compiler, ['check-plan', core, target, '--core'], {
     maxBuffer: 1024 * 1024,
   });
+  const packed = packProofPlan(await readFile(target, 'utf8'));
+  await compileInkProgram({ kind: 'ink-os-planned-v1', source, plan: packed });
+  await writeFile(target, packed);
   console.log(
     JSON.stringify({
+      units: Object.keys(proofPlan(packed).units).length,
       status: 'checked',
       core: artifact.manifest.core_sha256,
       bytes: (await readFile(target)).length,

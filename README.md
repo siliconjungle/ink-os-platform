@@ -242,3 +242,5 @@ snapshot-bound pages. Indexed point/page reads and maintained aggregates avoid
 fetching complete tables into application JavaScript.
 
 Ink builds can also [select and replay measured data paths](docs/data-path-planning.md) for declared typed UI queries, comparing scans, fixed indexes and maintained results under bounded build-time budgets, with explicit scan fallbacks. The [planned storage example](examples/planned-storage) keeps its application view in Ink.
+
+The Tables system now uses [reusable kernel-checked proof units](docs/proof-units.md), reducing its proof transport and admission memory while rechecking complete source bindings and application-specific fold obligations.

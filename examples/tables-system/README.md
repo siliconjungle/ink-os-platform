@@ -33,8 +33,10 @@ INK_TEST_NATIVE=1 node --test tests/native-system.test.mjs
 INK_UI_BROWSER_EXECUTABLE=/path/to/chrome node scripts/benchmark-ink-system.mjs
 ```
 
-To regenerate the proof, explicitly configure `INK_COMPILER` and `PYTHONPATH` for the pinned Ink CLI and planner/knowledge source packages, then run `node scripts/author-tables-system-plan.mjs`. It authors ordinary fold proofs, shares duplicate self-contained certificates, and checks the complete resulting packet. No planner, catalogue download or Rust installation runs during an ordinary application request.
+To regenerate the proof, explicitly configure `INK_COMPILER` and `PYTHONPATH` for the pinned Ink CLI and planner/knowledge source packages, then run `node scripts/author-tables-system-plan.mjs`. It authors ordinary fold proofs, shares duplicate self-contained certificates, checks the complete result, then packages and checks independently reusable mathematical units. No planner, catalogue download or Rust installation runs during an ordinary application request.
 
 [Contracts, limits and remaining boundaries](../../docs/system-planning.md) · [Measured run](../../docs/benchmarks/tables-system-2026-11-04.json)
 
 [Retained query delivery and reconnect contract](../../docs/retained-queries.md).
+
+[Reusable proof units and admission measurements](../../docs/proof-units.md). The committed packet remains self-contained; a fresh compiler replays every unit, while an existing session can reuse unchanged checked dependencies.

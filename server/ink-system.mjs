@@ -48,6 +48,9 @@ async function toolIdentity() {
   const files = [
     'server/ink-system.mjs',
     'server/data-path-planning.mjs','server/data-path-workload.mjs','server/data-path-worker.mjs','server/relational-query.mjs','server/table-storage.mjs',
+    'server/ink-proof-plan.mjs',
+    'server/ink-proof-worker.mjs',
+    'server/ink-proof-compiler.mjs',
     'server/ink-apps.mjs',
     'shared/ink-app.mjs',
     'shared/ink-ui.mjs',

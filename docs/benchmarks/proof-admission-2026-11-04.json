@@ -1,0 +1,354 @@
+{
+  "version": 1,
+  "node": "24.22.2",
+  "cpu": "Apple M4 Pro",
+  "compiler": {
+    "schema": 1,
+    "license": "MIT",
+    "sha256": "b5045e1175c12a9c27384e458b704351fb8ec1674f4fbf8b15aa95ae516432a3",
+    "bytes": 8406379,
+    "dependencyLockSHA256": "b656f0d7cb3f802d35f90d1e7151a574c0f5085ca2e4165ac8eae17a8a574ac2",
+    "replayCompatible": [
+      "a5f02fb3bc2223d5436831640b6111773a3cf32e969faec28f1c6187e3d66993",
+      "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
+      "29475ee79ddab3ac5ea036f9463f5833ce0338631ecb95b0739b2322a5cc61bd"
+    ],
+    "replayCompatibilitySHA256": "27b545c132b1becc86041a601c18b5cbeda96066f160a2b6394b90ea6e667452",
+    "transportSourceSHA256": "9bcf78828a9936ec292f0a24b61774797d945b872085c688d7e863c49e8b1081",
+    "outputs": [
+      "javascript",
+      "rust",
+      "wgsl"
+    ]
+  },
+  "scope": "Fresh Node process per mode/trial. Cold full release verification, then a changed view with refreshed source observations. Includes kernel replay, source checks, emission and artifact comparison; excludes authoring/compaction, disk transfer, execution and rendering. OS high-water RSS includes the Node coordinator and its worker threads; heap counters do not include every worker heap. No forced GC.",
+  "proofPlanBytes": {
+    "legacy": 8377090,
+    "units": 2957372
+  },
+  "targets": {
+    "javascript": {
+      "available": true,
+      "sha256": "5234dab578181ffdfefa6b14a7983b7f94111f063bfbe97de7ae917c9b87b624"
+    },
+    "native": {
+      "available": true,
+      "sha256": "fe8ddd2ea18f49f60910c5f42f15fb5b697f3a2564ad4902f2ad185c1440eb89"
+    },
+    "gpu": {
+      "available": false,
+      "reason": "OS planned execution uses JavaScript/native CPU hosts; GPU plan execution is unavailable"
+    },
+    "auto": {
+      "nativeFallback": "javascript"
+    }
+  },
+  "runs": [
+    {
+      "trial": 0,
+      "mode": "legacy",
+      "coldMS": 2447.636708,
+      "changedMS": 2450.108625,
+      "coldPacketBytes": 9446956,
+      "changedPacketBytes": 9470104,
+      "coldMemory": {
+        "rss": 319242240,
+        "heapTotal": 122454016,
+        "heapUsed": 56897800,
+        "external": 2783950,
+        "arrayBuffers": 169861
+      },
+      "afterMemory": {
+        "rss": 390070272,
+        "heapTotal": 209223680,
+        "heapUsed": 73834640,
+        "external": 2832504,
+        "arrayBuffers": 145659
+      },
+      "sampledPeakRSS": 668549120,
+      "osHighWaterRSSBytes": 678002688,
+      "afterCold": {
+        "sessions": 0,
+        "requests": 0,
+        "checked": 0,
+        "reused": 0,
+        "expandedBytes": 0,
+        "wasmBytes": 0,
+        "resident": false,
+        "queued": 0
+      },
+      "afterChanged": {
+        "sessions": 0,
+        "requests": 0,
+        "checked": 0,
+        "reused": 0,
+        "expandedBytes": 0,
+        "wasmBytes": 0,
+        "resident": false,
+        "queued": 0
+      },
+      "selected": {
+        "input": "144b88fce6b17fd113258ef5e393e7c045c6a2dc05c249f207d089ecd0fd1843",
+        "plan": "23eda3281019368d18a5b93ff0614742646d28d4c753694d922fa7d5579a45fa",
+        "schema": 1,
+        "selected": "144b88fce6b17fd113258ef5e393e7c045c6a2dc05c249f207d089ecd0fd1843",
+        "steps": 1
+      }
+    },
+    {
+      "trial": 0,
+      "mode": "units",
+      "coldMS": 670.797375,
+      "changedMS": 279.440333,
+      "coldPacketBytes": 3795768,
+      "changedPacketBytes": 3801278,
+      "coldMemory": {
+        "rss": 314900480,
+        "heapTotal": 35192832,
+        "heapUsed": 17040992,
+        "external": 2832354,
+        "arrayBuffers": 145659
+      },
+      "afterMemory": {
+        "rss": 346554368,
+        "heapTotal": 67076096,
+        "heapUsed": 40372072,
+        "external": 2832504,
+        "arrayBuffers": 218415
+      },
+      "sampledPeakRSS": 346554368,
+      "osHighWaterRSSBytes": 346554368,
+      "afterCold": {
+        "sessions": 1,
+        "requests": 1,
+        "checked": 180,
+        "reused": 0,
+        "expandedBytes": 7721999,
+        "wasmBytes": 60162048,
+        "resident": true,
+        "queued": 0
+      },
+      "afterChanged": {
+        "sessions": 1,
+        "requests": 2,
+        "checked": 181,
+        "reused": 180,
+        "expandedBytes": 7744399,
+        "wasmBytes": 60162048,
+        "resident": true,
+        "queued": 0
+      },
+      "selected": {
+        "input": "144b88fce6b17fd113258ef5e393e7c045c6a2dc05c249f207d089ecd0fd1843",
+        "plan": "18f7d64e0978bb02d1b5e0346e0d8e904ae29270d70d9b496ed00fa3c670f219",
+        "schema": 1,
+        "selected": "144b88fce6b17fd113258ef5e393e7c045c6a2dc05c249f207d089ecd0fd1843",
+        "steps": 1
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "units",
+      "coldMS": 671.810875,
+      "changedMS": 277.71066600000006,
+      "coldPacketBytes": 3795768,
+      "changedPacketBytes": 3801278,
+      "coldMemory": {
+        "rss": 306102272,
+        "heapTotal": 55492608,
+        "heapUsed": 21708640,
+        "external": 2783950,
+        "arrayBuffers": 169861
+      },
+      "afterMemory": {
+        "rss": 340115456,
+        "heapTotal": 64552960,
+        "heapUsed": 30321432,
+        "external": 4813899,
+        "arrayBuffers": 211195
+      },
+      "sampledPeakRSS": 346570752,
+      "osHighWaterRSSBytes": 347340800,
+      "afterCold": {
+        "sessions": 1,
+        "requests": 1,
+        "checked": 180,
+        "reused": 0,
+        "expandedBytes": 7721999,
+        "wasmBytes": 60162048,
+        "resident": true,
+        "queued": 0
+      },
+      "afterChanged": {
+        "sessions": 1,
+        "requests": 2,
+        "checked": 181,
+        "reused": 180,
+        "expandedBytes": 7744399,
+        "wasmBytes": 60162048,
+        "resident": true,
+        "queued": 0
+      },
+      "selected": {
+        "input": "144b88fce6b17fd113258ef5e393e7c045c6a2dc05c249f207d089ecd0fd1843",
+        "plan": "18f7d64e0978bb02d1b5e0346e0d8e904ae29270d70d9b496ed00fa3c670f219",
+        "schema": 1,
+        "selected": "144b88fce6b17fd113258ef5e393e7c045c6a2dc05c249f207d089ecd0fd1843",
+        "steps": 1
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "legacy",
+      "coldMS": 2529.91,
+      "changedMS": 2316.075666,
+      "coldPacketBytes": 9446956,
+      "changedPacketBytes": 9470104,
+      "coldMemory": {
+        "rss": 342917120,
+        "heapTotal": 133496832,
+        "heapUsed": 72797984,
+        "external": 2832354,
+        "arrayBuffers": 218265
+      },
+      "afterMemory": {
+        "rss": 408076288,
+        "heapTotal": 142114816,
+        "heapUsed": 73859840,
+        "external": 2832504,
+        "arrayBuffers": 145659
+      },
+      "sampledPeakRSS": 681197568,
+      "osHighWaterRSSBytes": 690995200,
+      "afterCold": {
+        "sessions": 0,
+        "requests": 0,
+        "checked": 0,
+        "reused": 0,
+        "expandedBytes": 0,
+        "wasmBytes": 0,
+        "resident": false,
+        "queued": 0
+      },
+      "afterChanged": {
+        "sessions": 0,
+        "requests": 0,
+        "checked": 0,
+        "reused": 0,
+        "expandedBytes": 0,
+        "wasmBytes": 0,
+        "resident": false,
+        "queued": 0
+      },
+      "selected": {
+        "input": "144b88fce6b17fd113258ef5e393e7c045c6a2dc05c249f207d089ecd0fd1843",
+        "plan": "23eda3281019368d18a5b93ff0614742646d28d4c753694d922fa7d5579a45fa",
+        "schema": 1,
+        "selected": "144b88fce6b17fd113258ef5e393e7c045c6a2dc05c249f207d089ecd0fd1843",
+        "steps": 1
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "legacy",
+      "coldMS": 2625.1545410000003,
+      "changedMS": 2611.548334,
+      "coldPacketBytes": 9446956,
+      "changedPacketBytes": 9470104,
+      "coldMemory": {
+        "rss": 348946432,
+        "heapTotal": 122716160,
+        "heapUsed": 56895024,
+        "external": 2783950,
+        "arrayBuffers": 169861
+      },
+      "afterMemory": {
+        "rss": 421756928,
+        "heapTotal": 208961536,
+        "heapUsed": 73863080,
+        "external": 2832504,
+        "arrayBuffers": 145659
+      },
+      "sampledPeakRSS": 685473792,
+      "osHighWaterRSSBytes": 694927360,
+      "afterCold": {
+        "sessions": 0,
+        "requests": 0,
+        "checked": 0,
+        "reused": 0,
+        "expandedBytes": 0,
+        "wasmBytes": 0,
+        "resident": false,
+        "queued": 0
+      },
+      "afterChanged": {
+        "sessions": 0,
+        "requests": 0,
+        "checked": 0,
+        "reused": 0,
+        "expandedBytes": 0,
+        "wasmBytes": 0,
+        "resident": false,
+        "queued": 0
+      },
+      "selected": {
+        "input": "144b88fce6b17fd113258ef5e393e7c045c6a2dc05c249f207d089ecd0fd1843",
+        "plan": "23eda3281019368d18a5b93ff0614742646d28d4c753694d922fa7d5579a45fa",
+        "schema": 1,
+        "selected": "144b88fce6b17fd113258ef5e393e7c045c6a2dc05c249f207d089ecd0fd1843",
+        "steps": 1
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "units",
+      "coldMS": 713.84475,
+      "changedMS": 290.6813340000001,
+      "coldPacketBytes": 3795768,
+      "changedPacketBytes": 3801278,
+      "coldMemory": {
+        "rss": 321437696,
+        "heapTotal": 34930688,
+        "heapUsed": 17025904,
+        "external": 2832354,
+        "arrayBuffers": 145659
+      },
+      "afterMemory": {
+        "rss": 359038976,
+        "heapTotal": 67338240,
+        "heapUsed": 40352984,
+        "external": 2832504,
+        "arrayBuffers": 218415
+      },
+      "sampledPeakRSS": 359038976,
+      "osHighWaterRSSBytes": 359038976,
+      "afterCold": {
+        "sessions": 1,
+        "requests": 1,
+        "checked": 180,
+        "reused": 0,
+        "expandedBytes": 7721999,
+        "wasmBytes": 60162048,
+        "resident": true,
+        "queued": 0
+      },
+      "afterChanged": {
+        "sessions": 1,
+        "requests": 2,
+        "checked": 181,
+        "reused": 180,
+        "expandedBytes": 7744399,
+        "wasmBytes": 60162048,
+        "resident": true,
+        "queued": 0
+      },
+      "selected": {
+        "input": "144b88fce6b17fd113258ef5e393e7c045c6a2dc05c249f207d089ecd0fd1843",
+        "plan": "18f7d64e0978bb02d1b5e0346e0d8e904ae29270d70d9b496ed00fa3c670f219",
+        "schema": 1,
+        "selected": "144b88fce6b17fd113258ef5e393e7c045c6a2dc05c249f207d089ecd0fd1843",
+        "steps": 1
+      }
+    }
+  ]
+}

@@ -36,6 +36,28 @@ try {
 const lockSHA256 = createHash('sha256')
   .update(await readFile('compiler/Cargo.lock'))
   .digest('hex');
+let compatibility;
+try {
+  compatibility = JSON.parse(
+    await readFile('compiler/replay-compatibility.json', 'utf8'),
+  );
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+}
+if (
+  compatibility &&
+  (compatibility.schema !== 1 ||
+    compatibility.dependencyLockSHA256 !== lockSHA256 ||
+    compatibility.proofReplayRequired !== true ||
+    !Array.isArray(compatibility.compatibleCompilerSHA256) ||
+    compatibility.compatibleCompilerSHA256.length > 8 ||
+    compatibility.compatibleCompilerSHA256.some(
+      (hash) => !/^[a-f0-9]{64}$/.test(hash),
+    ))
+)
+  throw Error(
+    'Compiler replay eligibility receipt differs from the locked source',
+  );
 if (bytes.includes(Buffer.from(homedir())))
   throw Error('Compiler artifact contains a personal filesystem path.');
 await copyFile(source, 'public/ink-compiler.wasm');
@@ -49,20 +71,25 @@ await writeFile(
       sha256: createHash('sha256').update(bytes).digest('hex'),
       bytes: bytes.length,
       dependencyLockSHA256: lockSHA256,
-      replayCompatible:
-        previous?.dependencyLockSHA256 === lockSHA256
-          ? [
-              ...new Set([
-                previous.sha256,
-                ...(previous.replayCompatible || []),
-              ]),
-            ]
-              .filter(
-                (hash) =>
-                  hash !== createHash('sha256').update(bytes).digest('hex'),
-              )
-              .slice(0, 8)
-          : [],
+      replayCompatible: [
+        ...new Set([
+          ...(previous?.dependencyLockSHA256 === lockSHA256
+            ? [previous.sha256, ...(previous.replayCompatible || [])]
+            : []),
+          ...(compatibility?.compatibleCompilerSHA256 || []),
+        ]),
+      ]
+        .filter(
+          (hash) => hash !== createHash('sha256').update(bytes).digest('hex'),
+        )
+        .slice(0, 8),
+      ...(compatibility
+        ? {
+            replayCompatibilitySHA256: createHash('sha256')
+              .update(await readFile('compiler/replay-compatibility.json'))
+              .digest('hex'),
+          }
+        : {}),
       transportSourceSHA256: createHash('sha256')
         .update(await readFile('compiler/src/lib.rs'))
         .digest('hex'),

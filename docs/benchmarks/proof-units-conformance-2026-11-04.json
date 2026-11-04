@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "compiler": "b5045e1175c12a9c27384e458b704351fb8ec1674f4fbf8b15aa95ae516432a3",
+  "kernel": {
+    "package": "6229997ba04f3e00068583e3ca225b88da1373e0",
+    "tests": 547,
+    "status": "passed",
+    "privateCheckout": true,
+    "privateTarget": true
+  },
+  "compilerTests": {
+    "passed": 19
+  },
+  "packageMains": {
+    "js": {
+      "revision": "37ace08876b4a26d341b773c6aba49442e60246f",
+      "lockedFetch": "passed",
+      "check": "passed"
+    },
+    "rust": {
+      "revision": "2a96ad908e89b89b5113d5f4bb4881ce3d408b80",
+      "lockedFetch": "passed",
+      "check": "passed"
+    },
+    "wasm": {
+      "revision": "d4df95b886629e07b42bac4272f2b54f1cba5a48",
+      "lockedFetch": "passed",
+      "check": "passed"
+    },
+    "gpu": {
+      "revision": "523642d008c102722b63c4b86bad68538f1a443b",
+      "lockedFetch": "passed",
+      "check": "passed"
+    }
+  },
+  "nativeHistories": {
+    "passed": 1,
+    "scope": "Actual compiled native histories, conflicts, rollback, retries and journal recovery."
+  },
+  "browser": {
+    "targets": [
+      "javascript",
+      "native"
+    ],
+    "rows": 64,
+    "edits": 2,
+    "panes": 2,
+    "status": "passed",
+    "scope": "Actual Chrome DOM with retained query delivery, concurrent conflicts and service recovery. Two-edit smoke run, not a latency study."
+  },
+  "platformTests": {
+    "passed": 496,
+    "skipped": 14,
+    "failed": 0,
+    "testConcurrency": 4
+  },
+  "proofUnitTests": {
+    "passed": 7,
+    "failed": 0
+  }
+}

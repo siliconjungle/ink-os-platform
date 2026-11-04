@@ -1,3 +1,5 @@
+import { proofPlan } from './ink-proof-plan.mjs';
+import { compileProofPlan } from './ink-proof-compiler.mjs';
 import { hostBudget, WORKER_MEMORY_MB } from './execution-budget.mjs';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -95,6 +97,8 @@ export function isolatedWorker(
 
 export async function compilerRequest(request, options = {}) {
   const { module } = await compilerModule();
+  if (request.op === 'compilePlan' && proofPlan(request.plan))
+    return compileProofPlan(module, request, options);
   return isolatedWorker(
     new URL('./ink-compiler-worker.mjs', import.meta.url),
     { module, request },

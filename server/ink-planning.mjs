@@ -1,3 +1,4 @@
+import { portableProofPlan } from './ink-proof-plan.mjs';
 import { hostBudget, WORKER_MEMORY_MB } from './execution-budget.mjs';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, writeFile, rm, stat } from 'node:fs/promises';
@@ -390,7 +391,7 @@ export async function buildImplementation(source, files, input) {
     schema: 1,
     compiler: (await compilerInfo()).sha256,
     source: inkProgramKey(source),
-    plan: artifact.plan,
+    plan: portableProofPlan(plan, artifact.plan),
     checked: artifact.compiled_plan,
     targets,
     selection,

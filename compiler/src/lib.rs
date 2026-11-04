@@ -14,6 +14,7 @@ const MAX_INPUT: usize = 1024 * 1024;
 thread_local! {
     // One immutable checked schema per resident compiler instance. The identity
     // is still required on every request; a cache miss never trusts caller data.
+    static PROOF_UNITS: std::cell::RefCell<ink_core::proof_units::Checker> = std::cell::RefCell::new(ink_core::proof_units::Checker::default());
     static PREPARED: std::cell::RefCell<Option<(String, std::rc::Rc<CheckedModule>)>> = const { std::cell::RefCell::new(None) };
 }
 static RESPONSE: Mutex<Vec<u8>> = Mutex::new(Vec::new());
@@ -773,6 +774,25 @@ fn emit_checked(checked: &CheckedModule) -> Result<Value, String> {
 
 pub fn handle(request: &Value) -> Result<Value, String> {
     match text(request, "op")? {
+        "maintainedSubjects" => {
+            let fields=request.as_object().ok_or("maintained source request")?;
+            if fields.len()!=2 || fields.keys().any(|key| !["op","source","graph"].contains(&key.as_str())) {return Err("maintainedSubjects accepts source or graph only".into());}
+            let checked=if request.get("graph").is_some(){modules::assemble(&request["graph"])?.0}else{let source=text(request,"source")?;if source.len()>MAX_SOURCE{return Err("Source exceeds 128 KiB".into());}CheckedModule::from_source(syntax::parse(source)?)?};
+            Ok(json!({"text":serde_json::to_string(&ink_core::maintained::subjects(&checked)?).map_err(|e|e.to_string())?}))
+        }
+        "proofUnits" => {
+            let object=request.as_object().ok_or("proof unit status request")?;
+            if object.len()!=2 || object.keys().any(|key| !["op","ids"].contains(&key.as_str())) {return Err("proofUnits accepts only op and ids".into());}
+            let ids=request["ids"].as_array().ok_or("proof unit ID list")?;
+            if ids.len()>ink_core::registry::MAX_VIEW_ENTRIES || ids.iter().any(|id|id.as_str().is_none_or(|s|s.len()!=64||!s.bytes().all(|b|b.is_ascii_hexdigit()&&!b.is_ascii_uppercase()))) {return Err("proof unit ID limit".into());}
+            PROOF_UNITS.with(|units|{let units=units.borrow();Ok(json!({"present":ids.iter().filter(|id|units.contains(id.as_str().unwrap())).collect::<Vec<_>>(),"units":units.len(),"bytes":units.bytes()}))})
+        }
+        "admitProofUnit" => {
+            let object=request.as_object().ok_or("proof unit request")?;
+            if object.len()!=3 || object.keys().any(|key| !["op","id","object"].contains(&key.as_str())) {return Err("admitProofUnit accepts only op, id and object".into());}
+            let id=text(request,"id")?;let bytes=text(request,"object")?.as_bytes();
+            PROOF_UNITS.with(|units|{let mut units=units.borrow_mut();units.admit_bytes(id,bytes)?;Ok(json!({"id":id,"units":units.len(),"bytes":units.bytes()}))})
+        }
         "compilePlan" => {
             let fields = request.as_object().ok_or("plan request must be an object")?;
             if fields.len() != 3 || fields.keys().any(|key| !["op", "source", "graph", "plan"].contains(&key.as_str())) {
@@ -790,7 +810,7 @@ pub fn handle(request: &Value) -> Result<Value, String> {
                 (CheckedModule::from_source(syntax::parse(source)?)?, None)
             };
             let packet = ink_core::planning::from_bytes(text(request, "plan")?.as_bytes())?;
-            let plan = ink_core::planning::check(&original, &packet)?;
+            let plan = PROOF_UNITS.with(|units|ink_core::planning::check_with_units(&original, &packet,&units.borrow()))?;
             // These require a different host ABI. Never silently erase an admitted
             // physical/placement/resource choice by emitting only its source module.
             if plan.representation().is_some() || plan.route().is_some() || plan.resources().is_some() {
