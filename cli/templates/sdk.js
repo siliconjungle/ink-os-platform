@@ -18,6 +18,24 @@
 		if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
 		return target;
 	};
+	// sdk/src/effects.js
+	/** Retain this ID across transport retries; expired IDs cannot execute again. */
+	function effectRequestId() {
+		return Date.now() + ":" + globalThis.crypto.randomUUID();
+	}
+	/** Transport-neutral, durable typed Ink protocol runs. */
+	function createEffects(request) {
+		return Object.freeze({
+			start: (entry, input = "[]", options = {}) => request("start", {
+				entry,
+				input,
+				requestId: effectRequestId(),
+				...options
+			}),
+			get: (id) => request("get", { id }),
+			cancel: (id) => request("cancel", { id })
+		});
+	}
 	// sdk/src/object-drag.js
 	function dragObjectIds(value) {
 		if (!Array.isArray(value) || !value.length || value.length > 1e3 || value.some((id) => typeof id !== "string" || !/^[a-f0-9]{32}$/.test(id))) return [];
@@ -964,10 +982,12 @@
 					}
 				};
 				client.ink = {
+					effects: createEffects((action, input) => request("ink.effects." + action, input)),
 					describe: () => request("ink.describe"),
 					run: (entry, input = "[]", options = {}) => request("ink.run", {
 						entry,
 						input,
+						requestId: effectRequestId(),
 						...options
 					}),
 					native: {

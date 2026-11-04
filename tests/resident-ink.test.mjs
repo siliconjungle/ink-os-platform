@@ -437,3 +437,16 @@ test('an uncertain append that reached disk recovers its mutation receipt withou
   );
   assert.equal(recovered.get(copy).title, 'once');
 });
+
+test('internal cancellation rejects before dispatch and releases the resident for subsequent calls', async (t) => {
+  const f = await fixture(t),
+    controller = new AbortController();
+  controller.abort(Error('fixture cancellation'));
+  await assert.rejects(
+    f.run('add', [99], { signal: controller.signal }),
+    /fixture cancellation/,
+  );
+  assert.equal((await f.run('total', [])).output.result, 0);
+  await assert.rejects(f.run('total', [], { signal: {} }), { status: 400 });
+  assert.equal((await f.run('add', [1])).output.result, 1);
+});

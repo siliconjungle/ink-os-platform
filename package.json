@@ -61,6 +61,8 @@
     "./relations": "./sdk/src/relations.js",
     "./file-icons": "./sdk/src/file-icons.js",
     "./object-drag": "./sdk/src/object-drag.js",
-    "./file-preview": "./sdk/src/file-preview.js"
+    "./file-preview": "./sdk/src/file-preview.js",
+    "./effects": "./sdk/src/effects.js",
+    "./ink/effects": "./sdk/ink/effects.ink"
   }
 }

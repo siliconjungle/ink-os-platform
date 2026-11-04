@@ -6,7 +6,7 @@ const text = value => typeof value === 'string' ? value : JSON.stringify(value, 
 const report = (message = '', error = false) => { status.textContent = message; status.dataset.error = String(error); };
 const node = (tag, label) => { const element = document.createElement(tag); if (label !== undefined) element.textContent = label; return element; };
 async function run(entry, input = '[]') {
-  const result=await ink.request('http', { path: '/code/run', method: 'POST', body: { entry, input } });if(result.hostRecord&&(result.hostRecord.effect==='write'||!hostRevisions.has(result.hostRecord.key)||![...fields.values()].some(field=>field.dirty)))hostRevisions.set(result.hostRecord.key,result.hostRecord.revision);return result;
+  const result=await ink.request('http', { path: '/code/run', method: 'POST', body: { entry, input, ...(metadata.ink.effects?.protocols.some(protocol=>protocol.entry===entry)?{requestId:Date.now()+':'+crypto.randomUUID()}:{}) } });if(result.hostRecord&&(result.hostRecord.effect==='write'||!hostRevisions.has(result.hostRecord.key)||![...fields.values()].some(field=>field.dirty)))hostRevisions.set(result.hostRecord.key,result.hostRecord.revision);return result;
 }
 function argumentsFor(input) {
   if (typeof input !== 'string' || !input.trim()) return '[]';

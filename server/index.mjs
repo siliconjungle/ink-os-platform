@@ -5,6 +5,7 @@ import { NativeInk } from './native-ink.mjs';
 import { managedNativeFromEnvironment } from './managed-native.mjs';
 import { NativeJobs } from './native-jobs.mjs';
 import { inkExecutionSource } from './ink-apps.mjs';
+import { InkEffects } from './ink-effects.mjs';
 import { InkPreviews } from './ink-previews.mjs';
 import { drainHost } from './shutdown.mjs';
 import { SnapshotGate } from './snapshot-gate.mjs';
@@ -82,6 +83,7 @@ await reconcileFileDefaults(platform);
 platform.code=code;platform.inkPreviews=new InkPreviews({platform});platform.computer=new Computer(platform);platform.collaboration=collaboration;platform.namespaceMigrations=namespaceMigrations;platform.versions=new Versions({world,collaboration:platform.collaboration,storage,bundle:key=>platform.bundle(key)});
 platform.nativeJobs=await new NativeJobs(data,{native:new NativeInk(join(data,'native'),{cargo:process.env.INK_NATIVE_CARGO||'cargo',rustc:process.env.INK_NATIVE_RUSTC||'rustc',offline:process.env.INK_NATIVE_OFFLINE==='1',managed:managedNativeFromEnvironment()}),enabled:process.env.INK_OS_NATIVE!=='0',source:async(appId,releaseId)=>{platform.app(appId);const release=world.get(releaseId);if(release?.kind!=='release'||JSON.parse(release.body).appId!==appId)throw Object.assign(Error('Native source release not found.'),{status:404});const bundle=await platform.bundle(releaseId);if(!bundle.ink)throw Object.assign(Error('This release has no Ink program.'),{status:400});return inkExecutionSource(bundle.ink,bundle.files);}}).open();
 code.nativeJobs=platform.nativeJobs;
+platform.effects=await new InkEffects({platform,autoStart:false}).open();
 if(production&&!platform.adminToken)throw Error('INK_OS_ADMIN_TOKEN is required');
 platform.schedules=await new Schedules({directory:data,platform}).open();
 platform.workflows=await new Workflows({directory:data,platform}).open();
@@ -201,6 +203,7 @@ maintenanceHost=createMaintenanceHostAdapter({platform,world,storage,code,reques
 snapshotGate=new SnapshotGate({directory:data,adapter:maintenanceHost,otherClosed:()=>maintenance.closed||draining});
 backups=await new Backups({gate:snapshotGate,world,storage,instanceId:process.env.INK_OS_INSTANCE_ID,available:()=>!maintenance.closed&&!draining&&!stopping&&!snapshotGate.closed}).open();
 await maintenance.activate();
+if(!maintenance.closed)platform.effects.resumeAdmission();
 platform.maintenance=maintenance;
 const server = http.createServer(async (req, res) => {
  let finish;const task=new Promise(resolve=>finish=resolve);let tracked=false;

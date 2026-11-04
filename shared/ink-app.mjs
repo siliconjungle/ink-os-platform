@@ -1,3 +1,4 @@
+import {inkEffects,inkEffectProtocols} from './ink-effects.mjs';
 const fail = message => { throw Object.assign(Error(message), { status: 400 }); };
 const entryName = value => typeof value === 'string' && /^[A-Za-z_][A-Za-z0-9_.]{0,100}$/.test(value);
 const symbol = value => typeof value === 'string' && /^[A-Za-z_][A-Za-z0-9_]{0,99}$/.test(value) && !value.startsWith('__');
@@ -44,7 +45,8 @@ export function inkSpec(input, paths) {
   const modules = input.modules === undefined ? null : inkModuleGraph(input.modules, { paths, privatePaths: true });
   if (modules && (modules.root !== input.source || [...input.exports, ...(input.view ? [input.view] : [])].some(name => !modules.modules.find(module => module.path === modules.root).exports.includes(name)))) fail('Ink view and app exports must be declared root module exports.');
   const host=input.host===undefined?undefined:inkHost(input.host);
-  return { version: input.implementation?3:host?2:1, source: input.source, view: input.view || null, exports: [...input.exports], ...(modules ? { modules } : {}),...(host?{host}:{}),...(input.implementation?{implementation:{version:1,path:input.implementation.path}}:{}) };
+  const effects=input.effects===undefined?undefined:inkEffects(input.effects);if(effects&&input.version!==3)fail('Typed effects require a checked version 3 release');
+  return { version: input.implementation?3:host?2:1, source: input.source, view: input.view || null, exports: [...input.exports], ...(modules ? { modules } : {}),...(effects?{effects}:{}),...(host?{host}:{}),...(input.implementation?{implementation:{version:1,path:input.implementation.path}}:{}) };
 }
 
 export function inkHost(input){
@@ -55,7 +57,7 @@ export function inkHostBindings(spec,entries){
   for(const binding of spec.host?.bindings||[]){const entry=entries.find(entry=>entry.name===binding.entry);if(!entry||entry.action||!spec.exports.includes(entry.name)&&spec.view!==entry.name||entry.params.length!==(binding.effect==='write'?2:1)||entry.params.some(param=>param.type?.kind!=='string')||binding.effect==='write'&&entry.result?.kind!=='string')fail('Host bindings require exported stateless String transforms: read(String), write(String,String)->String.');if(spec.view===entry.name&&binding.effect!=='read')fail('A view cannot perform a host write.');}
   return spec.host?.bindings||[];
 }
-export function inkPublicEntries(spec,entries){inkHostBindings(spec,entries);return entries.map(entry=>{const binding=spec.host?.bindings.find(binding=>binding.entry===entry.name);return binding?{...entry,params:binding.effect==='read'?[]:[{name:'expectedRevision',type:{kind:'u64'}},...entry.params.slice(1)],hostBinding:binding}:entry;});}
+export function inkPublicEntries(spec,entries,named={}){inkHostBindings(spec,entries);const protocols=inkEffectProtocols(spec,entries,named);return entries.map(entry=>{const protocol=protocols.find(protocol=>protocol.entry===entry.name);if(protocol)return{...entry,result:protocol.output,effectProtocol:{entry:protocol.entry,operations:protocol.operations,maxSteps:protocol.maxSteps,deadlineMs:protocol.deadlineMs}};const binding=spec.host?.bindings.find(binding=>binding.entry===entry.name);return binding?{...entry,params:binding.effect==='read'?[]:[{name:'expectedRevision',type:{kind:'u64'}},...entry.params.slice(1)],hostBinding:binding}:entry;});}
 
 export function inkEntries(manifest, graph) {
   if (graph && (!Array.isArray(graph.root_exports) || graph.root_exports.some(name => !symbol(name)))) fail('Invalid checked Ink root export metadata.');
@@ -65,7 +67,8 @@ export function inkEntries(manifest, graph) {
   ].filter(entry => !graph || graph.root_exports.includes(entry.name));
 }
 
-export function inkCommands(spec, entries) {
+export function inkCommands(spec, entries, named={}) {
+  inkEffectProtocols(spec,entries,named);
   inkHostBindings(spec,entries);
   if (spec.view) {
     const view = entries.find(entry => entry.name === spec.view);
@@ -73,7 +76,7 @@ export function inkCommands(spec, entries) {
   }
   const ids = new Set();
   return spec.exports.map(name => {
-    const entry = inkPublicEntries(spec,entries).find(entry => entry.name === name);
+    const entry = inkPublicEntries(spec,entries,named).find(entry => entry.name === name);
     if (!entry || entry.params.length > 16) fail('Ink command is missing or has more than 16 arguments: ' + name);
     const id = 'ink.' + name.toLowerCase().replace(/[^a-z0-9.-]/g, '-').slice(0, 59);
     if (ids.has(id)) fail('Ink exports have conflicting command names.');
@@ -83,7 +86,7 @@ export function inkCommands(spec, entries) {
       description: 'Run ' + name + '.', keywords: ['ink'],
       inputs: entry.params.map((param, index) => ({ name: 'arg' + index, label: param.name, type: 'json', required: true })),
       handler: { type: 'ink', entry: name, arguments: entry.params.map((_param, index) => 'arg' + index) },
-      effect: entry.change||entry.hostBinding?.effect==='write' ? 'write' : 'read', idempotent: !entry.change&&entry.hostBinding?.effect!=='write',
+      effect: entry.effectProtocol||entry.change||entry.hostBinding?.effect==='write' ? 'write' : 'read', idempotent: !entry.effectProtocol&&!entry.change&&entry.hostBinding?.effect!=='write',
       outputs: [{ label: 'Value', path: 'value', type: 'json' }, { label: 'Exact JSON', path: 'valueWire', type: 'json' }],
     };
   });

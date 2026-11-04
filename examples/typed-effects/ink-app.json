@@ -1,0 +1,89 @@
+{
+  "slug": "typed-effects",
+  "title": "Typed effects",
+  "language": "ink",
+  "capabilities": [
+    "effects.files",
+    "effects.random"
+  ],
+  "exports": [
+    "save_nonce"
+  ],
+  "modules": {
+    "version": 1,
+    "root": "main.ink",
+    "modules": [
+      {
+        "path": "main.ink",
+        "name": "example",
+        "dependencies": [
+          "effects.ink"
+        ],
+        "exports": [
+          "save_nonce",
+          "resume"
+        ]
+      },
+      {
+        "path": "effects.ink",
+        "name": "ink_effects",
+        "dependencies": [],
+        "exports": [
+          "EffectError",
+          "HttpEffectRequest",
+          "FileEffectRequest",
+          "ClockEffectRequest",
+          "RandomEffectRequest",
+          "ProcessEffectRequest",
+          "SubscriptionEffectRequest",
+          "HttpEffectResponse",
+          "FileEffectResponse",
+          "ClockEffectResponse",
+          "RandomEffectResponse",
+          "ProcessEffectResponse",
+          "SubscriptionEffectEvent",
+          "SubscriptionEffectResponse",
+          "EffectRequest",
+          "EffectReply",
+          "EffectPending",
+          "effect_http",
+          "effect_file",
+          "effect_clock",
+          "effect_random",
+          "effect_process",
+          "effect_subscription",
+          "effect_app"
+        ]
+      }
+    ]
+  },
+  "effects": {
+    "version": 1,
+    "protocols": [
+      {
+        "entry": "save_nonce",
+        "resume": "resume",
+        "maxSteps": 2,
+        "deadlineMs": 5000,
+        "operations": [
+          {
+            "name": "sample",
+            "kind": "random",
+            "resource": "system",
+            "effect": "volatile",
+            "retry": "recorded",
+            "deadlineMs": 1000
+          },
+          {
+            "name": "save",
+            "kind": "file",
+            "resource": "nonces",
+            "effect": "write",
+            "retry": "recorded",
+            "deadlineMs": 1000
+          }
+        ]
+      }
+    ]
+  }
+}

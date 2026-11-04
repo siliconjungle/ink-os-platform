@@ -4,6 +4,7 @@ import { inkEntries, inkCommands, inkSpec, inkModuleGraph,inkPublicEntries } fro
 import{runInkHostBinding}from'./ink-host-bindings.mjs';
 import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
 import { sourceFiles } from '../shared/source-files.mjs';
+import { EFFECT_CAPABILITIES } from '../shared/ink-effects.mjs';
 import { buildImplementation, verifyImplementation, implementationSummary } from './ink-planning.mjs';
 
 const encode = (path, bytes) => ({ path, base64: Buffer.from(bytes).toString('base64') });
@@ -59,9 +60,11 @@ export async function buildInkApp(manifest, files, { source } = {}) {
   const program = inkSource(candidate, sourceRelease);
   const { implementation, artifact } = await buildImplementation(program, files, manifest.optimisation);
   const entries = inkEntries(artifact.manifest, artifact.module_graph);
-  const spec = inkSpec({ ...candidate, version: 3, implementation: { version: 1, path: 'server/implementation.json' }, view: manifest.ui?.entry ?? null, exports: manifest.exports || entries.filter(entry => entry.name !== manifest.ui?.entry).map(entry => entry.name) });
-  const commands = inkCommands(spec, entries);
-  const visibleEntries = inkPublicEntries(spec,entries).filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name);
+  const spec = inkSpec({ ...candidate, version: 3, implementation: { version: 1, path: 'server/implementation.json' }, ...(manifest.effects?{effects:manifest.effects}:{}), view: manifest.ui?.entry ?? null, exports: manifest.exports || entries.filter(entry => entry.name !== manifest.ui?.entry&&!manifest.effects?.protocols?.some(protocol=>protocol.resume===entry.name)).map(entry => entry.name) });
+  const capabilities=[...new Set(['code.execute','world.read','world.write',...(manifest.capabilities||[])])];
+  validateEffectCapabilities(spec,capabilities);
+  const commands = inkCommands(spec, entries,artifact.manifest.named_types);
+  const visibleEntries = inkPublicEntries(spec,entries,artifact.manifest.named_types).filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name);
   const metadata = { title: manifest.title || manifest.slug, ink: spec, entries: visibleEntries, namedTypes: artifact.manifest.named_types, compiler: await compilerInfo(), implementation: implementationSummary(implementation), ...(artifact.module_graph ? { moduleGraph: artifact.module_graph } : {}) };
   const release = [
     ...sourceRelease,
@@ -83,17 +86,19 @@ export async function buildInkApp(manifest, files, { source } = {}) {
     if (!icon) fail(400, 'The custom icon is missing from the committed source.');
     desktop.icon = { svg: Buffer.from(icon.base64, 'base64').toString('utf8') };
   }
-  return { entry: 'index.html', ink: spec, files: release, commands, desktop, capabilities: [...new Set(['code.execute', 'world.read', 'world.write', ...(manifest.capabilities || [])])], ...(source ? { source } : {}) };
+  return { entry: 'index.html', ink: spec, files: release, commands, desktop, capabilities, ...(source ? { source } : {}) };
 }
 
+function validateEffectCapabilities(spec,capabilities){for(const protocol of spec.effects?.protocols||[])for(const operation of protocol.operations)if(!capabilities?.includes(EFFECT_CAPABILITIES[operation.kind]))fail(400,'Declare '+EFFECT_CAPABILITIES[operation.kind]+' for this effect protocol');}
 export async function validateInkBundle(bundle) {
   if (!bundle.ink) {
     if (bundle.commands.some(command => command.handler.type === 'ink')) fail(400, 'Ink commands require an Ink source contract.');
     return;
   }
   const spec = inkSpec(bundle.ink, new Set(bundle.files.map(file => file.path)));
+  validateEffectCapabilities(spec,bundle.capabilities);
   const artifact = await compileInkProgram(await inkExecutionSource(spec, bundle.files));
-  const expected = inkCommands(spec, inkEntries(artifact.manifest, artifact.module_graph));
+  const expected = inkCommands(spec, inkEntries(artifact.manifest, artifact.module_graph),artifact.manifest.named_types);
   if (JSON.stringify(bundle.commands) !== JSON.stringify((await import('../shared/app-commands.mjs')).validateCommands(expected))) fail(400, 'Ink commands must match the checked source exports and effects.');
 }
 
@@ -141,18 +146,19 @@ export async function installedInk(platform, appId, releaseId) {
   const spec = inkSpec(bundle.ink, new Set(bundle.files.map(file => file.path)));
   const source = await inkExecutionSource(spec, bundle.files);
   const compiled = await platform.code.compile(source);
-  inkCommands(spec, compiled.entries);
+  inkCommands(spec, compiled.entries,compiled.artifact.manifest.named_types);
   const implementation = spec.implementation ? implementationSummary(JSON.parse(Buffer.from(bundle.files.find(file => file.path === spec.implementation.path).base64, 'base64'))) : null;
-  return { source, spec, entries: inkPublicEntries(spec,compiled.entries).filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name), namedTypes: compiled.artifact.manifest.named_types, releaseId: selected, ...(implementation ? { implementation } : {}), ...(compiled.sourceIdentity ? { sourceIdentity: compiled.sourceIdentity } : {}) };
+  return { source, spec, entries: inkPublicEntries(spec,compiled.entries,compiled.artifact.manifest.named_types).filter(entry => spec.exports.includes(entry.name) || spec.view === entry.name), namedTypes: compiled.artifact.manifest.named_types, releaseId: selected, ...(implementation ? { implementation } : {}), ...(compiled.sourceIdentity ? { sourceIdentity: compiled.sourceIdentity } : {}) };
 }
 
-export async function runInstalledInk(platform, appId, input = {}, principal, releaseId) {
+export async function runInstalledInk(platform, appId, input = {}, principal, releaseId, control={}) {
   if (principal?.releaseId && input.releaseId && principal.releaseId !== input.releaseId) fail(403, 'A runtime cannot change its release identity.');
   const app = await installedInk(platform, appId, releaseId || principal?.releaseId || input.releaseId);
   if (!app.spec.exports.includes(input.entry) && app.spec.view !== input.entry) fail(403, 'The Ink entry is not exported by this app.');
+  if(app.spec.effects?.protocols.some(protocol=>protocol.entry===input.entry)){if(!platform.effects)fail(503,'Typed effect service is unavailable');return platform.effects.run(appId,{...input,releaseId:app.releaseId},principal||{appId,namespace:appId,releaseId:app.releaseId});}
   const hosted=await runInkHostBinding(platform,appId,app,input,principal);if(hosted)return hosted;
   const authority = platform.runtime.bind({ owner: false, appId, namespace: appId, releaseId: app.releaseId });
-  const result = await platform.code.run({ source: app.source, entry: input.entry, input: input.input, args: input.args, backend: input.backend, requestId: input.requestId, namespace: appId, stateKey: 'ink-app:state', principal: authority });
+  const result = await platform.code.run({ source: app.source, entry: input.entry, input: input.input, args: input.args, backend: input.backend, requestId: input.requestId, signal:control.signal, namespace: appId, stateKey: 'ink-app:state', principal: authority });
   if (result.needsArguments) fail(400, 'Provide a JSON argument array for this Ink entry.');
   const entry = app.entries.find(entry => entry.name === input.entry), wire = parseExactJSON(result.wire);
   return { ...result, value: entry.action ? result.output.result : result.output, valueWire: stringifyExactJSON(entry.action ? wire.result : wire), releaseId: app.releaseId };

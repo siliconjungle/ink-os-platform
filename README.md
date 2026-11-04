@@ -222,6 +222,8 @@ Apps register selectable scopes with `client.selection.set(ids, {root: element, 
 
 Desktop arrow keys navigate icon geometry rather than catalog order, stop at edges, and keep reserved modified shortcuts available. Shift-arrow extends the selection and retracing the path shrinks it. When Quick Look starts on the desktop, all four arrows move that same desktop selection; closing the preview returns focus to the current item. Previews from list scopes use their supplied item order.
 
+Installed apps can express typed external effects in Ink, with durable protocol continuations, versioned files, capability-bound HTTP/process resources, subscriptions and direct typed app calls. See [typed effects and protocols](docs/typed-effects.md) and the [all-Ink example](examples/typed-effects).
+
 ### Typed storage queries
 
 The Tables SDK now sends [typed relational queries to storage](docs/typed-storage-queries.md),

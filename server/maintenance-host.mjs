@@ -24,7 +24,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
   check(platform&&world&&typeof world.persist==='function'&&typeof world.transact==='function'&&typeof externalClosed==='function','MAINTENANCE_ADAPTER_CONFIG','Provide live host stores, tracked requests and the external admission gate');
   check(requests instanceof Set||typeof requests==='function','MAINTENANCE_ADAPTER_CONFIG','Provide tracked ordinary HTTP request tasks');
   check(responses instanceof Set||typeof responses==='function','MAINTENANCE_ADAPTER_CONFIG','Provide tracked ordinary HTTP responses');
-  const observations=new WeakMap();let closed=false,backgroundError=false;
+  const observations=new WeakMap();let closed=false,backgroundError=false,effectsDrainAllowed=true;
   if(platform.provider instanceof LocalProvider)platform.provider.bindAdmission(externalClosed);
   function observation(task){if(!promise(task))return null;let state=observations.get(task);if(!state){state={state:'pending'};observations.set(task,state);task.then(value=>{state.state='fulfilled';state.value=value;},()=>{state.state='rejected';});}return state;}
   async function pending(tasks){const states=[...new Set(tasks.filter(Boolean))].map(task=>{check(promise(task),'MAINTENANCE_QUEUE_UNVERIFIED','Host mutation queue has an unsupported shape');return observation(task);});await nextTurn();check(states.every(state=>state.state!=='rejected'),'MAINTENANCE_QUEUE_FAILED','An admitted host task failed before its durable completion');return states.filter(state=>state.state==='pending').length;}
@@ -32,13 +32,14 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
   function pool(){return platform.provider?.pool;}
   function queues(){const c=platform.collaboration,p=platform.projects,runtime=platform.runtime,compute=pool();return{
     publications:[platform.publishTail,...values(platform.releaseTails),...values(p?.operations)],
-    writers:[world.tail,platform.keysTail,runtime?.tail,platform.apiKeys?.tail,platform.environment?.tail,p?.tail,p?.publisher?.tail,p?.credentials?.store?.tail,platform.versions?.tail,platform.desktopActions?.tail,platform.nativeJobs?.tail,platform.workflows?.tail,platform.schedules?.tail,platform.fileDefaultsPending,c?.indexing,c?.versionTail,...values(c?.objectTails),...values(c?.documents),platform.namespaceMigrations?.tail,platform.automationMigrations?.tail,storage?.aliases?.tail,...values(storage?.blobTails),compute?.tail],
-    code:[...values(code?.tasks),...values(code?.compilations),...values(platform.nativeJobs?.native?.compilations)],
+    writers:[platform.effects?.store.tail,world.tail,platform.keysTail,runtime?.tail,platform.apiKeys?.tail,platform.environment?.tail,p?.tail,p?.publisher?.tail,p?.credentials?.store?.tail,platform.versions?.tail,platform.desktopActions?.tail,platform.nativeJobs?.tail,platform.workflows?.tail,platform.schedules?.tail,platform.fileDefaultsPending,c?.indexing,c?.versionTail,...values(c?.objectTails),...values(c?.documents),platform.namespaceMigrations?.tail,platform.automationMigrations?.tail,storage?.aliases?.tail,...values(storage?.blobTails),compute?.tail],
+    code:[...values(platform.effects?.tasks),...values(code?.tasks),...values(code?.compilations),...values(platform.nativeJobs?.native?.compilations)],
     assignments:[...values(compute?.pending),...values(compute?.retiring),compute?.reaping,compute?.maintenanceTask],
     native:[platform.nativeJobs?.pumping,platform.nativeJobs?.native?.tail],
   };}
   function documents(){const result=[];for(const item of values(platform.collaboration?.documents)){if(promise(item)){const state=observation(item);if(state?.state==='fulfilled')result.push(state.value);}else if(item)result.push(item);}return result;}
   async function healthy(){
+    if(platform.effects)check(platform.effects.ready===true&&!platform.effects.error&&!platform.effects.store.journal.error,'MAINTENANCE_EFFECTS_UNREADY','Typed effect journal needs recovery');
     check(!world.journal?.error,'MAINTENANCE_WORLD_UNREADY','World journal needs recovery');
     for(const service of[platform.namespaceMigrations,platform.automationMigrations])if(service)check(service.ready===true,'MAINTENANCE_MIGRATION_UNREADY','A migration needs recovery before maintenance');
     check(!platform.collaboration?.migrationBlocked?.size&&!platform.workflows?.migrationBlocked&&!platform.schedules?.migrationBlocked,'MAINTENANCE_MIGRATION_BLOCKED','A migration still holds its destination admission gates');
@@ -49,6 +50,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
     for(const doc of documents())check(!doc.writeError&&!doc.deleted,'MAINTENANCE_DOCUMENT_UNREADY','A collaborative journal needs recovery');
   }
   function startAccepted(){
+    if(effectsDrainAllowed)platform.effects?.drainAccepted();
     if(platform.workflows?.runs?.some(run=>run.status==='queued')&&!platform.workflows.pumping)Promise.resolve(platform.workflows.pump()).catch(()=>{backgroundError=true;});
     const jobs=platform.nativeJobs;if(jobs?.jobs?.some(job=>nativeActive.has(job.status))&&!jobs.pumping)Promise.resolve(jobs.pump()).catch(()=>{backgroundError=true;});
   }
@@ -68,19 +70,19 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
       workflows:workflowWorkers+counter(platform.workflows?.pumping?1:0)+counter(platform.workflows?.runs?.filter(run=>!terminal.has(run.status)).length||0)+counter(platform.workflows?.pendingProjection?.size||0),
       schedules:scheduleWorkers+counter(platform.schedules?.ticking?1:0)+counter(platform.schedules?.runs?.filter(run=>!terminal.has(run.status)).length||0),
       nativeJobs:nativeCount+jobs.filter(job=>nativeActive.has(job.status)).length,
-      codeTasks:codeCount,
+      codeTasks:codeCount+counter(platform.effects?.queue.size||0),
       poolAssignments:assignmentCount+counter(compute?.admissions?.size||0),
       poolRequests:sum(values(compute?.requests)),
     };
   }
   function external(expected){check(closed&&externalClosed()===expected,'MAINTENANCE_ADMISSION_MISMATCH','Maintenance admission gates disagree',409);}
-  function closeAdmission({poolClosed=false}={}){check(typeof poolClosed==='boolean','MAINTENANCE_ADAPTER_CONFIG','Choose an explicit pool admission state');closed=true;platform.schedules?.close();platform.workflows?.close();if(platform.nativeJobs)platform.nativeJobs.accepting=!poolClosed;
+  function closeAdmission({poolClosed=false}={}){check(typeof poolClosed==='boolean','MAINTENANCE_ADAPTER_CONFIG','Choose an explicit pool admission state');closed=true;effectsDrainAllowed=!poolClosed;platform.effects?.closeAdmission();if(!poolClosed)platform.effects?.drainAccepted();platform.schedules?.close();platform.workflows?.close();if(platform.nativeJobs)platform.nativeJobs.accepting=!poolClosed;
     for(const response of tracked(responses,'response'))if(String(response.getHeader?.('content-type')||'').startsWith('text/event-stream')&&!response.writableEnded)response.end();
     if(poolClosed&&pool())pool().admissionClosed=true;
   }
   function releasePool(){const compute=pool();if(!compute)return;if(typeof compute.releaseMaintenance==='function')compute.releaseMaintenance();else check(compute.admissionClosed!==true,'MAINTENANCE_POOL_UNSUPPORTED','This pool cannot release its maintenance gate');}
-  function continueDraining(){external(true);releasePool();if(platform.nativeJobs)platform.nativeJobs.accepting=true;}
-  function resumeAdmission(){check(externalClosed()===false,'MAINTENANCE_ADMISSION_MISMATCH','External maintenance admission is still closed',409);releasePool();closed=false;if(platform.nativeJobs)platform.nativeJobs.accepting=true;platform.workflows?.start();platform.schedules?.start();}
+  function continueDraining(){external(true);releasePool();effectsDrainAllowed=true;platform.effects?.drainAccepted();if(platform.nativeJobs)platform.nativeJobs.accepting=true;}
+  function resumeAdmission(){check(externalClosed()===false,'MAINTENANCE_ADMISSION_MISMATCH','External maintenance admission is still closed',409);releasePool();closed=false;effectsDrainAllowed=true;platform.effects?.resumeAdmission();if(platform.nativeJobs)platform.nativeJobs.accepting=true;platform.workflows?.start();platform.schedules?.start();}
   async function inventory(request,{snapshot=false}={}){
     const diagnostics=[],custom=new Set(),apps=new Map(),releases=new Map(),callable=new Set();let incompatible=0;
     const localBackendsInactive=snapshot&&platform.provider instanceof LocalProvider&&await platform.provider.snapshotBackendsInactive();
@@ -137,7 +139,7 @@ export function createMaintenanceHostAdapter({platform,world=platform?.world,sto
       const doc=await item;check(!doc.deleted&&!doc.writeError,'MAINTENANCE_DOCUMENT_UNREADY','A collaborative journal needs recovery');clearTimeout(doc.projectTimer);doc.projectTimer=null;doc.projectionEpoch=(doc.projectionEpoch||0)+1;await doc.tail;await c.projectCommitted(doc);await doc.tail;await c.checkpoint(doc);await doc.journal.sync();const directory=await open(doc.dir,'r');try{await directory.sync();}finally{await directory.close();}
     }
     await healthy();const after=queues();if(await pending([...after.writers,...after.publications]))unchanged();await Promise.all([...after.writers,...after.publications].filter(Boolean));if(!allZero(await activity()))unchanged();
-    await world.transact(()=>world.persist());await healthy();if(!allZero(await activity()))unchanged();return{flushed:true};
+    if(platform.effects)await platform.effects.store.transact(()=>platform.effects.store.persist());await world.transact(()=>world.persist());await healthy();if(!allZero(await activity()))unchanged();return{flushed:true};
   }
   const quiesceSnapshot=()=>quiescePool({retireRuntimeImage:false,fromImages:{},targetImages:{}},{snapshot:true});
   return{closeAdmission,resumeAdmission,continueDraining,activity,quiescePool,quiesceSnapshot,flush};

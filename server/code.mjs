@@ -195,6 +195,10 @@ export class Code {
     return saved;
   }
   async execute(input) {
+    if (input.signal !== undefined && !(input.signal instanceof AbortSignal))
+      throw Object.assign(Error('Invalid execution cancellation signal'), {
+        status: 400,
+      });
     if (
       input.backend &&
       !['javascript', 'auto', 'native'].includes(input.backend)
@@ -300,7 +304,13 @@ export class Code {
           })
         : javascriptResident(compiled, options),
     );
+    const abort = () => {
+      void this.residents.drop(session).catch(() => {});
+    };
+    input.signal?.addEventListener('abort', abort, { once: true });
     try {
+      if (input.signal?.aborted)
+        throw input.signal.reason || Error('Ink execution cancelled');
       if (selected.action) {
         if (session.revision !== saved.revision) {
           recovery = await journal.recover(saved);
@@ -373,6 +383,7 @@ export class Code {
       await this.residents.drop(session);
       throw error;
     } finally {
+      input.signal?.removeEventListener('abort', abort);
       this.residents.release(session);
     }
   }

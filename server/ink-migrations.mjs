@@ -20,7 +20,7 @@ async function checkedRelease(platform, appId, releaseId) {
   const spec = inkSpec(bundle.ink, new Set(bundle.files.map(file => file.path)));
   let source;
   try { source = await inkExecutionSource(spec, bundle.files); } catch { fail(409, 'release-source-bytes-invalid'); }
-  const compiled=await platform.code.compile(source);inkCommands(spec,compiled.entries);
+  const compiled=await platform.code.compile(source);inkCommands(spec,compiled.entries,compiled.artifact.manifest.named_types);
   return { record, spec, compiled, digest: metadata.digest };
 }
 
