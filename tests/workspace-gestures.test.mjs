@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {WorkspaceSwipe, adjacentWorkspace} from '../shared/workspace-gestures.mjs';
+import {WorkspaceSwipe, OverviewSwipe, adjacentWorkspace} from '../shared/workspace-gestures.mjs';
 const wheel = (tracker, x, y = 0, time = 0, extra = {}) => tracker.wheel({deltaX:x, deltaY:y, ...extra}, time);
 
 test('one switch per swipe, including momentum and direction reversal after switching', () => {
@@ -46,4 +46,23 @@ test('a new physical gesture rearms immediately without waiting for the previous
   assert.equal(wheel(tracker,100,0,32).step,1);
   tracker.reset();
   assert.equal(wheel(tracker,-100,0,48).step,-1);
+});
+
+test('vertical overview strokes open/close once per gesture and preserve the originating surface',()=>{
+  const tracker=new OverviewSwipe();
+  const event=(y,time,eligible=true,x=0)=>tracker.wheel({deltaX:x,deltaY:y},time,eligible);
+  assert.deepEqual(event(35,0),{consume:true,step:0});
+  assert.equal(event(75,16).step,1);
+  for(let time=32;time<500;time+=16)assert.equal(event(25,time).step,0);
+  tracker.reset();assert.equal(event(-110,510).step,-1);
+  tracker.reset();assert.deepEqual(event(120,600,false),{consume:false,step:0});
+  assert.deepEqual(event(150,616,true),{consume:false,step:0},'Moving from app content onto chrome does not steal its scroll');
+  assert.equal(event(120,1000).step,1,'A later stroke can start on chrome');
+});
+
+test('overview gestures ignore horizontal strokes, diagonal scrolling and browser-inherited zoom modifiers',()=>{
+  for(const value of [{deltaX:120,deltaY:0},{deltaX:110,deltaY:100},{deltaX:0,deltaY:120,ctrlKey:true},{deltaX:0,deltaY:120,metaKey:true},{deltaX:0,deltaY:120,altKey:true},{deltaX:0,deltaY:120,shiftKey:true}]){
+    // WheelEvent properties are inherited accessors rather than enumerable own properties.
+    assert.deepEqual(new OverviewSwipe().wheel(Object.create(value),0,true),{consume:false,step:0});
+  }
 });

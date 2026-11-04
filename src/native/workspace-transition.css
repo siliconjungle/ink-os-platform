@@ -1,23 +1,23 @@
 /* Slide the complete desktop, including its wallpaper. Keep chrome stationary. */
-:root[data-workspace-slide] .desktop-shell{view-transition-name:ink-desktop}
-:root[data-workspace-slide] .system-bar{view-transition-name:ink-desktop-toolbar}
-:root[data-workspace-slide] .desktop-bottom{view-transition-name:ink-desktop-dock}
-:root[data-workspace-slide] .canvas-navigation{view-transition-name:ink-desktop-navigation}
-:root[data-workspace-slide]::view-transition{pointer-events:none}
-:root[data-workspace-slide]::view-transition-old(root){display:none}
-:root[data-workspace-slide]::view-transition-new(root){animation:none;mix-blend-mode:normal}
-:root[data-workspace-slide]::view-transition-group(ink-desktop){z-index:1;animation-duration:320ms;animation-timing-function:cubic-bezier(.22,.8,.25,1)}
-:root[data-workspace-slide]::view-transition-group(ink-desktop-toolbar),
-:root[data-workspace-slide]::view-transition-group(ink-desktop-dock),
-:root[data-workspace-slide]::view-transition-group(ink-desktop-navigation){z-index:2;animation:none}
-:root[data-workspace-slide]::view-transition-old(ink-desktop-toolbar),
-:root[data-workspace-slide]::view-transition-old(ink-desktop-dock),
-:root[data-workspace-slide]::view-transition-old(ink-desktop-navigation){display:none}
-:root[data-workspace-slide]::view-transition-new(ink-desktop-toolbar),
-:root[data-workspace-slide]::view-transition-new(ink-desktop-dock),
-:root[data-workspace-slide]::view-transition-new(ink-desktop-navigation){animation:none;mix-blend-mode:normal}
-:root[data-workspace-slide]::view-transition-old(ink-desktop),
-:root[data-workspace-slide]::view-transition-new(ink-desktop){animation-duration:320ms;animation-timing-function:cubic-bezier(.22,.8,.25,1);mix-blend-mode:normal;animation-fill-mode:both}
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"]) .desktop-shell{view-transition-name:ink-desktop}
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"]) .system-bar{view-transition-name:ink-desktop-toolbar}
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"]) .desktop-bottom{view-transition-name:ink-desktop-dock}
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"]) .canvas-navigation{view-transition-name:ink-desktop-navigation}
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition{pointer-events:none}
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-old(root){display:none}
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-new(root){animation:none;mix-blend-mode:normal}
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-group(ink-desktop){z-index:1;animation-duration:320ms;animation-timing-function:cubic-bezier(.22,.8,.25,1)}
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-group(ink-desktop-toolbar),
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-group(ink-desktop-dock),
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-group(ink-desktop-navigation){z-index:2;animation:none}
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-old(ink-desktop-toolbar),
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-old(ink-desktop-dock),
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-old(ink-desktop-navigation){display:none}
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-new(ink-desktop-toolbar),
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-new(ink-desktop-dock),
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-new(ink-desktop-navigation){animation:none;mix-blend-mode:normal}
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-old(ink-desktop),
+:root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-new(ink-desktop){animation-duration:320ms;animation-timing-function:cubic-bezier(.22,.8,.25,1);mix-blend-mode:normal;animation-fill-mode:both}
 :root[data-workspace-slide="next"]::view-transition-old(ink-desktop){animation-name:ink-desktop-exit-left}
 :root[data-workspace-slide="next"]::view-transition-new(ink-desktop){animation-name:ink-desktop-enter-right}
 :root[data-workspace-slide="previous"]::view-transition-old(ink-desktop){animation-name:ink-desktop-exit-right}
@@ -27,7 +27,7 @@
 @keyframes ink-desktop-exit-right{to{transform:translateX(100vw)}}
 @keyframes ink-desktop-enter-left{from{transform:translateX(-100vw)}}
 @media(prefers-reduced-motion:reduce){
-  :root[data-workspace-slide]::view-transition-group(*),
-  :root[data-workspace-slide]::view-transition-old(*),
-  :root[data-workspace-slide]::view-transition-new(*){animation-duration:0s}
+  :root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-group(*),
+  :root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-old(*),
+  :root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-new(*){animation-duration:0s}
 }

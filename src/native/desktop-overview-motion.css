@@ -1,0 +1,13 @@
+.window-overview:focus{outline:none}
+.overview-gesture-hint{font-size:11px;color:var(--secondary,#999);margin-right:14px}
+:root[data-workspace-slide^="overview-"]::view-transition{pointer-events:none}
+:root[data-workspace-slide^="overview-"]::view-transition-group(ink-overview-desktop){z-index:1;animation-duration:340ms;animation-timing-function:cubic-bezier(.22,.8,.25,1);overflow:clip;border-radius:10px}
+:root[data-workspace-slide^="overview-"]::view-transition-old(ink-overview-desktop),
+:root[data-workspace-slide^="overview-"]::view-transition-new(ink-overview-desktop){height:100%;width:100%;object-fit:fill;animation-duration:340ms;mix-blend-mode:normal}
+:root[data-workspace-slide^="overview-"]::view-transition-old(root),
+:root[data-workspace-slide^="overview-"]::view-transition-new(root){animation-duration:340ms;animation-timing-function:cubic-bezier(.22,.8,.25,1);mix-blend-mode:normal}
+@media(prefers-reduced-motion:reduce){
+  :root[data-workspace-slide^="overview-"]::view-transition-group(*),
+  :root[data-workspace-slide^="overview-"]::view-transition-old(*),
+  :root[data-workspace-slide^="overview-"]::view-transition-new(*){animation-duration:0s}
+}

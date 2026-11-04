@@ -4,3 +4,8 @@ export class WorkspaceSwipe {
   reset():void;
   wheel(event:{deltaX:number;deltaY:number;deltaMode?:number;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean;shiftKey?:boolean}, now:number):{consume:boolean;step:number};
 }
+export class OverviewSwipe {
+  constructor(options?:{threshold?:number;idleMs?:number});
+  reset():void;
+  wheel(event:{deltaX:number;deltaY:number;deltaMode?:number;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean;shiftKey?:boolean},now:number,eligible:boolean):{consume:boolean;step:number};
+}

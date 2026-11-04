@@ -31,3 +31,21 @@ export class WorkspaceSwipe {
     return {consume:true, step:this.x > 0 ? 1 : -1};
   }
 }
+
+/** Reserve a vertical stroke only when it starts on desktop chrome. */
+export class OverviewSwipe {
+  constructor({threshold=100,idleMs=280}={}) {
+    this.idleMs=idleMs;
+    this.tracker=new WorkspaceSwipe({threshold,idleMs});
+    this.reset();
+  }
+  reset() {this.tracker.reset();this.last=-Infinity;this.eligible=undefined;}
+  wheel(event,now,eligible) {
+    if(now-this.last>this.idleMs||now<this.last)this.reset();
+    this.last=now;
+    if(this.eligible===undefined&&(event.deltaX||event.deltaY))this.eligible=eligible;
+    const result=this.tracker.wheel({deltaX:event.deltaY,deltaY:event.deltaX,deltaMode:event.deltaMode,
+      ctrlKey:event.ctrlKey,metaKey:event.metaKey,altKey:event.altKey,shiftKey:event.shiftKey},now);
+    return this.eligible?result:{consume:false,step:0};
+  }
+}

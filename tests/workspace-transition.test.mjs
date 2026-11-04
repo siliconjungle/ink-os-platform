@@ -48,3 +48,19 @@ test('reduced motion, hidden pages, unsupported browsers and capture failures st
     assert.equal(f.document.documentElement.dataset.workspaceSlide,undefined,mode);
   }
 });
+
+test('overview capture names are cleaned up when interrupted and after reduced-motion updates',async()=>{
+  const f=fixture(),events=[];
+  f.transition.run('overview-in',()=>events.push('open'),()=>events.push('clear-open-name'));
+  assert.equal(f.document.documentElement.dataset.workspaceSlide,'overview-in');
+  f.transition.run('overview-out',()=>events.push('close'),()=>events.push('clear-close-name'));
+  assert.deepEqual(events,['open','clear-open-name']);
+  f.views[0].commit();f.views[0].end();await Promise.resolve();await Promise.resolve();
+  assert.deepEqual(events,['open','clear-open-name']);
+  assert.equal(f.document.documentElement.dataset.workspaceSlide,'overview-out');
+  f.views[1].commit();f.views[1].end();await Promise.resolve();await Promise.resolve();
+  assert.deepEqual(events,['open','clear-open-name','close','clear-close-name']);
+  f.transition.reducedMotion=()=>true;
+  await f.transition.run('overview-in',()=>events.push('open-immediately'),()=>events.push('clear-immediately'));
+  assert.deepEqual(events.slice(-2),['open-immediately','clear-immediately']);
+});
