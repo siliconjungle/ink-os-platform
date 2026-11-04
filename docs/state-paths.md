@@ -33,6 +33,28 @@ let rows = Rows.values().filter(fn(row) => row.open);
 Results are identical to the scan (tested against a scan through random puts,
 removes, failed actions, host transactions and restores).
 
+**Counts and sums over a view.** `count(view)` reads the view's length, and
+`sum(view.map(fn(row) => ...))` keeps its total in the view when the mapped
+function also reads only its row:
+
+```ink
+keep OpenTotal:u64 = sum(Rows.values().filter(fn(row) => row.open).map(fn(row) => row.amount));
+```
+
+- Applying dirty rows to the view first adjusts each total by the row's old
+  and new admitted contribution, so a read costs the changed rows.
+- Totals are exact and wrap on read as the scan's additions do (`u64`,
+  `u32`, `i32`) or stay exact (`Int`). `f32` sums depend on the order of
+  addition and keep the scan.
+- A staged single cell scans. A contribution that throws drops its total;
+  the next read recomputes it by scanning and meets the same error.
+
+`tests/view_aggregates.rs` in the lowering compares every maintained count
+and sum with the same aggregate over a scanning filter. On the 100,000-row
+Tables state (10,000 open rows) a 20-row page read after a write, with its
+`OpenTotal` and `OpenCount` keeps, went from 0.90 to 0.07 ms inside the
+engine; the keeps had been 85% of it.
+
 ## State paths
 
 The lowering's state metadata now lists each view (`filters`) and, for every
@@ -165,6 +187,12 @@ Inside one engine, without workers:
 What remains:
 
 - A query that returns every matching row still builds every row it returns.
+  A link plan's limit can only bound the provider's query when the plan
+  neither filters nor aggregates rows, and then a direct read already pages at
+  the provider; plans that filter and aggregate scan their provider's rows,
+  reusing each consumer function's result per row.
+- The maintained counts and sums take effect in the OS once the browser
+  compiler is rebuilt with the lowering it now pins.
 - The first load is dominated by restoring the base snapshot (about 210 ms
   at 100,000 rows, 4.3 MB). A host-level first planned read now takes
   480–514 ms (from 528).
