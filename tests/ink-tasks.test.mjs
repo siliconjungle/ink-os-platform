@@ -181,7 +181,7 @@ test('an interrupted task run resumes from its journal without repeating effects
     server.close();
   });
   const origin = 'http://127.0.0.1:' + server.address().port,
-    { platform } = await fixture(t, {
+    { platform, directory } = await fixture(t, {
       allowHttp: true,
       policy: {
         version: 1,
@@ -191,6 +191,9 @@ test('an interrupted task run resumes from its journal without repeating effects
         },
       },
     });
+  // State goes through collaboration documents, as on a production host.
+  const { Collaboration } = await import('../server/collaboration.mjs');
+  await new Collaboration({ directory, world: platform.world }).index();
   const log = await install(platform, await buildInkApp({ slug: 'log', language: 'ink', exports: ['log', 'last'] }, [file('main.ink', LOG)])),
     triage = await install(platform, await taskApp({ app: log.app, release: log.release })),
     total = async () => (await runInstalledInk(platform, triage.app.id, { entry: 'total', input: '[]' }, owner)).valueWire,
@@ -201,9 +204,9 @@ test('an interrupted task run resumes from its journal without repeating effects
     stop = new AbortController(),
     running = first.run(triage.app.id, { task: 'triage', input: '["/tickets/1"]', requestId: 'durable' }, owner, { signal: stop.signal }).catch((e) => e);
   const journal = async () => {
-    const keys = await platform.code.stateKeys('ink-tasks', 'run:');
-    const key = keys.find((k) => /^run:[a-f0-9]{32}$/.test(k));
-    return key && (await platform.code.readState('ink-tasks', key)).value;
+    const keys = await platform.code.stateKeys('os', 'ink-task:run:');
+    const key = keys.find((k) => /^ink-task:run:[a-f0-9]{32}$/.test(k));
+    return key && (await platform.code.readState('os', key)).value;
   };
   for (let i = 0; i < 200 && !(hung.length && JSON.parse((await journal())?.records || '[]').length >= 2); i++) await new Promise((r) => setTimeout(r, 25));
   const kept = JSON.parse((await journal()).records);
@@ -245,7 +248,7 @@ test('an interrupted task run resumes from its journal without repeating effects
   assert.equal(await total(), '1', 'replay leaves live state alone');
   assert.equal(await last(), '"crash on start"');
   assert.deepEqual(
-    (await platform.code.stateKeys('ink-tasks', '')).filter((k) => k.startsWith('replay:') || (k.startsWith('@ink:') && !k.includes('run:'))),
+    (await platform.code.stateKeys('os', 'ink-task:replay:')),
     [],
     'scratch state is removed',
   );
@@ -313,3 +316,55 @@ test(
     assert.equal(replay.valueWire, native.valueWire);
   },
 );
+
+// A target entry that takes the caller identity first receives it from the
+// host; a task can neither name another caller nor declare that parameter.
+const AUDIT = `module audit;
+record Actor {appId:String,releaseId:String,}
+state Last:String="";
+change write(actor:Actor,v:String)->Result<u64,String> reads(Last) writes(Last){Last=string_concat(actor.appId,string_concat(":",v));return Ok(1);}
+query last()->String reads(Last){return Last;}`;
+const CALLER = (effect, call) => `module app;
+record Actor {appId:String,releaseId:String,}
+state N:u64=0;
+query total()->u64 reads(N){return N;}
+${effect}
+task go(id:String) -> Result<u64,String> {
+  let sent = ${call};
+  return sent;
+}
+`;
+test('task app effects carry the host-filled caller identity and cannot forge another', async (t) => {
+  const { platform } = await fixture(t, { policy: { version: 1, resources: {} } }),
+    audit = await install(platform, await buildInkApp({ slug: 'audit', language: 'ink', exports: ['write', 'last'] }, [file('main.ink', AUDIT)])),
+    tasks = new InkTasks({ platform }),
+    last = async () => (await runInstalledInk(platform, audit.app.id, { entry: 'last', input: '[]' }, owner)).valueWire;
+  const caller = async (effect, call) =>
+    install(
+      platform,
+      await buildInkApp(
+        {
+          slug: 'caller-' + crypto.randomUUID().slice(0, 8),
+          language: 'ink',
+          exports: ['total'],
+          capabilities: ['apps.invoke'],
+          tasks: {
+            version: 1,
+            entries: ['go'],
+            effects: [{ name: 'poke', kind: 'app', resource: { appId: audit.app.id, releaseId: audit.release.id, entry: 'write' }, effect: 'write', deadlineMs: 5000 }],
+          },
+        },
+        [file('main.ink', CALLER(effect, call))],
+      ),
+    );
+  const honest = await caller('ordered effect poke(v:String) -> Result<u64,String>;', 'poke(id)'),
+    victim = 'f'.repeat(32);
+  await tasks.run(honest.app.id, { task: 'go', input: JSON.stringify([victim]) }, owner);
+  assert.equal(await last(), JSON.stringify(honest.app.id + ':' + victim), 'the target sees the real caller');
+  const forger = await caller(
+    'ordered effect poke(actor:Actor,v:String) -> Result<u64,String>;',
+    'poke(Actor{appId:id,releaseId:""},"forged")',
+  );
+  await assert.rejects(tasks.run(forger.app.id, { task: 'go', input: JSON.stringify([victim]) }, owner), (e) => e.status === 422 && /types differ/.test(e.message));
+  assert.equal(await last(), JSON.stringify(honest.app.id + ':' + victim), 'nothing was written as another app');
+});

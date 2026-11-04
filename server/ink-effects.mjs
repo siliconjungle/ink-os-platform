@@ -33,7 +33,8 @@ const fail = (status, message) => {
 };
 const nowId = () => Date.now() + ':' + globalThis.crypto.randomUUID();
 const MAX_AGE = 86400000;
-const actorType = {
+// The caller identity a two-parameter app entry receives first, filled by the host.
+export const actorType = {
   kind: 'record',
   fields: [
     { name: 'appId', type: { kind: 'string' } },

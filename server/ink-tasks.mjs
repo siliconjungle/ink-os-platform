@@ -28,6 +28,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { installedInk, runInstalledInk } from './ink-apps.mjs';
 import { runTask, replayTask, TaskFailed, effectPrompt, replyValue, MANIFEST_FORMAT } from './ink-task-runner.mjs';
 import { httpEffect, effectFailure } from './ink-effect-io.mjs';
+import { actorType } from './ink-effects.mjs';
 import { hostBudget } from './execution-budget.mjs';
 import { TASK_CAPABILITIES } from '../shared/ink-tasks.mjs';
 import { EFFECT_REQUESTS, EFFECT_RESPONSES, EFFECT_ERROR, resolveEffectType, effectTypeEqual } from '../shared/ink-effects.mjs';
@@ -38,7 +39,10 @@ const fail = (status, message) => {
   throw Object.assign(Error(message), { status });
 };
 const sha = (text) => createHash('sha256').update(text).digest('hex');
-const RUNS = 'ink-tasks',
+// Run journals live under the host's `os` namespace, which only the owner and
+// the host write (apps write only their own namespace).
+const RUNS = 'os',
+  RUN = 'ink-task:run:',
   JOURNAL_FORMAT = 'ink-os-task-journal-v1',
   MAX_JOURNAL = 768 * 1024,
   MAX_START = 1024 * 1024,
@@ -134,7 +138,7 @@ export async function modelComplete(profile, prompt, signal, owner) {
 /** One run's durable record; writes are serialized and compare revisions. */
 class RunJournal {
   constructor(code, runId) {
-    Object.assign(this, { code, key: 'run:' + runId, revision: 0, chain: Promise.resolve() });
+    Object.assign(this, { code, key: RUN + runId, revision: 0, chain: Promise.resolve() });
   }
   async read() {
     const saved = await this.code.storage.read(RUNS, this.key);
@@ -160,10 +164,10 @@ export class InkTasks {
   }
   /** Resume every run a previous host left running. */
   async resume() {
-    const keys = (await this.platform.code.stateKeys(RUNS, 'run:')).filter((k) => /^run:[a-f0-9]{32}$/.test(k)),
+    const keys = (await this.platform.code.stateKeys(RUNS, RUN)).filter((k) => /^ink-task:run:[a-f0-9]{32}$/.test(k)),
       results = [];
     for (const key of keys) {
-      const journal = new RunJournal(this.platform.code, key.slice(4)),
+      const journal = new RunJournal(this.platform.code, key.slice(RUN.length)),
         record = await journal.read().catch(() => null);
       if (record?.format !== JOURNAL_FORMAT || record.status !== 'running' || this.active.has(record.runId)) continue;
       const task = this.continue(record, journal).catch((error) => ({ runId: record.runId, error: error.message }));
@@ -233,14 +237,21 @@ export class InkTasks {
       entry = app.entries.find((e) => e.name === target.entry);
     if (!entry || !app.spec.exports.includes(target.entry) || entry.effectProtocol || entry.hostBinding || (binding.effect === 'read' && entry.change))
       throw effectFailure('Denied', 'Target is not an exported direct typed Ink call');
-    const targetNamed = app.namedTypes;
+    const targetNamed = app.namedTypes,
+      params = entry.params.map((p) => resolveEffectType(p.type, targetNamed)),
+      // As for protocol app effects, a two-parameter entry whose first
+      // parameter is the caller identity receives it from the host; the task
+      // supplies only the rest and can never name another caller.
+      actor = params.length === 2 && effectTypeEqual(params[0], actorType),
+      supplied = actor ? params.slice(1) : params;
     if (
-      type &&
-      (entry.params.length !== type.params.length ||
-        entry.params.some((p, i) => !effectTypeEqual(resolveEffectType(p.type, targetNamed), resolveEffectType(type.params[i], named))) ||
-        !effectTypeEqual(resolveEffectType(entry.result, targetNamed), resolveEffectType(type.reply, named)))
+      !type ||
+      supplied.length !== type.params.length ||
+      supplied.some((p, i) => !effectTypeEqual(p, resolveEffectType(type.params[i], named))) ||
+      !effectTypeEqual(resolveEffectType(entry.result, targetNamed), resolveEffectType(type.reply, named))
     )
       throw effectFailure('TypeMismatch', 'Task app effect types differ from the target entry');
+    if (actor) values = [{ appId: caller.appId, releaseId: caller.releaseId }, ...values];
     const result = await runInstalledInk(
       this.platform,
       target.appId,
@@ -303,7 +314,10 @@ export class InkTasks {
     if (existing) {
       if (existing.appId !== appId || existing.task !== input.task || existing.input !== wire)
         fail(409, 'Task request identity was already used for a different run');
-      if (existing.status === 'running') return this.execute(prepared, existing, journal, signal);
+      if (existing.status === 'running') {
+        if (existing.releaseId !== prepared.app.releaseId) fail(409, 'The run belongs to another release');
+        return this.execute(prepared, existing, journal, signal);
+      }
       return this.finished(existing);
     }
     const record = {
@@ -322,7 +336,7 @@ export class InkTasks {
     try {
       const start = await this.platform.code.loadCheckpoint(appId, 'ink-app:state'),
         value = start.value === null ? { empty: true } : start.value.snapshot && start.value.snapshot.length <= MAX_START ? start.value : null;
-      if (value) await this.platform.code.storage.batch(RUNS, 'run:' + runId + ':start', 0, [{ key: 'run:' + runId + ':start', value }]);
+      if (value) await this.platform.code.storage.batch(RUNS, RUN + runId + ':start', 0, [{ key: RUN + runId + ':start', value }]);
     } catch {}
     return this.execute(prepared, record, journal, signal);
   }
@@ -422,12 +436,12 @@ export class InkTasks {
     if (record?.format !== JOURNAL_FORMAT || record.appId !== appId) fail(404, 'No such task run');
     if (record.status === 'running') fail(409, 'The task run has not finished');
     if (!record.trace) fail(409, 'The task run kept no trace');
-    const startKey = 'run:' + runId + ':start',
+    const startKey = RUN + runId + ':start',
       start = await this.platform.code.storage.read(RUNS, startKey);
     if (!start.value) fail(409, 'The task run kept no start state');
     const prepared = await this.prepare(appId, record.task, { ...principal, releaseId: record.releaseId });
     if (prepared.app.releaseId !== record.releaseId) fail(409, 'The run belongs to another release');
-    const scratch = 'replay:' + runId + ':' + randomBytes(8).toString('hex'),
+    const scratch = 'ink-task:replay:' + runId + ':' + randomBytes(8).toString('hex'),
       code = this.platform.code;
     // A run that started before the app's first commit replays on fresh state.
     if (!start.value.empty) await code.saveCheckpoint(RUNS, scratch, start.value, 0);
@@ -445,8 +459,9 @@ export class InkTasks {
       throw error;
     } finally {
       // Scratch state and its journal payloads leave with the replay.
-      const keys = (await code.stateKeys(RUNS, scratch)).concat(await code.stateKeys(RUNS, '@ink:'));
-      const own = keys.filter((k) => k === scratch || k.startsWith('@ink:' + sha(scratch) + ':'));
+      const own = [...new Set([...(await code.stateKeys(RUNS, scratch)), ...(await code.stateKeys(RUNS, '@ink:' + sha(scratch) + ':'))])].filter(
+        (k) => k === scratch || k.startsWith('@ink:' + sha(scratch) + ':'),
+      );
       const saved = await code.readState(RUNS, scratch);
       await code.storage.batch(RUNS, scratch, saved.revision, own.map((key) => ({ key, delete: true }))).catch(() => {});
     }
