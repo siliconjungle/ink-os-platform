@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "license": "MIT",
-  "sha256": "3d9368adbbd8135dc07ac30b8a09246124e5c3cdfeb2025e4a10e199a6f0c9a2",
-  "bytes": 6587004,
+  "sha256": "e4ec8cc030844cfd4ffa2235b54a8529c2f2541d7a2c6a38e8d42742b4b7402b",
+  "bytes": 7981000,
   "dependencyLockSHA256": "495d6dc5a5443d2cccb13fe4a93c2fc0da2cb40dbb720aac73072e770bed88aa",
-  "transportSourceSHA256": "a1f4ac6e59d7445cb4fec55a71129388f8d5691d527ec8780655a5794f292c8c",
+  "transportSourceSHA256": "49833df2edb539ffc788162f581f4b9650166da5d1bc40c7449eacb982377d53",
   "outputs": [
     "javascript",
     "rust",

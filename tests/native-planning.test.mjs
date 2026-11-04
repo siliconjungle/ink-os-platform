@@ -1,0 +1,24 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { NativeInk } from '../server/native-ink.mjs';
+import { buildInkApp, inkExecutionSource } from '../server/ink-apps.mjs';
+import { compileInkProgram } from '../server/ink-compiler.mjs';
+const source = await readFile(new URL('./fixtures/planned-counter.ink', import.meta.url), 'utf8');
+const plan = await readFile(new URL('./fixtures/planned-counter.plan.json', import.meta.url), 'utf8');
+const manifest = { language: 'ink', slug: 'planned-counter', exports: ['add', 'fail', 'total', 'amount'], optimisation: { version: 1, mode: 'replay', plan: 'counter.plan.json' } };
+const files = [{ path: 'main.ink', base64: Buffer.from(source).toString('base64') }, { path: 'counter.plan.json', base64: Buffer.from(plan).toString('base64') }];
+test('native selected execution shares portable checkpoints with JavaScript', { skip: process.env.INK_TEST_NATIVE !== '1', timeout: 300000 }, async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'ink-planned-native-')); t.after(() => rm(directory, { recursive: true, force: true }));
+  const bundle = await buildInkApp(manifest, files), execution = await inkExecutionSource(bundle.ink, bundle.files);
+  const native = new NativeInk(directory, { offline: process.env.INK_NATIVE_OFFLINE === '1' }), built = await native.build(execution, { namespace: 'planned-counter' });
+  const result = await native.run(built.id, { namespace: 'planned-counter', entry: 'add', input: '[18446744073709551615]' });
+  const original = await compileInkProgram(source), module = await import('data:text/javascript;base64,' + Buffer.from(original.javascript).toString('base64'));
+  const state = module.createState(); await state.restore(new Uint8Array(Buffer.from(result.snapshot, 'base64')));
+  assert.equal(state.invoke('total', []).result, 18446744073709551615n);
+  state.invoke('add', [2n]);
+  const next = await native.run(built.id, { namespace: 'planned-counter', entry: 'total', snapshot: Buffer.from(await state.checkpoint()).toString('base64') });
+  assert.equal(next.output.result, 1);
+});
