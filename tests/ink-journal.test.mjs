@@ -74,8 +74,11 @@ test('journal v2 headers stay constant and a compaction after a one-row edit rew
   for (let i = 0; i < 31; i++) await f.run('edit', [2000, i]);
   f.writes.length = 0;
   await f.run('edit', [2000, 5]);
+  // Count snapshot chunks only: metadata chunks hold receipts with random
+  // request identities, so how many of those change varies from run to run.
   const after = (await f.code.readState(f.namespace, f.key)).value,
-    written = f.writes.filter((k) => k.startsWith(f.prefix + 'c:'));
+    snapshotKeys = new Set(after.base.snapshot.chunks.map((id) => f.prefix + 'c:' + id)),
+    written = f.writes.filter((k) => snapshotKeys.has(k));
   assert.equal(after.count, 0);
   assert.notEqual(after.base.hash, first.base.hash);
   assert.ok(written.length <= 5, `compaction wrote ${written.length} of ${after.base.snapshot.chunks.length} snapshot chunks`);
