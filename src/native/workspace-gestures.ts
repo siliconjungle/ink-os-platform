@@ -8,7 +8,7 @@ declare global {
   }
 }
 
-export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compositor, overview:{isOpen:()=>boolean;open:()=>void;close:()=>void}) {
+export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compositor, overview:{isOpen:()=>boolean;open:()=>void;close:()=>void;step:(direction:number)=>void}) {
   const swipe = new WorkspaceSwipe();
   const vertical = new OverviewSwipe();
   const reset = () => {swipe.reset();vertical.reset();};
@@ -34,7 +34,7 @@ export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compos
     const now=performance.now(),open=overview.isOpen(),motion=vertical.wheel(event,now,eligible||open);
     if(motion.step>0&&!open)overview.open();
     else if(motion.step<0&&open)overview.close();
-    if(open){swipe.reset();return motion.consume;}
+    if(open){const result=swipe.wheel(event,now);if(result.step)overview.step(result.step);return motion.consume||result.consume;}
     const result=swipe.wheel(event,now);
     if(result.step)step(result.step);
     return result.consume||motion.consume;
@@ -59,8 +59,9 @@ export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compos
   window.addEventListener('message', frameWheel);
   const unsubscribeStart = window.inkDesktopGestures?.onGestureStart?.(reset);
   const unsubscribe = window.inkDesktopGestures?.onSwipe(direction => {
-    swipe.reset();
-    step(direction === 'left' ? 1 : -1);
+    reset();
+    const directionStep=direction==='left'?1:-1;
+    if(overview.isOpen())overview.step(directionStep);else step(directionStep);
   });
   window.addEventListener('blur', reset);
   const dispose = () => {

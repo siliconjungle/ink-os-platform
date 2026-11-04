@@ -1,13 +1,18 @@
-.window-overview:focus{outline:none}
+/* Focus remains available without a viewport-sized browser focus ring. */
+.desktop-shell :is(.desktop-stage,.desktop-items,.window-overview,.overview-desktops,.overview-canvas):is(:focus,:focus-visible){outline:none}
+.window-overview :is(button,input):focus-visible{outline:1px solid #bcbcbc;outline-offset:3px}
 .overview-gesture-hint{font-size:11px;color:var(--secondary,#999);margin-right:14px}
-:root[data-workspace-slide^="overview-"]::view-transition{pointer-events:none}
-:root[data-workspace-slide^="overview-"]::view-transition-group(ink-overview-desktop){z-index:1;animation-duration:340ms;animation-timing-function:cubic-bezier(.22,.8,.25,1);overflow:clip;border-radius:10px}
-:root[data-workspace-slide^="overview-"]::view-transition-old(ink-overview-desktop),
-:root[data-workspace-slide^="overview-"]::view-transition-new(ink-overview-desktop){height:100%;width:100%;object-fit:fill;animation-duration:340ms;mix-blend-mode:normal}
-:root[data-workspace-slide^="overview-"]::view-transition-old(root),
-:root[data-workspace-slide^="overview-"]::view-transition-new(root){animation-duration:340ms;animation-timing-function:cubic-bezier(.22,.8,.25,1);mix-blend-mode:normal}
-@media(prefers-reduced-motion:reduce){
-  :root[data-workspace-slide^="overview-"]::view-transition-group(*),
-  :root[data-workspace-slide^="overview-"]::view-transition-old(*),
-  :root[data-workspace-slide^="overview-"]::view-transition-new(*){animation-duration:0s}
-}
+.window-overview .overview-desktops{display:block;position:relative;overflow:clip;scroll-snap-type:none;scroll-behavior:auto;padding:12px 0 30px;scrollbar-width:none}
+.window-overview .overview-track{position:relative;display:flex;align-items:flex-start;gap:20px;width:max-content;will-change:transform;transition:transform 320ms cubic-bezier(.22,.8,.25,1)}
+.window-overview .overview-section{opacity:.55;transform:scale(.88);transform-origin:center center;transition:transform 280ms cubic-bezier(.22,.8,.25,1),opacity 280ms,border-color 180ms}
+.window-overview .overview-section.is-current{opacity:1;transform:scale(1)}
+.window-overview .overview-section.is-reordering{transition:none;opacity:1}
+.window-overview .overview-section.is-current{border-color:#ffffff35;background:#ffffff05}
+.window-overview .overview-section.is-current .overview-canvas{border-color:#ffffff60}
+.overview-canvas.is-live-preview{opacity:0}
+.desktop-shell:is(.overview-animating,.overview-live)>:is(.desktop-wallpaper,.desktop-items,.desktop-stage),
+.desktop-shell:is(.overview-animating,.overview-live)>:is(.desktop-items,.desktop-stage) *{pointer-events:none!important}
+.desktop-shell.overview-animating>:is(.system-bar,.desktop-bottom,.canvas-navigation){z-index:23000}
+.window-overview.is-closing,.window-overview.is-closing *{pointer-events:none!important}
+
+@media(prefers-reduced-motion:reduce){.window-overview :is(.overview-track,.overview-section){transition:none}}
