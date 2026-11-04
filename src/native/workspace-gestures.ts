@@ -1,3 +1,4 @@
+import {createGestureSession} from '../../shared/gesture-session.mjs';
 import {adjacentWorkspace, WorkspaceSwipe, OverviewSwipe} from '../../shared/workspace-gestures.mjs';
 import type {Compositor} from './compositor';
 import './workspace-gestures.css';
@@ -12,6 +13,7 @@ export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compos
   const swipe = new WorkspaceSwipe();
   const vertical = new OverviewSwipe();
   const reset = () => {swipe.reset();vertical.reset();};
+  const session=window.inkDesktopGestures?.onGestureStart?undefined:createGestureSession(reset);
   const status = document.createElement('span');
   status.className = 'workspace-gesture-status';
   status.setAttribute('role', 'status');
@@ -29,9 +31,9 @@ export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compos
     status.textContent = compositor.workspaces.find(space => space.id === id)?.name || 'Desktop';
   };
   const foreground = () => window.inkDesktopGestures?.isActive?.() !== false;
-  const route = (event:{deltaX:number;deltaY:number;deltaMode?:number;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean;shiftKey?:boolean},eligible:boolean) => {
+  const route = (event:{deltaX:number;deltaY:number;deltaMode?:number;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean;shiftKey?:boolean;momentum?:boolean},eligible:boolean) => {
     if (blocked() || !foreground()) {reset(); return false;}
-    const now=performance.now(),open=overview.isOpen(),motion=vertical.wheel(event,now,eligible||open);
+    const now=performance.now();session?.feed(event,now);const open=overview.isOpen(),motion=vertical.wheel(event,now,eligible||open);
     if(motion.step>0&&!open)overview.open();
     else if(motion.step<0&&open)overview.close();
     if(open){const result=swipe.wheel(event,now);if(result.step)overview.step(result.step);return motion.consume||result.consume;}
@@ -67,6 +69,7 @@ export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compos
   const dispose = () => {
     window.removeEventListener('wheel', wheel, true);
     window.removeEventListener('message', frameWheel);
+    session?.dispose();
     unsubscribeStart?.();
     window.removeEventListener('blur', reset);
     window.removeEventListener('pagehide', dispose);

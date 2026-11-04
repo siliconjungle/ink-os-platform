@@ -2,6 +2,15 @@
 .desktop-shell :is(.desktop-stage,.desktop-items,.window-overview,.overview-desktops,.overview-canvas):is(:focus,:focus-visible){outline:none}
 .window-overview :is(button,input):focus-visible{outline:1px solid #bcbcbc;outline-offset:3px}
 .overview-gesture-hint{font-size:11px;color:var(--secondary,#999);margin-right:14px}
+/* Keep the side controls above the live miniature without intercepting the picker. */
+.overview-navigation{position:fixed;inset:auto;margin:0;padding:0 12px;border:0;background:transparent;overflow:visible;display:grid;grid-template-columns:40px 1fr 40px;align-items:center;height:40px;box-sizing:border-box;pointer-events:none;opacity:1;transition:opacity 240ms ease-out}
+.overview-navigation::backdrop{background:transparent;pointer-events:none}
+.overview-navigation>.overview-step-button{display:grid;place-items:center;width:40px;height:40px;pointer-events:auto;border:1px solid #ffffff25;border-radius:50%;background:#202020ed;color:var(--text,#ddd);box-shadow:0 3px 14px #0005;transition:background 160ms,border-color 160ms}
+.overview-navigation>.overview-step-button:first-child{grid-column:1}
+.overview-navigation>.overview-step-button:last-child{grid-column:3}
+.overview-navigation>.overview-step-button:hover{background:#333;border-color:#ffffff50}
+.overview-navigation[hidden],.overview-navigation>.overview-step-button[hidden],.overview-navigation[popover]:not(:popover-open){display:none}
+.window-overview.is-closing .overview-navigation{opacity:0!important}
 .desktop-shell>.desktop-bottom{opacity:1;transition:opacity 240ms ease-out}
 .desktop-shell.overview-open>.desktop-bottom{opacity:0;pointer-events:none}
 .window-overview .overview-desktops{display:block;position:relative;overflow:clip;scroll-snap-type:none;scroll-behavior:auto;padding:12px 0 30px;scrollbar-width:none}
@@ -17,4 +26,4 @@
 .desktop-shell.overview-animating>:is(.system-bar,.desktop-bottom,.canvas-navigation){z-index:23000}
 .window-overview.is-closing,.window-overview.is-closing *{pointer-events:none!important}
 
-@media(prefers-reduced-motion:reduce){.window-overview :is(.overview-track,.overview-section),.desktop-shell>.desktop-bottom{transition:none}}
+@media(prefers-reduced-motion:reduce){.window-overview :is(.overview-track,.overview-section),.desktop-shell>.desktop-bottom,.overview-navigation{transition:none}}

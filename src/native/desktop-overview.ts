@@ -6,20 +6,31 @@ import type {Compositor} from './compositor';
 type OverviewCard={section:HTMLElement;rename:HTMLInputElement;remove:HTMLButtonElement;canvas:HTMLElement;preview:string};
 export class DesktopOverview{
  readonly node=el('div',{class:'window-overview',role:'dialog','aria-label':'Window overview'});readonly desktops=el('div',{class:'overview-desktops'});readonly track=el('div',{class:'overview-track'});offset=NaN;readonly cards=new Map<number,OverviewCard>();signature='';reordering=false;selected:number;readonly observer:ResizeObserver;
+ readonly previous=button('Previous desktop','chevron-left',()=>this.step(-1),'overview-step-button');
+ readonly next=button('Next desktop','chevron-right',()=>this.step(1),'overview-step-button');
+ readonly navigation=el('nav',{class:'overview-navigation','aria-label':'Choose desktop',popover:'manual'},this.previous,this.next);
  constructor(readonly compositor:Compositor,readonly getObject:(id?:string)=>WorldObject|undefined,readonly close:()=>void,readonly select:(id:number,windowKey?:string)=>void,readonly changed:()=>void=()=>{}){
   this.selected=compositor.workspace;
-  const head=el('div',{class:'overview-header'},el('span',{},'Desktops'),el('span',{class:'spacer'}),el('span',{class:'overview-gesture-hint'},'← / → to choose · Swipe down to open'),el('button',{class:'button',onclick:()=>{const id=compositor.addWorkspace();this.refresh();this.choose(id);}},icon('plus',14),'New desktop'),button('Close overview','close',this.close));this.desktops.append(this.track);this.node.append(head,this.desktops);this.refresh();
+  const head=el('div',{class:'overview-header'},el('span',{},'Desktops'),this.navigation,el('span',{class:'spacer'}),el('span',{class:'overview-gesture-hint'},'← / → to choose · Swipe down to open'),el('button',{class:'button',onclick:()=>{const id=compositor.addWorkspace();this.refresh();this.choose(id);}},icon('plus',14),'New desktop'),button('Close overview','close',this.close));this.desktops.append(this.track);this.node.append(head,this.desktops);this.refresh();
   this.observer=new ResizeObserver(()=>{if(this.node.isConnected)this.reveal(this.selected,'instant');});this.observer.observe(this.desktops);
   this.node.addEventListener('keydown',event=>{if(event.defaultPrevented||(event.target as HTMLElement).closest('input,textarea,[contenteditable="true"]'))return;if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();event.stopPropagation();this.step(event.key==='ArrowRight'?1:-1);}else if(event.key==='Enter'&&event.target===this.node){event.preventDefault();this.select(this.selected);}});
   requestAnimationFrame(()=>{if(this.node.isConnected)this.reveal(this.selected,'instant');});
  }
- reveal(id:number,behavior:ScrollBehavior=matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'){const card=this.cards.get(id);if(!card)return;const next=this.desktops.clientWidth/2-card.section.offsetLeft-card.section.offsetWidth/2;if(Math.abs(next-this.offset)<.5)return;this.offset=next;this.track.style.transition=behavior==='instant'?'none':'';this.track.style.transform=`translate3d(${next}px,0,0)`;}
+ reveal(id:number,behavior:ScrollBehavior=matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'){const card=this.cards.get(id);if(!card)return;this.positionNavigation();const next=this.desktops.clientWidth/2-card.section.offsetLeft-card.section.offsetWidth/2;if(Math.abs(next-this.offset)<.5)return;this.offset=next;this.track.style.transition=behavior==='instant'?'none':'';this.track.style.transform=`translate3d(${next}px,0,0)`;}
  pan(amount:number){this.offset=(Number.isFinite(this.offset)?this.offset:0)+amount;this.track.style.transition='none';this.track.style.transform=`translate3d(${this.offset}px,0,0)`;}
 
  choose(id:number){if(!this.cards.has(id))return;this.selected=id;this.paintSelection();this.changed();this.reveal(id);}
  step(direction:number){if(this.reordering)return;const id=adjacentWorkspace(this.compositor.workspaces,this.selected,direction);if(id!==undefined)this.choose(id);}
- paintSelection(){this.node.dataset.selectedDesktop=String(this.selected);for(const[id,card]of this.cards){card.section.classList.toggle('is-current',id===this.selected);card.rename.classList.toggle('active',id===this.selected);if(id===this.selected)card.canvas.setAttribute('aria-current','true');else card.canvas.removeAttribute('aria-current');}}
- destroy(){this.observer.disconnect();}
+ paintSelection(){const focused=document.activeElement;this.previous.hidden=adjacentWorkspace(this.compositor.workspaces,this.selected,-1)===undefined;this.next.hidden=adjacentWorkspace(this.compositor.workspaces,this.selected,1)===undefined;this.navigation.hidden=this.previous.hidden&&this.next.hidden;if(focused===this.previous&&this.previous.hidden||focused===this.next&&this.next.hidden)this.node.focus({preventScroll:true});this.node.dataset.selectedDesktop=String(this.selected);for(const[id,card]of this.cards){card.section.classList.toggle('is-current',id===this.selected);card.rename.classList.toggle('active',id===this.selected);if(id===this.selected)card.canvas.setAttribute('aria-current','true');else card.canvas.removeAttribute('aria-current');}}
+ positionNavigation(){
+  if(!this.node.isConnected)return;
+  const popovers=typeof this.navigation.showPopover==='function';
+  if(this.navigation.hidden){if(popovers&&this.navigation.matches(':popover-open'))this.navigation.hidePopover();return;}
+  const viewport=this.desktops.getBoundingClientRect(),preview=this.cards.get(this.selected)?.canvas;if(!preview)return;let top=0;for(let element:HTMLElement|null=preview;element&&element!==this.desktops;element=element.offsetParent as HTMLElement|null)top+=element.offsetTop;
+  this.navigation.style.left=viewport.left+'px';this.navigation.style.top=viewport.top+top+preview.offsetHeight/2-20+'px';this.navigation.style.width=viewport.width+'px';
+  if(popovers&&!this.navigation.matches(':popover-open')){this.navigation.style.opacity='0';this.navigation.showPopover();this.navigation.getBoundingClientRect();this.navigation.style.opacity='1';}
+ }
+ destroy(){this.observer.disconnect();if(typeof this.navigation.hidePopover==='function'&&this.navigation.matches(':popover-open'))this.navigation.hidePopover();}
  createCard(id:number):OverviewCard{
   const c=this.compositor,go=()=>this.select(id),canvas=el('div',{class:'overview-canvas',tabIndex:0}),section=el('section',{class:'overview-section','data-desktop-id':id}),rename=el('input',{maxlength:80,class:'overview-rename'}),current=()=>c.workspaces.find(space=>space.id===id);
   const commitName=()=>{if(rename.value.trim())c.renameWorkspace(id,rename.value);rename.value=current()?.name||'';};rename.addEventListener('change',commitName);rename.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();commitName();rename.blur();}if(e.key==='Escape'){e.stopPropagation();rename.value=current()?.name||'';rename.blur();}});
