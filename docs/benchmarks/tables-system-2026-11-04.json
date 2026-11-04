@@ -8,7 +8,7 @@
     "cpu": "Apple M4 Pro",
     "logicalCpus": 14
   },
-  "scope": "Fresh Node/browser process per mode; loopback owner HTTP fixture, typed UI runtime and actual DOM paint in two panes. Explicit replay, exploratory measurements; no automatic profitability claim. Excludes production authentication, desktop MessagePort and Electron/window-compositor coverage. Lost reply is a deliberately discarded completed application reply.",
+  "scope": "Fresh Node/browser process per mode; loopback owner HTTP fixture, typed UI runtime and DOM updates in two panes and a following animation-frame opportunity; physical paint was not measured. Explicit replay, exploratory measurements; no automatic profitability claim. Excludes production authentication, desktop MessagePort and Electron/window-compositor coverage. Lost reply is a deliberately discarded completed application reply.",
   "runs": [
     {
       "mode": "baseline-javascript",

@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import assert from 'node:assert/strict';
 import { exclusive, summary } from './lib/ink-system-profile.mjs';
 
@@ -87,7 +88,7 @@ export function chromeTrace(run) {
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const input = process.argv[2];
   if (!input) throw Error('Usage: node scripts/analyse-ink-system-profile.mjs REPORT.json [OUTPUT_BASE]');
-  const report = JSON.parse(await readFile(input)), runs = report.runs || [report], base = process.argv[3] || input.replace(/\.json$/, '');
+  const bytes = await readFile(input), report = JSON.parse(input.endsWith('.gz') ? gunzipSync(bytes, { maxOutputLength:64*1024*1024 }) : bytes), runs = report.runs || [report], base = process.argv[3] || input.replace(/\.json(?:\.gz)?$/, '');
   const result = { schema:1, recordedAt:report.recordedAt, scope:'Browser critical-path phases partition each sample. Server stages are nested inclusive/exclusive work and are not additive across concurrent requests. Native resident rounds include IPC/codecs.', runs:runs.map(analyse) };
   await writeFile(base+'.summary.json', JSON.stringify(result,null,2)+'\n');
   const representative = runs.find(r=>r.mode==='javascript' && r.workload.seedRows===64) || runs[0];

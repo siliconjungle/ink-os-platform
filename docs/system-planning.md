@@ -73,10 +73,12 @@ The benchmark uses a loopback owner fixture; production authentication, desktop 
 
 The recorded Apple M4 Pro run produced:
 
-| Computation | Edit-to-paint p50 / p95 | Successful guarded commits/s | Service recovery |
+| Computation | Edit-to-observed-frame p50 / p95 | Successful guarded commits/s | Service recovery |
 | --- | ---: | ---: | ---: |
 | Baseline JavaScript | 66.1 / 82.9 ms | 49.3 | 84.9 ms |
 | Selected JavaScript | 66.1 / 82.7 ms | 49.6 | 155.7 ms |
 | Selected native | 82.2 / 99.0 ms | 45.1 | 94.6 ms |
 
 All modes persisted about 4.8 KiB and exchanged about 14.0 KiB of RPC bodies per measured edit. At this small workload, maintained computation does not improve complete latency; durable commit, invalidation coalescing, frame cadence and optimistic retry contention remain substantial costs. Selected plans also increase admission memory and build time. These results establish the connected execution and recovery path, while leaving large-table placement and proof/admission memory as measurable next improvements.
+
+[Full timing and byte profile](benchmarks/tables-profile-2026-11-04.md) separates DOM completion from the frame proxy, accounts for the repeated entry descriptors, and measures larger tables and periodic checkpoint replacement.

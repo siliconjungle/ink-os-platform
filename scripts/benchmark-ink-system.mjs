@@ -440,6 +440,12 @@ try {
     );
   const recoveryStart = performance.now(),
     jobs = p.code.nativeJobs;
+  // Stop new refreshes and drain each browser lane before retiring its mount
+  // service. Otherwise an already scheduled invalidation can race close().
+  await page.evaluate(async () => {
+    Object.values(controllers).forEach(controller => controller.suspend(true));
+    await Promise.all(Object.values(controllers).map(controller => controller.refresh()));
+  });
   stop();
   await p.inkViews.close();
   await p.code.close();
@@ -475,6 +481,7 @@ try {
       Object.values(controllers).map((controller) => controller.reopen()),
     ),
   );
+  await page.evaluate(() => Object.values(controllers).forEach(controller => controller.suspend(false)));
   await page.waitForFunction(
     () =>
       [...document.querySelectorAll('li')].filter(
@@ -492,6 +499,7 @@ try {
   assert.equal(restored.valueWire, beforeRecovery);
   assert.deepEqual(errors, []);
   const uiErrors = await page.evaluate(() => uiErrors);
+  assert.deepEqual(uiErrors, [], "UI errors must not be silently accepted by the benchmark");
   latencies.sort((a, b) => a - b);
   console.log(
     JSON.stringify({
