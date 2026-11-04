@@ -5,22 +5,22 @@
       "slug": "finder",
       "title": "Finder",
       "repository": "https://github.com/siliconjungle/ink-app-finder",
-      "commit": "0a3caf948d1ae730b9b4c8c1bf86c0e335c7899d",
-      "sha256": "c76bc10d4b7353e46af3ddf9cee8b1088417f26582391b3e132552a88fdbe91f"
+      "commit": "6795ec46b3d4fc43f29d02548017def9270ddeb1",
+      "sha256": "515543b5e7495b7fffb02b65aaf2d8ce881302d8978197172fa1959acb0d5ae4"
     },
     {
       "slug": "preview",
       "title": "Preview",
       "repository": "https://github.com/siliconjungle/ink-app-preview",
-      "commit": "ae8327c1371f3514df27b2bc6ced95513b5a4a01",
-      "sha256": "1489cd33555e5b3cb0c328fb0e58e46be99c058bc0ce023c9aebd42ae267b223"
+      "commit": "c0bc2ac4bab9767bdd1a6a24ca0d7488fb57f5aa",
+      "sha256": "9dd0154aea32e9905e901468c87d5068974897fb96e14a170d6d3324e55737bf"
     },
     {
       "slug": "ink-environment",
       "title": "Ink Environment",
       "repository": "https://github.com/siliconjungle/ink-app-ink-environment",
-      "commit": "debfb61b3f08e3b7e3bef64df506856be68ae477",
-      "sha256": "1a65b0aae9e25ba68fe08ecbf303159f88a7968927be848558e988d44ce8a3bc"
+      "commit": "4fd8e4b5f2f6dee83f7aefb4558c721d7c798e08",
+      "sha256": "c35e750492afcc37a11cb6ee3f9c6c50a700ffa4e24e9dd3ff5449817c15c0a1"
     }
   ]
 }
