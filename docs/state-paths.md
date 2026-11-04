@@ -154,3 +154,8 @@ What remains:
 - The first render of a planned read still loads the copy (about 2 s here at
   100,000 rows).
 - Fields within a row are not tracked; `Rows[k]` names whole rows.
+- A commit hint is matched to the next state change of its app. A replicated
+  or migration write that lands while a local commit is in flight takes that
+  commit's paths instead of advancing every path, so readers of other paths
+  can keep a stale result until the app's next commit. The review that found
+  this rated it correctness only: readers are entitled to the exported query.
