@@ -15,7 +15,7 @@ function sortKeys(value) { return Array.isArray(value) ? value.map(sortKeys) : v
 const fail = message => { throw Object.assign(Error(message), { status: 400 }); };
 export function implementationSummary(value) {
   return { ...value.checked, targets: value.targets, selection: { mode: value.selection.mode,
-    reason: value.selection.reason || value.selection.receipt?.selection?.reason || 'Comparable lifecycle costs selected the admitted implementation.',
+    reason: value.selection.reason || value.selection.receipt?.selection?.reason || (value.checked.steps === 0 ? 'Baseline retained by the recorded selection gates.' : 'Implementation selected by the recorded selection gates.'),
     ...(value.selection.receipt?.selection?.total_ns ? { totalNS: value.selection.receipt.selection.total_ns } : {}) } };
 }
 
