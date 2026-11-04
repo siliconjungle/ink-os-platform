@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-11-04T08:58:25.235Z",
+  "host": {
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v22.23.4",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 2
+  },
+  "scope": "One fresh process; baseline JavaScript Tables/dashboard system; host-level read paths only (no browser, HTTP or view composition). Medians of --reads samples, each after one Tables write. Exploratory single-host measurement.",
+  "workload": {
+    "rows": 100000,
+    "openRows": 10000,
+    "reads": 9,
+    "seedMs": 5037
+  },
+  "direct": {
+    "readMs": 56.561109999998735,
+    "rowsCrossing": 20,
+    "note": "provider-defined page; the consumer cannot filter"
+  },
+  "plan": {
+    "firstReadMs": 722,
+    "readAfterWriteMs": 43.630982000000586,
+    "scanned": 10008,
+    "matched": 2867,
+    "bytesCrossing": 1481,
+    "bytesWithoutPushdown": 767834,
+    "total": "16205",
+    "firstMatches": 2858
+  },
+  "unrelatedWrite": {
+    "directReadMs": 0.29933100000016566,
+    "planReadMs": 0.27874100000008184,
+    "directEvaluations": 0,
+    "planEvaluations": 0
+  },
+  "writes": {
+    "withFollowingCopyMs": 6.825549999999566,
+    "withoutCopyMs": 5.097670000001017
+  },
+  "links": {
+    "admitted": 1,
+    "evaluations": 10,
+    "hits": 2,
+    "reused": 0,
+    "loads": 1,
+    "applies": 9,
+    "refreshed": 9,
+    "links": 0,
+    "results": 0,
+    "bytes": 1481
+  }
+}

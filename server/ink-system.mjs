@@ -28,6 +28,9 @@ import {
 } from '../shared/ink-app.mjs';
 import { inkUiComponents } from '../shared/ink-ui.mjs';
 import { checkUiRead } from './ink-ui-reads.mjs';
+import { inkLinkPlan } from '../shared/ink-link-plan.mjs';
+import { admitLinkPlan } from './ink-link-plans.mjs';
+import { inkFootprints } from './ink-footprints.mjs';
 import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
 import { digest, canonical } from './ink-module-summaries.mjs';
 const fail = (message) => {
@@ -123,7 +126,7 @@ function linkGraph(units, links) {
     edges = [];
   for (const link of links) {
     if (
-      !keys(link, ['provider', 'entry', 'consumer', 'component', 'input']) ||
+      !keys(link, ['provider', 'entry', 'consumer', 'component', 'input', 'plan']) ||
       !byName.has(link.provider) ||
       !byName.has(link.consumer) ||
       typeof link.entry !== 'string' ||
@@ -156,6 +159,7 @@ function linkGraph(units, links) {
     edges.push({
       ...link,
       input: link.input || '[]',
+      ...(link.plan !== undefined ? { plan: inkLinkPlan(link.plan) } : {}),
       type: digest({ params: entry.params, result: component.data }),
       observes: {
         provider: link.provider,
@@ -199,6 +203,32 @@ async function graphFor(apps, links) {
     units.push(u);
   }
   const { edges, order } = linkGraph(units, links);
+  // Plans are admitted here as at run time: the footprint of the exact
+  // releases must stay within the declared link (server/ink-link-plans.mjs).
+  const programs = new Map();
+  const program = (name) => {
+    if (!programs.has(name))
+      programs.set(name, (async () => {
+        const bundle = apps.find((a) => a.name === name).bundle,
+          source = await inkExecutionSource(bundle.ink, bundle.files),
+          artifact = await compileInkProgram(source);
+        return { compiled: { artifact, entries: inkEntries(artifact.manifest, artifact.module_graph) }, footprints: await inkFootprints(source), capabilities: bundle.capabilities || [] };
+      })());
+    return programs.get(name);
+  };
+  for (const edge of edges.filter((e) => e.plan)) {
+    const p = await program(edge.provider),
+      c = await program(edge.consumer),
+      unit = units.find((u) => u.name === edge.consumer),
+      admitted = admitLinkPlan({
+        binding: { appId: 'unit:' + edge.provider, releaseId: 'unit', entry: edge.entry, input: edge.input, plan: edge.plan },
+        data: unit.components.find((x) => x.name === edge.component).data,
+        provider: { ...p, capabilities: [...p.capabilities, 'code.execute'] },
+        consumer: { ...c, appId: 'unit:' + edge.consumer, releaseId: 'unit', capabilities: [...c.capabilities, 'code.execute'] },
+      });
+    edge.footprint = admitted.footprint;
+    edge.code = admitted.code;
+  }
   for (const edge of edges) {
     const bundle = apps.find((a) => a.name === edge.provider).bundle,
       saved = implementation(bundle);
@@ -413,12 +443,13 @@ export async function verifyInkSystem(packet) {
   const derived = await graphFor(
     packet.apps,
     packet.graph.links.map(
-      ({ provider, entry, consumer, component, input }) => ({
+      ({ provider, entry, consumer, component, input, plan }) => ({
         provider,
         entry,
         consumer,
         component,
         input,
+        ...(plan ? { plan } : {}),
       }),
     ),
   );
@@ -501,6 +532,7 @@ export async function installInkSystem(platform, packet, principal) {
           releaseId: provider.releaseId,
           entry: link.entry,
           input: link.input,
+          ...(link.plan ? { plan: link.plan } : {}),
         };
       }
       const metadata = bundle.files.find((f) => f.path === 'app.json');

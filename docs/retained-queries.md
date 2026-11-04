@@ -4,7 +4,7 @@ A live typed Ink interface retains its exported query on the host. The provider'
 
 ## Commit to query to view
 
-The first `watch` request activates the mount's declared query subscriptions. A durable `ink-app:state` commit invalidates the provider's retained result. The existing checked implementation maintains its Ink keeps as part of that transaction. The broker evaluates the exported readonly query against committed resident state, validates the source stamp before publishing, and retains its page, aggregate, exact version and positional page splice together. Both views consume that same immutable snapshot.
+The first `watch` request activates the mount's declared query subscriptions. A durable `ink-app:state` commit that writes a state root the query reads invalidates the provider's retained result; commits to other roots leave it current, and a recomputation with identical exact bytes keeps the snapshot and its sequence ([cross-app plans](cross-app-plans.md)). The existing checked implementation maintains its Ink keeps as part of that transaction. The broker evaluates the exported readonly query against committed resident state, validates the source stamp before publishing, and retains its page, aggregate, exact version and positional page splice together. Both views consume that same immutable snapshot.
 
 Only exported readonly entries with the exact declared `UiData<Row>` result type qualify. Changes, host bindings and effect protocols remain excluded. Provider `code.execute`, consumer `apps.invoke`, active releases and mount ownership are checked at admission and delivery. Changing a provider release fences its consumers rather than retargeting their bindings.
 

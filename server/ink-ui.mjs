@@ -245,7 +245,9 @@ export class InkViews {
     });
   }
   invalidate(event) {
-    this.reads.invalidate(event);
+    if (event.type === 'ink-reads') return;
+    const provider = this.reads.invalidate(event),
+      readers = new Set();
     for (const mount of this.mounts.values()) {
       if (mount.disposed || mount.previewId) continue;
       let changed = false,
@@ -297,6 +299,8 @@ export class InkViews {
         if (entry.readSnapshot && !this.reads.current(entry.readSnapshot)) {
           entry.dataDirty = true;
           changed = true;
+          if (entry.readSnapshot.binding.appId !== mount.appId)
+            readers.add(mount.appId);
           if (!mount.subscriptions.has(name)) needsRender = true;
         }
       }
@@ -310,6 +314,11 @@ export class InkViews {
         if (needsRender) this.schedule(mount);
       }
     }
+    // Tell desktops which apps read the changed provider, so only their frames
+    // refresh; other apps holding apps.invoke are not woken by this commit.
+    if (provider && readers.size)
+      for (const listener of [...this.platform.world.listeners])
+        listener({ type: 'ink-reads', provider: provider.appId, apps: [...readers].sort() });
   }
   async render(mount, principal, provided, { passive = false } = {}) {
     if (mount.disposed) fail(410, 'Interface was disposed');
@@ -339,7 +348,10 @@ export class InkViews {
             component.name,
             mount.previewId
               ? null
-              : await this.reads.read(binding, component.data, signal),
+              : await this.reads.read(binding, component.data, signal, {
+                  appId: mount.appId,
+                  releaseId: mount.releaseId,
+                }),
           );
         }
       const compute = async () => {
@@ -348,6 +360,13 @@ export class InkViews {
           if (!component) fail(400, 'View references an undeclared component');
           let entry = cache.get(name);
           if (computed.includes(name)) return entry.view;
+          // A reused read snapshot (same exact value) supersedes its dirty mark.
+          if (
+            entry?.dataDirty &&
+            component.read &&
+            entry.readSnapshot === readSnapshots.get(name)
+          )
+            entry.dataDirty = false;
           const needed =
             all ||
             !entry ||
@@ -617,6 +636,7 @@ export class InkViews {
                   this.schedule(mount);
                 }
               },
+              { appId: mount.appId, releaseId: mount.releaseId },
             ),
           );
         }

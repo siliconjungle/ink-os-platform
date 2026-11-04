@@ -5,6 +5,8 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::sync::Mutex;
 
+mod footprints;
+
 const MAX_REQUEST: usize = 16 * 1024 * 1024;
 const MAX_GENERATED: usize = 8 * 1024 * 1024;
 const MAX_SOURCE: usize = 128 * 1024;
@@ -860,6 +862,23 @@ pub fn handle(request: &Value) -> Result<Value, String> {
             let mut output = emit_checked(&checked)?;
             output["module_graph"] = graph;
             Ok(output)
+        }
+        "footprints" => {
+            // The same explicit source or module graph as compile/compileModules.
+            let o = request.as_object().ok_or("footprints request must be an object")?;
+            if o.len() != 2 || o.keys().any(|k| k != "op" && k != "source" && k != "graph") {
+                return Err("footprints accepts only op and source or graph".into());
+            }
+            let checked = if let Some(graph) = request.get("graph") {
+                modules::assemble(graph)?.0
+            } else {
+                let source = text(request, "source")?;
+                if source.len() > MAX_SOURCE {
+                    return Err("Source exceeds 128 KiB.".into());
+                }
+                CheckedModule::from_source(syntax::parse(source)?)?
+            };
+            Ok(footprints::describe(&checked))
         }
         "describeModules" => {
             if request.as_object().is_none_or(|o| o.len()!=2 || o.keys().any(|k| k!="op" && k!="graph")) { return Err("describeModules accepts only op and graph".into()); }

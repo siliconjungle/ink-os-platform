@@ -2,9 +2,13 @@ import { hostBudget, WORKER_MEMORY_MB } from './execution-budget.mjs';
 import { Worker } from 'node:worker_threads';
 import { compilerModule } from './ink-compiler.mjs';
 
-export async function javascriptResident(compiled, { timeout = 30000 } = {}) {
+export async function javascriptResident(
+  compiled,
+  // Link workers (server/ink-link-worker.mjs) reuse this endpoint and pool.
+  { timeout = 30000, worker: script = new URL('./ink-resident-worker.mjs', import.meta.url) } = {},
+) {
   const worker = new Worker(
-    new URL('./ink-resident-worker.mjs', import.meta.url),
+    script,
     {
       workerData: {
         artifact: compiled.artifact,
@@ -13,7 +17,7 @@ export async function javascriptResident(compiled, { timeout = 30000 } = {}) {
         entries: [
           ...compiled.entries,
           ...(compiled.artifact.manifest.state?.actions || [])
-            .filter((a) => /^(__learn_get|__learn_set|__objective_[A-Za-z_][A-Za-z0-9_]*)$/.test(a.name))
+            .filter((a) => /^(__learn_get|__learn_set|__objective_[A-Za-z_][A-Za-z0-9_]*|__task_[A-Za-z0-9_]+)$/.test(a.name))
             .map((a) => ({ ...a, action: true })),
         ],
         compiler: (await compilerModule()).module,
@@ -44,7 +48,7 @@ export async function javascriptResident(compiled, { timeout = 30000 } = {}) {
     // Private, opt-in benchmark telemetry never enters the Ink result or journal.
     try { current.diagnostic?.(message.trace || []); } catch {}
     message.error
-      ? current.reject(Error(message.error))
+      ? current.reject(Object.assign(Error(message.error), message.status ? { status: message.status } : {}))
       : current.resolve(message.value);
   });
   worker.unref();

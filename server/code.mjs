@@ -15,9 +15,11 @@ import {
   inkOriginalSource,
 } from './ink-compiler.mjs';
 import { inkEntries } from '../shared/ink-app.mjs';
+import { inkFootprints, writeRoots } from './ink-footprints.mjs';
 import { stringifyExactJSON } from '../shared/exact-json.mjs';
 // Generated learn-hole entries (see server/ink-learned.mjs).
 const LEARNED_ENTRY = /^(__learn_get|__learn_set|__objective_[A-Za-z_][A-Za-z0-9_]*)$/;
+const TASK_ENTRY = /^__task_[A-Za-z0-9_]+$/;
 const learnedEntry = (compiled, name) => { const fn = compiled.artifact.manifest.state?.actions?.find(a => a.name === name); return fn && { ...fn, action: true }; };
 
 export class Code {
@@ -26,6 +28,8 @@ export class Code {
     this.tasks = new Map();
     this.pureTasks = new Set();
     this.commitHints=new Map();
+    // Notified after each durable commit: {namespace, stateKey, before, after, record, source, roots}.
+    this.commitListeners = new Set();
     this.budget = options.budget || hostBudget;
     this.compilations = new Map();
     this.residents = new InkResidents(options);
@@ -34,6 +38,13 @@ export class Code {
       batch: (...args) => this.writeStates(...args),
       keys: (...args) => this.stateKeys(...args),
     };
+  }
+  /** IR footprints of a compiled program, or null when the compiler predates them. */
+  footprints(compiled) {
+    if (!this.footprintTasks) this.footprintTasks = new WeakMap();
+    if (!this.footprintTasks.has(compiled))
+      this.footprintTasks.set(compiled, inkFootprints(compiled.source).catch(() => null));
+    return this.footprintTasks.get(compiled);
   }
   async compile(source) {
     source = normalizeInkProgram(source);
@@ -281,6 +292,11 @@ export class Code {
       ? compiled.entries.find((fn) => fn.name === input.entry) ??
         (input.learned === true && LEARNED_ENTRY.test(input.entry)
           ? learnedEntry(compiled, input.entry)
+          : undefined) ??
+        // Generated task queries are reachable only from the task service
+        // (server/ink-tasks.mjs), which limits calls to the running task's.
+        (input.task === true && TASK_ENTRY.test(input.entry)
+          ? learnedEntry(compiled, input.entry)
           : undefined)
       : compiled.entries[0];
     if (!selected)
@@ -429,7 +445,8 @@ export class Code {
             wire: result.wire,
             receipt,
           };
-        const hintKey=namespace+'\0'+stateKey;this.commitHints.set(hintKey,{source:inkProgramKey(compiled.source),roots:(selected.roots||[]).map(index=>compiled.artifact.manifest.state.roots[index]?.name).filter(Boolean)});let committed;
+        // Readers re-run only when a commit writes a root they read (IR write roots).
+        const hintKey=namespace+'\0'+stateKey,hint={source:inkProgramKey(compiled.source),roots:writeRoots(await this.footprints(compiled),compiled,selected)};this.commitHints.set(hintKey,hint);let committed;
         try{
         committed = await journal.commit(
           saved,
@@ -439,6 +456,7 @@ export class Code {
           () => scheduledEndpoint.request({ op: 'checkpoint' }),
         );
         }finally{this.commitHints.delete(hintKey);}
+        for(const listener of this.commitListeners)try{listener({namespace,stateKey,before:saved.revision,after:committed.revision,record:{entry:record.entry,input:record.input,wire:record.wire},source:hint.source,roots:hint.roots});}catch{}
         session.revision = committed.revision;
         // Only receipts are needed while the state is resident. Recovery reads
         // the immutable base and tail again after eviction or an external write.

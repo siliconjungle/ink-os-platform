@@ -50,7 +50,7 @@ The release checker compares the complete view and event schemas, including acti
 
 ## Dependency maintenance
 
-The host derives state-root dependencies from checked compiler entries. An app state commit supplies a source-bound conservative invalidation hint. Only components intersecting those roots are reevaluated; other cached component results are reused. Unknown state replacement invalidates every component. Dependencies currently include both reads and writes, so refresh can be conservative.
+The host derives state-root dependencies from checked compiler entries. An app state commit supplies a source-bound conservative invalidation hint. Only components intersecting those roots are reevaluated; other cached component results are reused. Unknown state replacement invalidates every component. Commit hints carry the change's IR write roots (from the compiler's `footprints` request), so a change that only reads a root does not invalidate components reading it; older compilers fall back to every root the change touches.
 
 The renderer compares stable IDs and emits mount, property/event update, child reorder and dispose operations. The whole transaction is validated before adapter callbacks run. A no-change refresh retains the revision and causes no widget updates. This is incremental at component and widget boundaries; computations inside a changed component and the composed-tree diff still run as a whole. It is not general incremental evaluation of every Ink expression.
 

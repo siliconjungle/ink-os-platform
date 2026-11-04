@@ -3,6 +3,9 @@ import { stateObjectId } from './app-data.mjs';
 import { resolveEffectType, effectTypeEqual } from '../shared/ink-effects.mjs';
 import { randomBytes } from 'node:crypto';
 import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
+import { RootVersions } from './ink-root-versions.mjs';
+import { readRoots } from './ink-footprints.mjs';
+import { InkLinks } from './ink-links.mjs';
 const fail = (status, message) => {
   throw Object.assign(Error(message), { status });
 };
@@ -59,6 +62,13 @@ export function queryPageDelta(previous, value) {
 /** One retained, checked latest-snapshot query per exact authority and input.
  * Intermediate commits may coalesce; source versions and page/aggregate are
  * always published together. This does not authorize incremental query rewrites.
+ *
+ * A snapshot stays current until a commit writes a state root its exported
+ * query reads (RootVersions, from IR write roots); its stateRevision then
+ * names the commit it was computed at, and the value is unchanged since. A
+ * recomputed result with identical exact bytes keeps its snapshot identity,
+ * so no new sequence is delivered. Bindings with a link plan are served by
+ * InkLinks (server/ink-links.mjs).
  */
 export class InkUiReads {
   constructor(platform) {
@@ -69,17 +79,34 @@ export class InkUiReads {
     this.controllers = new Set();
     this.reads = 0;
     this.hits = 0;
+    this.reused = 0;
     this.accepting = true;
+    this.versions = new RootVersions(platform);
+    this.links = new InkLinks(platform, this);
   }
-  key(binding, expected) {
+  key(binding, expected, consumer) {
     return JSON.stringify([
       {
         appId: binding.appId,
         releaseId: binding.releaseId,
         entry: binding.entry,
         input: stringifyExactJSON(parseExactJSON(binding.input || '[]')),
+        // Plan code belongs to the consumer release; InkLinks shares results
+        // across consumers whose plan code is identical.
+        ...(binding.plan
+          ? { plan: binding.plan, consumer: [consumer?.appId, consumer?.releaseId] }
+          : {}),
       },
       expected,
+    ]);
+  }
+  /** Versions of the roots a read depends on, with the provider's release fence. */
+  precise(appId, releaseId, roots) {
+    this.stamp(appId, releaseId);
+    return JSON.stringify([
+      this.platform.app(appId).revision,
+      releaseId,
+      this.versions.versions(appId, roots),
     ]);
   }
   stamp(appId, releaseId) {
@@ -105,14 +132,23 @@ export class InkUiReads {
   }
   current(snapshot) {
     try {
-      return (
-        !!snapshot &&
-        snapshot.stamp ===
-          this.stamp(snapshot.binding.appId, snapshot.binding.releaseId)
-      );
+      if (!snapshot) return false;
+      const { appId, releaseId } = snapshot.binding;
+      return snapshot.roots
+        ? snapshot.precise === this.precise(appId, releaseId, snapshot.roots)
+        : snapshot.stamp === this.stamp(appId, releaseId);
     } catch {
       return false;
     }
+  }
+  async roots(binding) {
+    const provider = await installedInk(this.platform, binding.appId, binding.releaseId),
+      compiled = await this.platform.code.compile(provider.source),
+      entry = compiled.entries.find((entry) => entry.name === binding.entry);
+    return {
+      provider,
+      roots: entry ? readRoots(await this.platform.code.footprints(compiled), compiled, entry) : null,
+    };
   }
   trim() {
     for (const [key, snapshot] of this.cache) {
@@ -120,9 +156,9 @@ export class InkUiReads {
       if (!this.retained.has(key) && snapshot.settled) this.cache.delete(key);
     }
   }
-  retain(binding, expected, listener) {
+  retain(binding, expected, listener, consumer) {
     if (!this.accepting) fail(503, 'Query admission is closed');
-    const key = this.key(binding, expected);
+    const key = this.key(binding, expected, consumer);
     let record = this.retained.get(key);
     if (!record) {
       if (this.retained.size >= 32)
@@ -132,6 +168,7 @@ export class InkUiReads {
         key,
         binding,
         expected,
+        consumer,
         id: prior?.id || randomBytes(16).toString('hex'),
         sequence: prior?.sequence || 0,
         last: prior?.settled ? prior : null,
@@ -155,7 +192,10 @@ export class InkUiReads {
       }
     };
   }
+  /** Record a World event; returns the provider whose roots changed, if tracked. */
   invalidate(event) {
+    this.links.observe(event);
+    const provider = this.versions.observe(event);
     for (const record of this.retained.values()) {
       if (event.restore) {
         record.id = randomBytes(16).toString('hex');
@@ -168,6 +208,7 @@ export class InkUiReads {
         this.pump(record);
       }
     }
+    return provider;
   }
   pump(record) {
     if (
@@ -191,6 +232,7 @@ export class InkUiReads {
               record.controller.signal,
               AbortSignal.timeout(30000),
             ]),
+            record.consumer,
           );
           if (
             !record.listeners.size ||
@@ -256,9 +298,11 @@ export class InkUiReads {
       })
       .catch(() => {});
   }
-  async read(binding, expected, signal) {
+  async read(binding, expected, signal, consumer) {
+    if (binding.plan)
+      return this.links.read(binding, expected, { signal, consumer });
     await this.platform.code.readState(binding.appId, 'ink-app:state');
-    const key = this.key(binding, expected),
+    const key = this.key(binding, expected, consumer),
       prior = this.cache.get(key);
     if (prior && (!prior.settled || this.current(prior))) {
       this.hits++;
@@ -274,14 +318,12 @@ export class InkUiReads {
         settled: false,
       };
     snapshot.promise = (async () => {
-      const provider = await installedInk(
-        this.platform,
-        binding.appId,
-        binding.releaseId,
-      );
+      const { provider, roots } = await this.roots(binding);
       checkUiRead(provider, binding.entry, expected);
+      snapshot.roots = roots;
       for (let attempt = 0; attempt < 3; attempt++) {
         snapshot.stamp = this.stamp(binding.appId, binding.releaseId);
+        if (roots) snapshot.precise = this.precise(binding.appId, binding.releaseId, roots);
         const result = await runInstalledInk(
           this.platform,
           binding.appId,
@@ -293,6 +335,15 @@ export class InkUiReads {
         if (Buffer.byteLength(result.valueWire) > 128 * 1024)
           fail(413, 'Exported UI data exceeds 128 KiB');
         if (!this.current(snapshot)) continue;
+        const previous = prior?.settled ? prior : record?.last;
+        if (previous?.wire === result.valueWire && previous.roots) {
+          // Same exact value: keep the identity consumers already hold.
+          previous.stamp = snapshot.stamp;
+          previous.precise = snapshot.precise;
+          this.reused++;
+          return previous;
+        }
+        snapshot.wire = result.valueWire;
         snapshot.value = freeze(parseExactJSON(result.valueWire));
         snapshot.delta = queryPageDelta(
           prior?.value || record?.last?.value,
@@ -330,8 +381,10 @@ export class InkUiReads {
     })();
     this.cache.set(key, snapshot);
     snapshot.promise.then(
-      () => {
+      (value) => {
         snapshot.settled = true;
+        if (value !== snapshot && this.cache.get(key) === snapshot)
+          this.cache.set(key, value);
         this.trim();
       },
       () => {
@@ -354,6 +407,7 @@ export class InkUiReads {
     }
   }
   async close() {
+    this.links.close();
     this.pause();
     for (const controller of this.controllers) controller.abort();
     await Promise.allSettled([...this.tasks]);

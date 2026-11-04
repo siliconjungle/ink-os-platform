@@ -62,7 +62,7 @@ export async function buildInkApp(manifest, files, { source, cachedImplementatio
   const { implementation, artifact } = cachedImplementation?await verifyImplementation(program,JSON.stringify(cachedImplementation)):await buildImplementation(program, files, manifest.optimisation);
   const entries = inkEntries(artifact.manifest, artifact.module_graph);
   const dataPaths=await buildDataPaths(program,manifest.ui,manifest.storagePlanning,files);
-  const spec = inkSpec({ ...candidate, version: 3, implementation: { version: 1, path: 'server/implementation.json' }, ...(dataPaths?{dataPaths:{version:1,path:'server/data-paths.json'}}:{}), ...(manifest.effects?{effects:manifest.effects}:{}),...(manifest.ui?.version===1?{ui:manifest.ui}:{}), view: manifest.ui?.entry ?? null, exports: manifest.exports || entries.filter(entry => entry.name !== manifest.ui?.entry&&!manifest.ui?.components?.some(component=>component.entry===entry.name)&&!manifest.effects?.protocols?.some(protocol=>protocol.resume===entry.name)).map(entry => entry.name) });
+  const spec = inkSpec({ ...candidate, version: 3, implementation: { version: 1, path: 'server/implementation.json' }, ...(dataPaths?{dataPaths:{version:1,path:'server/data-paths.json'}}:{}), ...(manifest.effects?{effects:manifest.effects}:{}),...(manifest.tasks?{tasks:manifest.tasks}:{}),...(manifest.ui?.version===1?{ui:manifest.ui}:{}), view: manifest.ui?.entry ?? null, exports: manifest.exports || entries.filter(entry => entry.name !== manifest.ui?.entry&&!manifest.ui?.components?.some(component=>component.entry===entry.name)&&!manifest.effects?.protocols?.some(protocol=>protocol.resume===entry.name)).map(entry => entry.name) });
   const capabilities=[...new Set(['code.execute','world.read','world.write',...(manifest.capabilities||[])])];
   validateEffectCapabilities(spec,capabilities);
   const commands = inkCommands(spec, entries,artifact.manifest.named_types);
@@ -103,6 +103,12 @@ export async function validateInkBundle(bundle, {allowUnboundUi=false}={}) {
   validateEffectCapabilities(spec,bundle.capabilities);
   if(spec.dataPaths)verifyDataPaths(inkSource(spec,bundle.files),spec.ui,JSON.parse(Buffer.from(bundle.files.find(f=>f.path===spec.dataPaths.path).base64,'base64')));
   const artifact = await compileInkProgram(await inkExecutionSource(spec, bundle.files));
+  if (spec.tasks) {
+    const { checkTaskContract } = await import('./ink-tasks.mjs'), { TASK_CAPABILITIES } = await import('../shared/ink-tasks.mjs');
+    const missing = ['code.execute', ...spec.tasks.effects.map(b => TASK_CAPABILITIES[b.kind])].find(c => !bundle.capabilities?.includes(c));
+    if (missing) fail(400, 'Declare ' + missing + ' for this tasks contract');
+    checkTaskContract(spec.tasks, artifact);
+  }
   const expected = inkCommands(spec, inkEntries(artifact.manifest, artifact.module_graph),artifact.manifest.named_types);
   if (JSON.stringify(bundle.commands) !== JSON.stringify((await import('../shared/app-commands.mjs')).validateCommands(expected))) fail(400, 'Ink commands must match the checked source exports and effects.');
 }

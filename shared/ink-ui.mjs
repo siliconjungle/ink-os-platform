@@ -1,4 +1,5 @@
 import { resolveEffectType, effectTypeEqual } from './ink-effects.mjs';
+import { inkLinkPlan } from './ink-link-plan.mjs';
 const fail = (message) => {
   throw Object.assign(Error(message), { status: 400 });
 };
@@ -136,7 +137,7 @@ export function inkUi(input) {
         if (
           !fields(
             read,
-            ['appId', 'releaseId', 'entry', 'input'],
+            ['appId', 'releaseId', 'entry', 'input', 'plan'],
             ['appId', 'releaseId', 'entry'],
           ) ||
           !(
@@ -177,6 +178,9 @@ export function inkUi(input) {
       return {
         ...component,
         ...(component.query ? { query: structuredClone(component.query) } : {}),
+        ...(component.read?.plan !== undefined
+          ? { read: { ...component.read, plan: inkLinkPlan(component.read.plan) } }
+          : {}),
       };
     }),
   };
