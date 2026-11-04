@@ -89,10 +89,15 @@ export function nativeResident({ executable, compiled, timeout = 30000 }) {
       child.stdin.write(JSON.stringify(message) + '\n');
     });
   };
+  // As in JavaScript residents, generated learn-hole and task queries are
+  // callable here; code.run admits them only for the services that own them.
+  const generated = (compiled.artifact.manifest.state?.actions || [])
+    .filter((a) => /^(__learn_get|__learn_set|__objective_[A-Za-z_][A-Za-z0-9_]*|__task_[A-Za-z0-9_]+)$/.test(a.name))
+    .map((a) => ({ ...a, action: true }));
   const call = async (message) => {
-    const selected = compiled.entries.find(
-      (candidate) => candidate.name === message.entry,
-    );
+    const selected =
+      compiled.entries.find((candidate) => candidate.name === message.entry) ||
+      generated.find((candidate) => candidate.name === message.entry);
     if (!selected) throw Error('Select an exported native Ink entry.');
     const result = await raw({
       ...message,

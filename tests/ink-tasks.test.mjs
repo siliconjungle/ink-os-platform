@@ -251,3 +251,65 @@ test('an interrupted task run resumes from its journal without repeating effects
   );
   await assert.rejects(second.replay(log.app.id, resumed.runId, owner), { status: 404 });
 });
+
+test(
+  'task steps run on the native artifact and its traces replay identically on JavaScript state',
+  { skip: process.env.INK_TEST_NATIVE !== '1', timeout: 600000 },
+  async (t) => {
+    const { NativeInk } = await import('../server/native-ink.mjs'),
+      { NativeJobs } = await import('../server/native-jobs.mjs'),
+      { inkExecutionSource } = await import('../server/ink-apps.mjs'),
+      { join } = await import('node:path');
+    const server = createServer(async (req, res) => {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      if (req.url === '/tickets/1') return res.end('the app crashes on start');
+      const prompt = JSON.parse(body).messages[0].content;
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ content: [{ type: 'text', text: prompt.includes('classify(') ? '"Label.Bug"' : '"crash on start"' }] }));
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    t.after(() => server.close());
+    const origin = 'http://127.0.0.1:' + server.address().port,
+      { platform, directory } = await fixture(t, {
+        allowHttp: true,
+        policy: {
+          version: 1,
+          resources: {
+            assistant: { kind: 'model', namespaces: ['*'], origin, model: 'test-model', maxTokens: 256 },
+            tickets: { kind: 'http', namespaces: ['*'], origin, methods: ['GET'], pathPrefix: '/tickets/' },
+          },
+        },
+      });
+    const log = await install(platform, await buildInkApp({ slug: 'log', language: 'ink', exports: ['log', 'last'] }, [file('main.ink', LOG)])),
+      bundle = await taskApp({ app: log.app, release: log.release }),
+      triage = await install(platform, bundle);
+    const jobs = await new NativeJobs(directory, {
+      native: new NativeInk(join(directory, 'native'), { offline: process.env.INK_NATIVE_OFFLINE === '1' }),
+      source: () => inkExecutionSource(bundle.ink, bundle.files),
+    }).open();
+    t.after(() => jobs.close());
+    const job = await jobs.enqueue(triage.app.id, triage.release.id);
+    await jobs.pump();
+    assert.equal(jobs.get(triage.app.id, job.id).status, 'succeeded', JSON.stringify(jobs.get(triage.app.id, job.id)));
+    platform.code.nativeJobs = jobs;
+    const backends = [],
+      run = platform.code.run.bind(platform.code);
+    platform.code.run = async (input) => {
+      const result = await run(input);
+      if (input.namespace === triage.app.id) backends.push(result.backend);
+      return result;
+    };
+    const tasks = new InkTasks({ platform }),
+      native = await tasks.run(triage.app.id, { task: 'triage', input: '["/tickets/1"]' }, owner);
+    assert.equal(native.valueWire, '{"Ok":"Label.Bug"}');
+    assert.ok(backends.length && backends.every((b) => b === 'native'), 'every step ran on the native artifact: ' + backends);
+    // The native run's trace replays on JavaScript state started from the
+    // same state, with every effect answered from the trace.
+    platform.code.nativeJobs = null;
+    const replay = await tasks.replay(triage.app.id, native.runId, owner);
+    assert.equal(replay.matches, true);
+    assert.equal(replay.valueWire, native.valueWire);
+  },
+);

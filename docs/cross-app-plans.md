@@ -199,6 +199,13 @@ with the runtime's vendored scheduler:
   1 MiB). Live state is not touched, and the result and outcomes must match
   exactly. They do when no other commit interleaved with the run.
 
+- **Native artifacts.** When an app's native (Rust) artifact is ready, the
+  task's queries, changes and generated step queries run on it, like any
+  other call. A run's trace replays the same on JavaScript state
+  (`tests/ink-tasks.test.mjs`, under `INK_TEST_NATIVE=1`). The Ink
+  distribution also has the scheduler itself in Rust for native hosts, and
+  runs tasks on Wasm-compiled state (ink-lang `docs/effect-tasks.md`).
+
 Queries and changes a task calls must be root-module exports. A task runs
 within its contract's deadline (at most 30 s), counted again when it
 resumes. Model and HTTP reads that were in flight when the host stopped are
