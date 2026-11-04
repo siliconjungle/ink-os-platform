@@ -1,3 +1,4 @@
+import {installFrameWheelBridge} from './workspace-gestures.js';
 import {createInkUi} from './ui-client.js';
 import { createEffects, effectRequestId } from './effects.js';
 import{bindObjectDrag}from './object-drag.js';
@@ -8,7 +9,7 @@ import {createContextMenus} from './context-menu.js';
 import{createAppCalls}from './app-api.js';
 import {GestureLatch,nativeScrollTarget} from './gestures.js';
 // Ink app SDK v1. No framework, host cookies, or arbitrary-path proxy.
-export function connect(){const keymap=import('./desktop-keys.js');
+export function connect(){installFrameWheelBridge();const keymap=import('./desktop-keys.js');
  return new Promise((resolve,reject)=>{
   const origin=new URLSearchParams(location.search).get('desktopOrigin')||'http://127.0.0.1:4318';let connected=false;
   const timer=setTimeout(()=>{removeEventListener('message',hello);reject(Error('Desktop connection timed out'));},15000);

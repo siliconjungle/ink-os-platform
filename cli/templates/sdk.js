@@ -18,6 +18,45 @@
 		if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
 		return target;
 	};
+	// sdk/src/workspace-gestures.js
+	/** Runs in an app frame with ordinary DOM access only; no Node or IPC exposure. */
+	function installFrameWheelBridge() {
+		const marker = Symbol.for("ink.workspace.wheel.bridge.v1");
+		if (window[marker] || window === window.parent) return;
+		window[marker] = true;
+		const valid = (value) => value?.source === "ink-workspace-wheel" && value.version === 1 && [value.deltaX, value.deltaY].every((number) => Number.isFinite(number) && Math.abs(number) <= 1e5) && [
+			0,
+			1,
+			2
+		].includes(value.deltaMode);
+		const post = (value) => window.parent.postMessage(value, "*");
+		window.addEventListener("wheel", (event) => {
+			if (!event.isTrusted) return;
+			const value = {
+				source: "ink-workspace-wheel",
+				version: 1,
+				deltaX: event.deltaX,
+				deltaY: event.deltaY,
+				deltaMode: event.deltaMode,
+				ctrlKey: event.ctrlKey,
+				metaKey: event.metaKey,
+				altKey: event.altKey,
+				shiftKey: event.shiftKey
+			};
+			if (!valid(value)) return;
+			post(value);
+			if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && Math.abs(event.deltaX) > Math.abs(event.deltaY) * 1.5) {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
+		}, {
+			capture: true,
+			passive: false
+		});
+		window.addEventListener("message", (event) => {
+			if (valid(event.data) && [...document.querySelectorAll("iframe")].some((frame) => frame.contentWindow === event.source)) post(event.data);
+		});
+	}
 	// sdk/src/ui-client.js
 	/** Transport-neutral typed Ink interface sessions. */
 	function createInkUi(request) {
@@ -877,6 +916,7 @@
 	var init_live_query = __esmMin((() => {}));
 	// sdk/src/browser.js
 	function connect() {
+		installFrameWheelBridge();
 		const keymap = Promise.resolve().then(() => (init_desktop_keys(), desktop_keys_exports));
 		return new Promise((resolve, reject) => {
 			const origin = new URLSearchParams(location.search).get("desktopOrigin") || "http://127.0.0.1:4318";

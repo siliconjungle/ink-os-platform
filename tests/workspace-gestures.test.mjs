@@ -37,3 +37,13 @@ test('desktop order is respected and gestures stop at either end instead of wrap
   assert.equal(adjacentWorkspace(spaces, 99, 1), undefined);
   assert.equal(adjacentWorkspace(spaces, 2, 2), undefined);
 });
+
+test('a new physical gesture rearms immediately without waiting for the previous momentum to become idle', () => {
+  const tracker=new WorkspaceSwipe();
+  assert.equal(wheel(tracker,100,0,0).step,1);
+  assert.equal(wheel(tracker,40,0,16).step,0);
+  tracker.reset(); // The native scroll-begin event, independent of selected app or desktop.
+  assert.equal(wheel(tracker,100,0,32).step,1);
+  tracker.reset();
+  assert.equal(wheel(tracker,-100,0,48).step,-1);
+});
