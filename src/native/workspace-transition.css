@@ -26,6 +26,9 @@
 @keyframes ink-desktop-enter-right{from{transform:translateX(100vw)}}
 @keyframes ink-desktop-exit-right{to{transform:translateX(100vw)}}
 @keyframes ink-desktop-enter-left{from{transform:translateX(-100vw)}}
+:root[data-workspace-scrub]::view-transition-old(ink-desktop),
+:root[data-workspace-scrub]::view-transition-new(ink-desktop),
+:root[data-workspace-scrub]::view-transition-group(ink-desktop){animation-play-state:paused;animation-duration:1000ms;animation-timing-function:linear}
 @media(prefers-reduced-motion:reduce){
   :root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-group(*),
   :root:is([data-workspace-slide="next"],[data-workspace-slide="previous"])::view-transition-old(*),

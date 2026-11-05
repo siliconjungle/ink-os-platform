@@ -1,0 +1,1 @@
+export function settleProgress(from:number,to:number,paint:(value:number)=>void,complete:()=>void,clock?:{now:()=>number;request:(callback:(now:number)=>void)=>number;cancel:(id:number|undefined)=>void}):()=>void;

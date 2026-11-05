@@ -64,3 +64,29 @@ test('overview capture names are cleaned up when interrupted and after reduced-m
   await f.transition.run('overview-in',()=>events.push('open-immediately'),()=>events.push('clear-immediately'));
   assert.deepEqual(events.slice(-2),['open-immediately','clear-immediately']);
 });
+
+
+test('desktop snapshots stay paused at the held position, reverse, and restore the source on cancellation',async t=>{
+  const oldRAF=globalThis.requestAnimationFrame,oldCancel=globalThis.cancelAnimationFrame;
+  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
+  t.after(()=>{globalThis.requestAnimationFrame=oldRAF;globalThis.cancelAnimationFrame=oldCancel;});
+  const f=fixture(),states=[];
+  const animations=['old','new'].map(kind=>({effect:{pseudoElement:`::view-transition-${kind}(ink-desktop)`,updateTiming(){}},pause(){this.paused=true;},currentTime:0}));
+  f.document.getAnimations=()=>animations;
+  const control=f.transition.scrub(1,()=>states.push('preview'),accept=>states.push(accept?'target':'source'));
+  control.move(.4);f.views[0].commit();f.views[0].end();await Promise.resolve();
+  assert.ok(animations.every(a=>a.paused&&a.currentTime===400));
+  assert.deepEqual(states,['preview']);
+  control.move(.2);assert.ok(animations.every(a=>a.currentTime===200));
+  control.end();f.transition.finish();
+  assert.deepEqual(states,['preview','source']);assert.equal(f.views[0].skipped,true);
+  assert.equal(f.document.documentElement.dataset.workspaceScrub,undefined);
+});
+
+test('release before snapshot readiness and interrupted captures commit exactly the nearest destination',async()=>{
+  const f=fixture(),states=[];f.document.getAnimations=()=>[];
+  const control=f.transition.scrub(-1,()=>states.push('preview'),accept=>states.push(accept?'target':'source'));
+  control.move(.8);control.end();f.transition.finish();
+  f.views[0].commit();f.views[0].end();await Promise.resolve();
+  assert.deepEqual(states,['target']);
+});

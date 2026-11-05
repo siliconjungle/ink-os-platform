@@ -1,19 +1,26 @@
 import {createGestureSession} from '../../shared/gesture-session.mjs';
-import {adjacentWorkspace, WorkspaceSwipe, OverviewSwipe} from '../../shared/workspace-gestures.mjs';
+import {adjacentWorkspace} from '../../shared/workspace-gestures.mjs';
+import {GestureDrag,type GestureMotion} from '../../shared/gesture-drag.mjs';
+import {workspaceDrag} from './workspace-drag';
 import type {Compositor} from './compositor';
 import './workspace-gestures.css';
 
 declare global {
   interface Window {
-    inkDesktopGestures?: {isActive?():boolean;onGestureStart?(listener:()=>void):()=>void;onSwipe(listener:(direction:'left'|'right')=>void):()=>void};
+    inkDesktopGestures?: {isActive?():boolean;onGestureStart?(listener:()=>void):()=>void;onGestureEnd?(listener:(cancelled:boolean)=>void):()=>void;onGestureMove?(listener:(position:{x:number;y:number})=>void):()=>void;onSwipe(listener:(direction:'left'|'right')=>void):()=>void};
   }
 }
 
-export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compositor, overview:{isOpen:()=>boolean;open:()=>void;close:()=>void;step:(direction:number)=>void}) {
-  const swipe = new WorkspaceSwipe();
-  const vertical = new OverviewSwipe();
-  const reset = () => {swipe.reset();vertical.reset();};
-  const session=window.inkDesktopGestures?.onGestureStart?undefined:createGestureSession(reset);
+export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compositor, overview:{isOpen:()=>boolean;open:()=>void;close:()=>void;step:(direction:number)=>void;beginVertical:()=>GestureMotion|undefined;beginHorizontal:()=>GestureMotion|undefined;finish:()=>void}) {
+  const native=!!window.inkDesktopGestures?.onGestureMove&&/Mac/.test(navigator.platform);
+  let touching=false,consumeTail=false,nativeEligible:boolean|undefined,nativeX=0,nativeY=0;
+  let pendingNative:{x:number;y:number}|undefined;
+  let nativeModifiers={ctrlKey:false,metaKey:false,altKey:false,shiftKey:false};
+  const drag=new GestureDrag(axis=>axis==='vertical'?overview.beginVertical():overview.isOpen()?overview.beginHorizontal():workspaceDrag(compositor));
+  const reset=()=>{drag.end(true);touching=false;consumeTail=false;};
+  const start=()=>{drag.start();touching=true;consumeTail=false;nativeEligible=undefined;nativeX=0;nativeY=0;pendingNative=undefined;};
+  const end=(cancelled=false)=>{drag.end(cancelled);touching=false;};
+  const session=native?undefined:createGestureSession(start,()=>end());
   const status = document.createElement('span');
   status.className = 'workspace-gesture-status';
   status.setAttribute('role', 'status');
@@ -24,7 +31,7 @@ export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compos
   switcher.title = 'Two-finger ← / → switches desktops · Swipe up on the desktop or a window title bar for desktop selection; down to return';
   const blocked = () => !!compositor.gesture || !!document.documentElement.dataset.gesture || !!document.querySelector('.modal-backdrop,.quick-look-backdrop,.desktop-context,.system-menu');
   const step = (direction:number) => {
-    if (blocked() || overview.isOpen()) {swipe.reset(); return;}
+    if (blocked() || overview.isOpen()) {drag.end(true); return;}
     const id = adjacentWorkspace(compositor.workspaces, compositor.workspace, direction);
     if (id === undefined) return;
     compositor.switchWorkspace(id);
@@ -33,13 +40,14 @@ export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compos
   const foreground = () => window.inkDesktopGestures?.isActive?.() !== false;
   const route = (event:{deltaX:number;deltaY:number;deltaMode?:number;ctrlKey?:boolean;metaKey?:boolean;altKey?:boolean;shiftKey?:boolean;momentum?:boolean},eligible:boolean) => {
     if (blocked() || !foreground()) {reset(); return false;}
-    const now=performance.now();session?.feed(event,now);const open=overview.isOpen(),motion=vertical.wheel(event,now,eligible||open);
-    if(motion.step>0&&!open)overview.open();
-    else if(motion.step<0&&open)overview.close();
-    if(open){const result=swipe.wheel(event,now);if(result.step)overview.step(result.step);return motion.consume||result.consume;}
-    const result=swipe.wheel(event,now);
-    if(result.step)step(result.step);
-    return result.consume||motion.consume;
+    if(native){
+      if(touching&&nativeEligible===undefined){nativeEligible=eligible||overview.isOpen();nativeModifiers={ctrlKey:!!event.ctrlKey,metaKey:!!event.metaKey,altKey:!!event.altKey,shiftKey:!!event.shiftKey};if(pendingNative){consumeTail=drag.wheel({deltaX:pendingNative.x,deltaY:pendingNative.y,...nativeModifiers},nativeEligible);nativeX=pendingNative.x;nativeY=pendingNative.y;}}
+      return consumeTail||touching&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.shiftKey&&(Math.abs(event.deltaX)>Math.abs(event.deltaY)*1.5||!!nativeEligible&&Math.abs(event.deltaY)>Math.abs(event.deltaX)*1.5);
+    }
+    const physical=session?session.feed(event,performance.now()):touching;
+    if(!physical)return consumeTail;
+    const consume=drag.wheel(event,eligible||overview.isOpen());
+    consumeTail=consume;return consume;
   };
   const wheel = (event:WheelEvent) => {
     const target=event.target instanceof Element?event.target:null;
@@ -59,19 +67,38 @@ export function installWorkspaceGestures(switcher:HTMLElement, compositor:Compos
   };
   window.addEventListener('wheel', wheel, {passive:false,capture:true});
   window.addEventListener('message', frameWheel);
-  const unsubscribeStart = window.inkDesktopGestures?.onGestureStart?.(reset);
+  const unsubscribeStart = native?window.inkDesktopGestures?.onGestureStart?.(start):undefined;
+  const unsubscribeMove=native?window.inkDesktopGestures?.onGestureMove?.(position=>{
+    pendingNative=position;
+    if(!touching||nativeEligible===undefined)return;
+    if(blocked()||!foreground()){reset();return;}
+    consumeTail=drag.wheel({deltaX:position.x-nativeX,deltaY:position.y-nativeY,...nativeModifiers},nativeEligible);
+    nativeX=position.x;nativeY=position.y;
+  }):undefined;
+  const unsubscribeEnd = native?window.inkDesktopGestures?.onGestureEnd?.(end):undefined;
+  const interrupt=()=>{end();compositor.workspaceTransition.finish();overview.finish();};
+  document.addEventListener('pointerdown',interrupt,true);
+  document.addEventListener('keydown',interrupt,true);
   const unsubscribe = window.inkDesktopGestures?.onSwipe(direction => {
     reset();
     const directionStep=direction==='left'?1:-1;
     if(overview.isOpen())overview.step(directionStep);else step(directionStep);
   });
-  window.addEventListener('blur', reset);
+  // Native window focus is authoritative; parking an iframe must not end a stroke.
+  const blur=()=>{if(!native)reset();};
+  window.addEventListener('blur', blur);
   const dispose = () => {
     window.removeEventListener('wheel', wheel, true);
     window.removeEventListener('message', frameWheel);
     session?.dispose();
     unsubscribeStart?.();
-    window.removeEventListener('blur', reset);
+    unsubscribeEnd?.();
+    unsubscribeMove?.();
+    drag.end(true);
+    compositor.workspaceTransition.finish();
+    document.removeEventListener('pointerdown',interrupt,true);
+    document.removeEventListener('keydown',interrupt,true);
+    window.removeEventListener('blur', blur);
     window.removeEventListener('pagehide', dispose);
     unsubscribe?.();
     status.remove();
