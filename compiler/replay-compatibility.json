@@ -1,18 +1,18 @@
 {
   "schema": 1,
-  "dependencyLockSHA256": "5308b01959d30972f4dce6ff59d9e006907e9e635974403a59758d035f9e804f",
+  "dependencyLockSHA256": "63eac5511487e7b6a15099ea7ffbe8a27d9d1919e6b76cdd0b3e1008eff2be6d",
   "compatibleCompilerSHA256": [
     "a5f02fb3bc2223d5436831640b6111773a3cf32e969faec28f1c6187e3d66993",
     "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
     "29475ee79ddab3ac5ea036f9463f5833ce0338631ecb95b0739b2322a5cc61bd"
   ],
   "proofReplayRequired": true,
-  "scope": "Eligibility for current full proof, source-summary, artifact and target-byte replay only. The Rust, Wasm and GPU compatibility lowering revisions preserve the previously pinned src trees (the GPU revision changes only its JavaScript lowering pin). The JavaScript lowering maintains filtered table views with their counts and sums, reports changed state paths, writes snapshots faster (same bytes) and keeps F32 list captures under 1024 elements in packed arrays, so its emitted modules differ: packets that bind JavaScript artifact bytes from an older compiler fail replay and must be rebuilt. Checked proof units add no source equality premise.",
+  "scope": "Eligibility for current full proof, source-summary, artifact and target-byte replay only. The Wasm and GPU compatibility lowering revisions preserve the previously pinned src trees (they change only their Rust and JavaScript lowering pins). The Rust lowering now checks JSON ingress instead of panicking and reports which roots and keys each commit changes, and the JavaScript lowering maintains filtered table views with their counts and sums, reports changed state paths, writes snapshots faster (same bytes) and keeps F32 list captures under 1024 elements in packed arrays, so emitted Rust and JavaScript differ: packets that bind artifact bytes from an older compiler fail replay and must be rebuilt. Checked proof units add no source equality premise.",
   "core": "6229997ba04f3e00068583e3ca225b88da1373e0",
   "lowerings": {
     "js": "2ed6bfc2904a1eaff14772596afa0eb33bd9493b",
-    "rust": "6e24285eef441011fe8a304ae4d5f973ec7c68f6",
-    "wasm": "8f78c9f9bd29be6dad37e28183a1fcd3aedfe4c1",
-    "gpu": "3582c42909d3b9540a29ed68f3431302fb5f99dd"
+    "rust": "67e2d5f095bda42369bd5a87d5b2faa97c4e825f",
+    "wasm": "d5ae3db97d1e37213c6f291b4d87567b7077f6c7",
+    "gpu": "dbbddb4a08806b345646030302116478dfc5fcbd"
   }
 }

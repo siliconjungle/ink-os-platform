@@ -82,6 +82,14 @@ fn main(){
  match result{Ok(value)=>println!("{}",value),Err(error)=>{println!("{}",serde_json::json!({"error":error}));std::process::exit(1);}}
 }
 `;
+// Generated state that reports what each commit changed (take_changes) gets a
+// driver that can start tracking and returns each change's report with its
+// reply. Older generated state keeps the driver it was built with.
+const trackingDriver = driver
+  .replace('"checkpoint"=>{', '"track"=>Ok(serde_json::json!(state.track_changes())),\n    "checkpoint"=>{')
+  .replace('Ok(serde_json::json!({"output":value}))},', 'if request["kind"]=="change"{Ok(serde_json::json!({"output":value,"changes":state.take_changes()}))}else{Ok(serde_json::json!({"output":value}))}},');
+export const reportsChanges = (rust) => typeof rust === 'string' && rust.includes('pub fn take_changes(');
+const driverFor = (rust) => (reportsChanges(rust) ? trackingDriver : driver);
 
 export class NativeInk {
   constructor(directory, { cargo = 'cargo', rustc = 'rustc', offline = false, managed = null, execute: executeImpl = execute } = {}) {
@@ -118,7 +126,7 @@ export class NativeInk {
     if (!artifact.rust) throw Object.assign(Error(artifact.rust_reason || 'Native target is unsupported for this program.'), { status: 422 });
     const info = await compilerInfo(), lock = await readFile(new URL('./native-runtime.lock', import.meta.url));
     const host = { platform: process.platform, arch: process.arch };
-    const compatibilityKey = createHash('sha256').update(JSON.stringify({ source, namespace, compiler: info.sha256, manifest: cargoManifest, lock: lock.toString(), driver, host })).digest('hex');
+    const compatibilityKey = createHash('sha256').update(JSON.stringify({ source, namespace, compiler: info.sha256, manifest: cargoManifest, lock: lock.toString(), driver: driverFor(artifact.rust), host })).digest('hex');
     return { compatibilityKey, artifact, info, lock, host, source };
   }
   async plan(source, namespace, compiled) {
@@ -148,7 +156,7 @@ export class NativeInk {
     await mkdir(join(directory, 'src'), { recursive: true, mode: 0o700 });
     await writeFile(join(directory, 'Cargo.toml'), cargoManifest);
     await writeFile(join(directory, 'Cargo.lock'), lock);
-    await writeFile(join(directory, 'src/main.rs'), artifact.rust + driver);
+    await writeFile(join(directory, 'src/main.rs'), artifact.rust + driverFor(artifact.rust));
     const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => buildEnvironmentName(name)));
     Object.assign(env, Object.fromEntries(Object.entries(tools.runtimeEnvironment || {}).filter(([name]) => buildEnvironmentName(name))), { CARGO_BUILD_JOBS:'1', RUSTC: tools.rustc, CARGO_TARGET_DIR: join(this.directory, 'target'), CARGO_INCREMENTAL: '0', CARGO_PROFILE_RELEASE_DEBUG: '0', CARGO_ENCODED_RUSTFLAGS: [`--remap-path-prefix=${homedir()}=/build`, `--remap-path-prefix=${directory}=/ink/native`].join('\x1f') });
     const args = ['build', '--locked', '--release', '--manifest-path', join(directory, 'Cargo.toml')];

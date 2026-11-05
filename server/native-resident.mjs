@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { parseExactJSON } from '../shared/exact-json.mjs';
 import { publicResult } from '../shared/ink-values.mjs';
+import { changedPaths } from '../shared/ink-state-paths.mjs';
 
 export function nativeResident({ executable, compiled, timeout = 30000 }) {
   const artifact = compiled.artifact;
@@ -110,11 +111,14 @@ export function nativeResident({ executable, compiled, timeout = 30000 }) {
     const visible = publicResult(result.output, selected, artifact.manifest);
     if (Buffer.byteLength(visible.wire) > 8 * 1024 * 1024)
       throw Error('Ink output exceeds 8 MiB.');
-    return {
-      ...visible,
-      committed: !!selected.action && result.output.committed === true,
-    };
+    const committed = !!selected.action && result.output.committed === true,
+      // The state paths this commit changed, when the executable reports them.
+      paths = committed && tracking && result.changes ? changedPaths(result.changes, artifact.manifest.state) : null;
+    return { ...visible, committed, ...(paths ? { paths } : {}) };
   };
+  // Executables built from generated state that reports changes answer
+  // `track`; older ones refuse it, and their commits list IR write roots.
+  let tracking = false;
   refs(false);
   return {
     request: async (message) => {
@@ -129,11 +133,13 @@ export function nativeResident({ executable, compiled, timeout = 30000 }) {
               }
             : {}),
         });
+        tracking = false;
         for (const item of message.records || []) {
           const result = await call({ ...item, op: 'call' });
           if (!result.committed || result.wire !== item.wire)
             throw Error('Ink application journal replay mismatch.');
         }
+        tracking = await raw({ op: 'track' }).then((value) => value === true, () => false);
         return true;
       }
       if (message.op === 'checkpoint') {

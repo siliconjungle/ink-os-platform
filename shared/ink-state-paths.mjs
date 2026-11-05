@@ -9,8 +9,9 @@
 //   Root[*]     some row whose key was not listed
 //
 // A changed root is always reported by name as well, so readers that only
-// know roots stay correct. Anything a report cannot describe changes every
-// path of the roots involved.
+// know roots stay correct. Native executables report roots and keys with
+// `filters: null` (they keep no views). Anything a report cannot describe
+// changes every path of the roots involved.
 
 const SCALAR_KEYS = new Set(['u32', 'i32', 'u64', 'string']);
 
@@ -28,11 +29,17 @@ export function changedPaths(changes, state) {
   if (!changes || changes.all || !Array.isArray(changes.roots)) return null;
   const filters = state?.filters || [],
     paths = new Set(changes.roots);
-  for (const id of changes.filters || []) {
-    const filter = filters[id];
-    if (!filter?.path) return null;
-    paths.add(filter.path);
-  }
+  if (changes.filters === null) {
+    // A report without views (native state keeps none): every view of a
+    // changed root may have changed.
+    for (const root of changes.roots)
+      for (const filter of filters) if (state.roots[filter.root]?.name === root) paths.add(filter.path);
+  } else
+    for (const id of changes.filters || []) {
+      const filter = filters[id];
+      if (!filter?.path) return null;
+      paths.add(filter.path);
+    }
   for (const [name, keys] of Object.entries(changes.keys || {})) {
     const root = state.roots.find((r) => r.name === name);
     if (!root) return null;

@@ -88,6 +88,15 @@ everything.
   input `[42]` becomes `Rows[42]` plus `Rows[*]`. Keys are named only for
   `u32`, `i32`, `u64` and `String` keys given as exact JSON integers or
   strings; anything else depends on the root.
+- **Native executables.** Rust state built by this compiler reports the
+  same changes (`take_changes`): the roots whose rows differ and up to 64
+  changed keys per root, compared from each commit's undo log. It keeps no
+  filtered views, so its reports say `filters: null` and every view of a
+  changed root counts as changed. The resident driver turns tracking on
+  after a load; an executable built from older generated state refuses
+  `track`, and its commits list every path of their IR write roots as
+  before. `tests/native-ink.test.mjs` checks the paths a native commit
+  reports.
 - **Exact headers.** A hint carries the journal header its commit writes. It
   explains only a state change to exactly that header. A replicated or
   migration write that lands while the commit is in flight advances every
@@ -191,8 +200,11 @@ What remains:
   neither filters nor aggregates rows, and then a direct read already pages at
   the provider; plans that filter and aggregate scan their provider's rows,
   reusing each consumer function's result per row.
-- The maintained counts and sums take effect in the OS once the browser
-  compiler is rebuilt with the lowering it now pins.
+- The maintained counts and sums, and native change reports, take effect
+  in the OS once the browser compiler is rebuilt with the lowerings it now
+  pins.
+- Native state has no filtered views, so a native commit to a table still
+  re-runs every view reader of that table.
 - The first load is dominated by restoring the base snapshot (about 210 ms
   at 100,000 rows, 4.3 MB). A host-level first planned read now takes
   480–514 ms (from 528).

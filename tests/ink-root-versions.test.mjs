@@ -31,3 +31,19 @@ test('commit hints explain only the state header their own commit wrote', () => 
   const [, other2] = versions.versions(appId, ['Rows', 'Other']);
   assert.ok(other2 > other1);
 });
+
+// Reports from state that keeps no filtered views (native executables) say
+// `filters: null`: every view of a changed root counts as changed, while
+// keyed paths and unchanged roots stay precise.
+test('change reports without views mark every view of a changed root', async () => {
+  const { changedPaths } = await import('../shared/ink-state-paths.mjs');
+  const state = {
+    roots: [{ name: 'Rows', key: { kind: 'u64' } }, { name: 'Notes', key: { kind: 'u64' } }],
+    filters: [{ root: 0, path: 'Rows#0' }, { root: 1, path: 'Notes#1' }, { root: 0, path: 'Rows#2' }],
+  };
+  assert.deepEqual(changedPaths({ all: false, roots: ['Rows'], filters: null, keys: { Rows: [5n] } }, state), ['Rows', 'Rows#0', 'Rows#2', 'Rows[5]']);
+  assert.deepEqual(changedPaths({ all: false, roots: [], filters: null, keys: {} }, state), [], 'an identical rewrite changes nothing');
+  assert.deepEqual(changedPaths({ all: false, roots: ['Rows'], filters: null, keys: { Rows: null } }, state), ['Rows', 'Rows#0', 'Rows#2', 'Rows[*]']);
+  assert.deepEqual(changedPaths({ all: false, roots: ['Rows'], filters: [2], keys: { Rows: [5n] } }, state), ['Rows', 'Rows#2', 'Rows[5]']);
+  assert.equal(changedPaths({ all: true }, state), null);
+});

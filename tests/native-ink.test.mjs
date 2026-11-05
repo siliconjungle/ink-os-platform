@@ -66,3 +66,32 @@ test('actual compiled Rust preserves browser values and portable state across ta
   assert.equal((await native.build(source, { namespace: 'test-app' })).cached, false);
   assert.equal((await native.run(build.id, { namespace: 'test-app', entry: 'total' })).output.result, 0);
 });
+
+test('native commits report the rows they change, so keyed readers stay current', { skip: process.env.INK_TEST_NATIVE !== '1', timeout: 300000 }, async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'ink-native-paths-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const native = new NativeInk(directory, { offline: process.env.INK_NATIVE_OFFLINE === '1' });
+  const source = 'module rows; record Row{id:u64,open:Bool,} state Rows:Table<u64,Row>=Table.empty(); state Notes:u64=0; change put(row:Row)->Result<Unit,String> reads(Rows) writes(Rows){Rows.put(row.id,row);return Ok(());} change note(x:u64)->Result<Unit,String> reads(Notes) writes(Notes){Notes=x;return Ok(());} query open()->List<Row> reads(Rows){return Rows.values().filter(fn(r)=>r.open);}';
+  const build = await native.build(source, { namespace: 'test-app' });
+  const code = new Code('.', join(directory, 'resident'));
+  t.after(() => code.close());
+  code.nativeJobs = { native, readyFor: async () => build.id };
+  const hints = [];
+  code.commitListeners.add((commit) => hints.push(commit.roots));
+  const run = (entry, input) => code.run({ source, namespace: 'test-app', stateKey: 'rows', entry, input, backend: 'native' });
+  await run('put', '[{"id":5,"open":true}]');
+  await run('put', '[{"id":5,"open":true}]');
+  await run('put', '[{"id":7,"open":false}]');
+  await run('note', '[3]');
+  const compiled = await code.compile(source);
+  if (!compiled.artifact.rust.includes('pub fn take_changes(')) {
+    // An older compiler: every commit lists every path of its write roots.
+    assert.deepEqual(hints[1], hints[0]);
+    return;
+  }
+  const view = compiled.artifact.manifest.state.filters.map((f) => f.path);
+  assert.deepEqual(hints[0], ['Rows', ...view, 'Rows[5]'].sort(), 'the written key and the root\'s views');
+  assert.deepEqual(hints[1], [], 'an identical rewrite changes nothing');
+  assert.deepEqual(hints[2], ['Rows', ...view, 'Rows[7]'].sort());
+  assert.ok(hints[3].includes('Notes') && !hints[3].some((p) => p.startsWith('Rows')), 'a note changes no row');
+});
