@@ -1,18 +1,18 @@
 {
   "schema": 1,
-  "dependencyLockSHA256": "875511e01aee89d971d69ccaafd1fc7118b129f3db426688987c7291c460c8aa",
+  "dependencyLockSHA256": "586bb6d7c4107b3cca0206332f51b63103b88aa8049a4ba3e4802c0b739fa45b",
   "compatibleCompilerSHA256": [
     "a5f02fb3bc2223d5436831640b6111773a3cf32e969faec28f1c6187e3d66993",
     "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
     "29475ee79ddab3ac5ea036f9463f5833ce0338631ecb95b0739b2322a5cc61bd"
   ],
   "proofReplayRequired": true,
-  "scope": "Eligibility for current full proof, source-summary, artifact and target-byte replay only. The core revision differs from the previous one only in how fresh surface names are found (one ordered range query instead of a scan); elaborated programs and core bytes are unchanged. The Rust, Wasm and GPU lowering revisions change only their core and lowering pins. The JavaScript lowering now fuses map/filter/zip pipelines into single loops, serves Table.values() from cached ordered rows and converts lists at call boundaries with counted loops, so emitted JavaScript differs: packets that bind artifact bytes from an older compiler fail replay and must be rebuilt. Checked proof units add no source equality premise.",
+  "scope": "Eligibility for current full proof, source-summary, artifact and target-byte replay only. The core revision differs from the previous one only in how fresh surface names are found (one ordered range query instead of a scan); elaborated programs and core bytes are unchanged. The Rust lowering builds its wire contract once per emission (same emitted Rust); the Wasm and GPU lowering revisions change only their core and lowering pins. The JavaScript lowering now fuses map/filter/zip pipelines into single loops, serves Table.values() from cached ordered rows, converts lists at call boundaries with counted loops and builds its wire contract once, so emitted JavaScript differs: packets that bind artifact bytes from an older compiler fail replay and must be rebuilt. Checked proof units add no source equality premise.",
   "core": "e5364895ccc2c4e0f512ed65cf6e4236c83e20f6",
   "lowerings": {
-    "js": "4a0e19c4329733c26f0fb366f274742d82a27305",
-    "rust": "b9d7d7125d12a1c209e026b09a0da379148bb4dc",
-    "wasm": "cf53edb046033763d2c4c9878601eb915735f2e5",
-    "gpu": "5eced4392bf811bc061c439f9c121757c6d1cb21"
+    "js": "1d31d870744116e79f662cfe35ec76e19f5e1ebc",
+    "rust": "0fce1d5f8b0399ae49a2c73765bb855b64c3a370",
+    "wasm": "61a1a5f10025497bb3e28cd78957e73bf47e3674",
+    "gpu": "c3d6a76dc199b5579475506376f56f28875c74bf"
   }
 }
