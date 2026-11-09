@@ -9,7 +9,7 @@
 // functions that admission proved pure.
 import { parentPort, workerData } from 'node:worker_threads';
 import { parseExactJSON, stringifyExactJSON } from '../shared/exact-json.mjs';
-import { wireValue, wireResult } from '../shared/ink-values.mjs';
+import { wireValue, exactWire, resultWire } from '../shared/ink-values.mjs';
 import { native, fastArguments } from './ink-input.mjs';
 
 const { artifact, entries } = workerData;
@@ -65,7 +65,7 @@ function invoke(entry, input) {
 function replay(records) {
   for (const record of records) {
     const { selected, output } = invoke(record.entry, record.input);
-    const wire = stringifyExactJSON(wireResult(output, selected, artifact.manifest));
+    const wire = resultWire(output, selected, artifact.manifest);
     if (!output.committed || wire !== record.wire) {
       state = null;
       throw Error('Provider copy replay mismatch.');
@@ -87,7 +87,7 @@ function fieldKey(value, type) {
     case 'string': case 'id': case 'enum':
       return JSON.stringify(value);
     default:
-      return stringifyExactJSON(wireValue(value, type, named));
+      return exactWire(value, type, named);
   }
 }
 function memoized(c, consumer, name, rowType) {
@@ -99,7 +99,7 @@ function memoized(c, consumer, name, rowType) {
         ? fields.length === 1
           ? (row) => fieldKey(row[fields[0][0]], resolve(fields[0][1], named))
           : (row) => fields.map(([f, type]) => fieldKey(row[f], resolve(type, named))).join('\u0001')
-        : (row) => stringifyExactJSON(wireValue(row, rowType, named)),
+        : (row) => exactWire(row, rowType, named),
     id = consumer + '\0' + name;
   let memo = memos.get(id);
   if (!memo) memos.set(id, (memo = new Map()));
@@ -152,9 +152,12 @@ function evaluate({ entry, input, plan, consumer }) {
   } else if (plan.where) total = { Some: BigInt(rows.length) };
   const matched = rows.length,
     offset = plan.offset ?? 0,
-    page = rows.slice(offset, plan.limit === undefined ? undefined : offset + plan.limit).map((row) => wireValue(row, rowType, named));
+    page = rows.slice(offset, plan.limit === undefined ? undefined : offset + plan.limit);
+  let pageWire = '';
+  for (let i = 0; i < page.length; i++) pageWire += (i ? ',' : '') + exactWire(page[i], rowType, named);
   return {
-    wire: stringifyExactJSON({ rows: page, total, version: wireValue(value.version, field('version'), named) }),
+    // The same text as stringifyExactJSON({ rows, total, version }) over wire values.
+    wire: '{"rows":[' + pageWire + '],"total":' + stringifyExactJSON(total) + ',"version":' + exactWire(value.version, field('version'), named) + '}',
     scanned: all.length,
     matched,
     calls: counts.calls - before.calls,
