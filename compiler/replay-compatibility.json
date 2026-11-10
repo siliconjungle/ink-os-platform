@@ -1,18 +1,18 @@
 {
   "schema": 1,
-  "dependencyLockSHA256": "a03cf68aa77dff97f049693ce673e8235927cd277e62304ee03759f1b8a35489",
+  "dependencyLockSHA256": "78a47ccda785714b78a0139670afb87b3ba587c3b0b1745757cc85cf5ed91c89",
   "compatibleCompilerSHA256": [
     "a5f02fb3bc2223d5436831640b6111773a3cf32e969faec28f1c6187e3d66993",
     "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
     "29475ee79ddab3ac5ea036f9463f5833ce0338631ecb95b0739b2322a5cc61bd"
   ],
   "proofReplayRequired": true,
-  "scope": "Eligibility for current full proof, source-summary, artifact and target-byte replay only. The compiler now uses the main revisions of ink-core (standalone package f1931588) and of every lowering, with the OS branches merged into them, and ink-abi 19f31a6 throughout. Core bytes and emitted Rust matched the previous pin byte for byte on the two-module app compile checked; the core changes share the elaborator's program context, type let chains in one environment and index helpers for field demand. The JavaScript lowering maps float, word and object lists with separate loops and builds type descriptions and wire schemas once per emission, so emitted JavaScript differs: packets that bind artifact bytes from an older compiler fail replay and must be rebuilt. Checked proof units add no source equality premise.",
+  "scope": "Eligibility for current full proof, source-summary, artifact and target-byte replay only. The compiler uses the main revisions of ink-core (standalone package f1931588, unchanged), ink-abi bc1aa1e and every lowering. Core bytes are unchanged. The Rust lowering emits filtered sums as one loop, keeps zips lazy, counts pipeline lengths and keeps float canonicalisation off loop-carried paths and nested arithmetic; the embedded value wire validates and decodes scalar lists in one pass; the JavaScript lowering gives fused F32 loops a plain-number copy and converts F32 lists at public calls in the list loop; the GPU lowering fuses integer sums over filters into one reduction. Emitted JavaScript and Rust differ, so packets that bind artifact bytes from an older compiler fail replay and must be rebuilt. Checked proof units add no source equality premise.",
   "core": "f1931588e506562f327b26247f088f29c8bc91eb",
   "lowerings": {
-    "js": "7482da3995b8523301ae48bcba6bbf050a0a4a87",
-    "rust": "16944c674681592efb9fabb4f7ba41b4f6096c4a",
-    "wasm": "3e0e134ac7fcccc5aae3cf4900fa3b4707fd4506",
-    "gpu": "218c34108e7643876f6fc17980402fd03b52c5e7"
+    "js": "b04f95d5e447be3557636957bad432d3ac551c56",
+    "rust": "9311a669056913f003a07cfe4ca2c5ccb9798a0d",
+    "wasm": "2b466efbc0afc5b35ade3ed58d0a4922373ac4af",
+    "gpu": "47a2c725200d606b2cc96015df6387c2d06624b6"
   }
 }
