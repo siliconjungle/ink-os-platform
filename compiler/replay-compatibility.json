@@ -1,18 +1,18 @@
 {
   "schema": 1,
-  "dependencyLockSHA256": "586bb6d7c4107b3cca0206332f51b63103b88aa8049a4ba3e4802c0b739fa45b",
+  "dependencyLockSHA256": "a03cf68aa77dff97f049693ce673e8235927cd277e62304ee03759f1b8a35489",
   "compatibleCompilerSHA256": [
     "a5f02fb3bc2223d5436831640b6111773a3cf32e969faec28f1c6187e3d66993",
     "0e892999d101855397f185e143277db484d787262cde5ada35dc89b1e4dc0024",
     "29475ee79ddab3ac5ea036f9463f5833ce0338631ecb95b0739b2322a5cc61bd"
   ],
   "proofReplayRequired": true,
-  "scope": "Eligibility for current full proof, source-summary, artifact and target-byte replay only. The core revision differs from the previous one only in how fresh surface names are found (one ordered range query instead of a scan); elaborated programs and core bytes are unchanged. The Rust lowering builds its wire contract once per emission (same emitted Rust); the Wasm and GPU lowering revisions change only their core and lowering pins. The JavaScript lowering now fuses map/filter/zip pipelines into single loops, serves Table.values() from cached ordered rows, converts lists at call boundaries with counted loops and builds its wire contract once, so emitted JavaScript differs: packets that bind artifact bytes from an older compiler fail replay and must be rebuilt. Checked proof units add no source equality premise.",
-  "core": "e5364895ccc2c4e0f512ed65cf6e4236c83e20f6",
+  "scope": "Eligibility for current full proof, source-summary, artifact and target-byte replay only. The compiler now uses the main revisions of ink-core (standalone package f1931588) and of every lowering, with the OS branches merged into them, and ink-abi 19f31a6 throughout. Core bytes and emitted Rust matched the previous pin byte for byte on the two-module app compile checked; the core changes share the elaborator's program context, type let chains in one environment and index helpers for field demand. The JavaScript lowering maps float, word and object lists with separate loops and builds type descriptions and wire schemas once per emission, so emitted JavaScript differs: packets that bind artifact bytes from an older compiler fail replay and must be rebuilt. Checked proof units add no source equality premise.",
+  "core": "f1931588e506562f327b26247f088f29c8bc91eb",
   "lowerings": {
-    "js": "1d31d870744116e79f662cfe35ec76e19f5e1ebc",
-    "rust": "0fce1d5f8b0399ae49a2c73765bb855b64c3a370",
-    "wasm": "61a1a5f10025497bb3e28cd78957e73bf47e3674",
-    "gpu": "c3d6a76dc199b5579475506376f56f28875c74bf"
+    "js": "7482da3995b8523301ae48bcba6bbf050a0a4a87",
+    "rust": "16944c674681592efb9fabb4f7ba41b4f6096c4a",
+    "wasm": "3e0e134ac7fcccc5aae3cf4900fa3b4707fd4506",
+    "gpu": "218c34108e7643876f6fc17980402fd03b52c5e7"
   }
 }
